@@ -4,6 +4,8 @@ const { runQuery, runGet } = require('../dbHelper');
 const VendaService = require('../services/VendaService');
 const AuditService = require('../services/AuditService');
 const ReversaoControladaService = require('../services/ReversaoControladaService');
+const { PERMISSIONS } = require('../constants/userRoles');
+const { requirePermission } = require('../middlewares/requirePermission');
 
 router.get('/', async (req, res, next) => {
   const { data_inicial, data_final, pagina = 1, limite = 10 } = req.query;
@@ -61,7 +63,7 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-router.post('/:id/reverter', async (req, res, next) => {
+router.post('/:id/reverter', requirePermission(PERMISSIONS.REVERSAO_EXECUTAR), async (req, res, next) => {
   try {
     const resultado = await ReversaoControladaService.reverterVenda(
       req.params.id,

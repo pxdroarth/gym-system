@@ -3,6 +3,7 @@ const AppError = require('../errors/AppError');
 const AuditService = require('./AuditService');
 const FechamentoMensalService = require('./FechamentoMensalService');
 const { MENSALIDADE_STATUS } = require('../constants/domainStates');
+const { PERMISSIONS, roleHasPermission } = require('../constants/userRoles');
 
 function exigirMotivo(motivo) {
   const texto = String(motivo || '').trim();
@@ -13,6 +14,9 @@ function exigirMotivo(motivo) {
 function exigirAtor(actor) {
   if (!actor || !actor.id || !actor.name) {
     throw new AppError('ator responsavel e obrigatorio', 400, 'ATOR_OBRIGATORIO');
+  }
+  if (!actor.role || !roleHasPermission(actor.role, PERMISSIONS.REVERSAO_EXECUTAR)) {
+    throw new AppError('Permissao negada para reversao controlada', 403, 'PERMISSAO_NEGADA');
   }
   return actor;
 }

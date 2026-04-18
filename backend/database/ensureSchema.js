@@ -1,4 +1,5 @@
 const { runQuery, runGet, runExecute } = require('../dbHelper');
+const { USER_ROLES, USER_STATUS } = require('../constants/userRoles');
 
 async function tableExists(tableName) {
   const row = await runGet(
@@ -103,12 +104,52 @@ async function ensureReversaoSoftDeleteColumns() {
   await addColumnIfMissing('conta_financeira', 'reversao_controlada_id INTEGER');
 }
 
+async function ensureUsuarioInterno() {
+  if (!(await tableExists('usuario_interno'))) {
+    await runExecute(`
+      CREATE TABLE usuario_interno (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nome TEXT NOT NULL,
+        email TEXT UNIQUE,
+        login TEXT UNIQUE,
+        papel TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'ativo',
+        senha_hash TEXT,
+        ultimo_acesso_em TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now')),
+        created_by TEXT,
+        updated_by TEXT
+      )
+    `);
+  }
+
+  const count = await runGet('SELECT COUNT(*) AS total FROM usuario_interno');
+  if (Number(count?.total || 0) === 0) {
+    await runExecute(
+      `INSERT INTO usuario_interno
+        (nome, email, login, papel, status, created_by, updated_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      [
+        'Administrador Bootstrap',
+        'admin.local@sistema',
+        'admin',
+        USER_ROLES.ADMIN,
+        USER_STATUS.ATIVO,
+        'bootstrap',
+        'bootstrap',
+      ]
+    );
+  }
+}
+
 async function ensureSchema() {
   await ensureAuditLog();
   await ensureFechamentoMensal();
   await ensureReversaoControlada();
   await ensurePlanoAssociadoColumns();
   await ensureReversaoSoftDeleteColumns();
+  await ensureUsuarioInterno();
 }
 
 module.exports = ensureSchema;

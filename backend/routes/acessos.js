@@ -3,6 +3,9 @@ const router = express.Router();
 const { runQuery, runGet, runExecute } = require('../dbHelper');
 const AccessService = require('../services/AccessService');
 const AppError = require('../errors/AppError');
+const AuditService = require('../services/AuditService');
+const { PERMISSIONS } = require('../constants/userRoles');
+const { assertPermission } = require('../middlewares/requirePermission');
 
 router.get('/', async (_req, res, next) => {
   try {
@@ -57,6 +60,10 @@ router.get('/:id', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
+    if (req.body?.liberacao_manual) {
+      assertPermission(req, PERMISSIONS.ACESSO_LIBERACAO_MANUAL);
+    }
+
     const acesso = await AccessService.registrarAcesso(req.body || {});
     res.status(201).json(acesso);
   } catch (error) {
@@ -103,14 +110,24 @@ router.delete('/:id', async (req, res, next) => {
 });
 
 router.post('/mock-hikvision', async (req, res, next) => {
-  const { aluno_id } = req.body || {};
+  const { aluno_id, liberacao_manual, motivo } = req.body || {};
 
   if (!aluno_id) {
     return next(new AppError('aluno_id e obrigatorio', 400, 'ALUNO_ID_OBRIGATORIO'));
   }
 
   try {
-    const resultado = await AccessService.registrarTentativaAcesso(aluno_id);
+    const actor = AuditService.getActorFromRequest(req);
+    if (liberacao_manual) {
+      assertPermission(req, PERMISSIONS.ACESSO_LIBERACAO_MANUAL);
+    }
+
+    const resultado = await AccessService.registrarTentativaAcesso(aluno_id, {
+      liberacaoManual: Boolean(liberacao_manual),
+      motivo,
+      operador: actor.name,
+      actor,
+    });
     res.status(201).json(resultado);
   } catch (error) {
     next(error);

@@ -3,6 +3,7 @@ const cors = require('cors');
 const path = require('path');
 const errorHandler = require('./middlewares/errorHandler');
 const ensureSchema = require('./database/ensureSchema');
+const operatorContext = require('./middlewares/operatorContext');
 
 const app = express();
 const port = 3001;
@@ -23,6 +24,7 @@ async function start() {
 
   app.use(express.json());
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+  app.use(operatorContext);
 
   const seedPlanoContas = require('./seeds/seedPlanoContas');
   await seedPlanoContas();
@@ -49,6 +51,7 @@ async function start() {
   app.use('/contas-financeiras', require('./routes/contasFinanceiras'));
   app.use('/fechamento-mensal', require('./routes/fechamentoMensal'));
   app.use('/reversoes', require('./routes/reversoes'));
+  app.use('/usuarios-internos', require('./routes/usuariosInternos'));
   app.use('/relatorios', require('./routes/relatorios'));
 
   app.get('/test-db', (req, res) => {

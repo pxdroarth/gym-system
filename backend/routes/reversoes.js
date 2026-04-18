@@ -2,8 +2,10 @@ const express = require('express');
 const router = express.Router();
 const AuditService = require('../services/AuditService');
 const ReversaoControladaService = require('../services/ReversaoControladaService');
+const { PERMISSIONS } = require('../constants/userRoles');
+const { requirePermission } = require('../middlewares/requirePermission');
 
-router.post('/mensalidades/:id', async (req, res, next) => {
+router.post('/mensalidades/:id', requirePermission(PERMISSIONS.REVERSAO_EXECUTAR), async (req, res, next) => {
   try {
     const data = await ReversaoControladaService.reverterMensalidade(
       req.params.id,
@@ -16,7 +18,7 @@ router.post('/mensalidades/:id', async (req, res, next) => {
   }
 });
 
-router.post('/vendas/:id', async (req, res, next) => {
+router.post('/vendas/:id', requirePermission(PERMISSIONS.REVERSAO_EXECUTAR), async (req, res, next) => {
   try {
     const data = await ReversaoControladaService.reverterVenda(
       req.params.id,
@@ -29,7 +31,7 @@ router.post('/vendas/:id', async (req, res, next) => {
   }
 });
 
-router.post('/contas-financeiras/:id', async (req, res, next) => {
+router.post('/contas-financeiras/:id', requirePermission(PERMISSIONS.REVERSAO_EXECUTAR), async (req, res, next) => {
   try {
     const data = await ReversaoControladaService.reverterContaFinanceira(
       req.params.id,

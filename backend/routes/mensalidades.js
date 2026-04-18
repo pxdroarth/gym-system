@@ -4,6 +4,8 @@ const MensalidadeService = require('../services/MensalidadeService');
 const { sincronizarFinanceiro } = require('../services/FinanceService');
 const AuditService = require('../services/AuditService');
 const ReversaoControladaService = require('../services/ReversaoControladaService');
+const { PERMISSIONS } = require('../constants/userRoles');
+const { requirePermission } = require('../middlewares/requirePermission');
 
 router.post('/', async (req, res, next) => {
   try {
@@ -73,7 +75,7 @@ router.patch('/:id/status', async (req, res, next) => {
   }
 });
 
-router.post('/:id/reverter', async (req, res, next) => {
+router.post('/:id/reverter', requirePermission(PERMISSIONS.REVERSAO_EXECUTAR), async (req, res, next) => {
   try {
     const resultado = await ReversaoControladaService.reverterMensalidade(
       req.params.id,

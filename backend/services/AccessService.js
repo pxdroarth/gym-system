@@ -7,6 +7,7 @@ const {
   MENSALIDADE_STATUS,
   VINCULO_STATUS,
 } = require('../constants/domainStates');
+const { PERMISSIONS, roleHasPermission } = require('../constants/userRoles');
 
 function resultadoBancoPorStatus(status) {
   return [
@@ -79,6 +80,10 @@ async function avaliarAcessoAluno(alunoId, options = {}) {
   if (!id) throw new AppError('aluno_id e obrigatorio', 400, 'ALUNO_ID_INVALIDO');
 
   if (options.liberacaoManual) {
+    if (!options.actor?.role || !roleHasPermission(options.actor.role, PERMISSIONS.ACESSO_LIBERACAO_MANUAL)) {
+      throw new AppError('Permissao negada para liberacao manual de acesso', 403, 'PERMISSAO_NEGADA');
+    }
+
     if (!options.motivo || !options.operador) {
       throw new AppError('Liberacao manual exige motivo e operador', 400, 'LIBERACAO_MANUAL_INVALIDA');
     }

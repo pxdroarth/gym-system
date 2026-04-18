@@ -2,6 +2,7 @@ const { runQuery, runGet, runExecute, runTransaction } = require('../dbHelper');
 const AppError = require('../errors/AppError');
 const AuditService = require('./AuditService');
 const { FECHAMENTO_STATUS } = require('../constants/domainStates');
+const { PERMISSIONS, roleHasPermission } = require('../constants/userRoles');
 
 function clientOrDefault(client) {
   return client || { all: runQuery, get: runGet, run: runExecute };
@@ -189,6 +190,10 @@ async function fecharPeriodo(ano, mes, actor) {
 }
 
 async function reabrirPeriodo(ano, mes, actor) {
+  if (!actor?.role || !roleHasPermission(actor.role, PERMISSIONS.FECHAMENTO_REABRIR)) {
+    throw new AppError('Somente admin pode reabrir fechamento mensal', 403, 'PERMISSAO_NEGADA');
+  }
+
   return runTransaction(async (tx) => {
     const periodo = validarPeriodo(ano, mes);
     const before = await obterFechamento(periodo.ano, periodo.mes, tx);

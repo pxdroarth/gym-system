@@ -4,6 +4,8 @@ const { runQuery, runGet, runExecute, runTransaction } = require('../dbHelper');
 const AuditService = require('../services/AuditService');
 const FechamentoMensalService = require('../services/FechamentoMensalService');
 const VinculoService = require('../services/VinculoService');
+const { PERMISSIONS } = require('../constants/userRoles');
+const { assertPermission } = require('../middlewares/requirePermission');
 
 function toISODate(d) {
   if (!d) return null;
@@ -214,6 +216,7 @@ router.put('/:id', async (req, res, next) => {
       const mudouPlanoComDependentes = Number(antes.plano_id) !== planoIdFinal && dependentes.length > 0;
 
       if (mudouPlanoComDependentes) {
+        assertPermission(req, PERMISSIONS.ALUNOS_ALTERAR_PLANO_COM_DEPENDENTES);
         await FechamentoMensalService.assertPeriodoEditavelPorData(
           new Date().toISOString().slice(0, 10),
           'mudanca de plano com dependentes',

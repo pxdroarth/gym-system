@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const FechamentoMensalService = require('../services/FechamentoMensalService');
 const AuditService = require('../services/AuditService');
+const { PERMISSIONS } = require('../constants/userRoles');
+const { requirePermission } = require('../middlewares/requirePermission');
 
 router.get('/:ano/:mes/analisar', async (req, res, next) => {
   try {
@@ -23,7 +25,7 @@ router.post('/:ano/:mes/fechar', async (req, res, next) => {
   }
 });
 
-router.post('/:ano/:mes/reabrir', async (req, res, next) => {
+router.post('/:ano/:mes/reabrir', requirePermission(PERMISSIONS.FECHAMENTO_REABRIR), async (req, res, next) => {
   try {
     res.json(await FechamentoMensalService.reabrirPeriodo(
       req.params.ano,

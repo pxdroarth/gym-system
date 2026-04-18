@@ -10,6 +10,14 @@ function safeJson(value) {
 }
 
 function getActorFromRequest(req) {
+  if (req?.operator && !req.operator.blocked) {
+    return {
+      id: String(req.operator.id),
+      name: req.operator.nome || req.operator.login || `usuario_${req.operator.id}`,
+      role: req.operator.papel,
+    };
+  }
+
   if (!req) return { id: 'sistema', name: 'sistema' };
 
   return {

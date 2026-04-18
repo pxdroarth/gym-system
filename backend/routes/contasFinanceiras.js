@@ -5,6 +5,8 @@ const AppError = require('../errors/AppError');
 const AuditService = require('../services/AuditService');
 const FechamentoMensalService = require('../services/FechamentoMensalService');
 const ReversaoControladaService = require('../services/ReversaoControladaService');
+const { PERMISSIONS } = require('../constants/userRoles');
+const { requirePermission } = require('../middlewares/requirePermission');
 
 function validarCamposObrigatorios(body, campos) {
   for (const campo of campos) {
@@ -185,7 +187,7 @@ router.patch('/:id/status', async (req, res, next) => {
   }
 });
 
-router.post('/:id/reverter', async (req, res, next) => {
+router.post('/:id/reverter', requirePermission(PERMISSIONS.REVERSAO_EXECUTAR), async (req, res, next) => {
   try {
     const data = await ReversaoControladaService.reverterContaFinanceira(
       req.params.id,
