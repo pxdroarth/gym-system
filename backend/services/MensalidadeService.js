@@ -1,6 +1,9 @@
-const { runGet, runExecute, runQuery } = require('../dbHelper');
+const { runGet, runExecute, runQuery, runTransaction } = require('../dbHelper');
 const AppError = require('../errors/AppError');
 const { MENSALIDADE_STATUS, MENSALIDADE_STATUS_VALUES } = require('../constants/domainStates');
+const AuditService = require('./AuditService');
+const FechamentoMensalService = require('./FechamentoMensalService');
+const FinanceiroService = require('./FinanceiroService');
 
 function isISODate(v) {
   return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
@@ -251,7 +254,7 @@ async function listarVigentes() {
   `, [MENSALIDADE_STATUS.PAGO]);
 }
 
-async function registrarPagamento(payload = {}) {
+async function registrarPagamento(payload = {}, actor) {
   const { mensalidade_id, data_pagamento, valor_pago } = payload;
   const dataPagamentoFinal = data_pagamento || new Date().toISOString().slice(0, 10);
 
@@ -259,49 +262,77 @@ async function registrarPagamento(payload = {}) {
     throw new AppError('Campos obrigatorios faltando', 400, 'PAGAMENTO_PAYLOAD_INVALIDO');
   }
 
-  const mensalidade = await runGet('SELECT * FROM mensalidade WHERE id = ?', [mensalidade_id]);
-  if (!mensalidade) throw new AppError('Mensalidade nao encontrada', 404, 'MENSALIDADE_NAO_ENCONTRADA');
+  return runTransaction(async (tx) => {
+    await FechamentoMensalService.assertPeriodoEditavelPorData(dataPagamentoFinal, 'pagamento de mensalidade', tx);
 
-  if (mensalidade.status === MENSALIDADE_STATUS.CANCELADO) {
-    throw new AppError('Mensalidade cancelada nao pode ser paga', 400, 'MENSALIDADE_CANCELADA');
-  }
+    const mensalidade = await tx.get('SELECT * FROM mensalidade WHERE id = ?', [mensalidade_id]);
+    if (!mensalidade) throw new AppError('Mensalidade nao encontrada', 404, 'MENSALIDADE_NAO_ENCONTRADA');
 
-  const valor = Number(valor_pago);
-  if (!Number.isFinite(valor) || valor <= 0) {
-    throw new AppError('valor_pago invalido', 400, 'VALOR_PAGO_INVALIDO');
-  }
+    if (mensalidade.status === MENSALIDADE_STATUS.CANCELADO) {
+      throw new AppError('Mensalidade cancelada nao pode ser paga', 400, 'MENSALIDADE_CANCELADA');
+    }
 
-  const valorPrevisto = Number(mensalidade.valor_cobrado || 0);
-  const novoStatus = valor < valorPrevisto ? MENSALIDADE_STATUS.PARCIAL : MENSALIDADE_STATUS.PAGO;
-  const existente = await runGet('SELECT id FROM pagamento WHERE mensalidade_id = ?', [mensalidade_id]);
-  let pagamentoId;
+    const valor = Number(valor_pago);
+    if (!Number.isFinite(valor) || valor <= 0) {
+      throw new AppError('valor_pago invalido', 400, 'VALOR_PAGO_INVALIDO');
+    }
 
-  if (existente) {
-    await runExecute(
-      'UPDATE pagamento SET data_pagamento = ?, valor_pago = ?, valor_previsto = ? WHERE id = ?',
-      [dataPagamentoFinal, valor, valorPrevisto, existente.id]
+    const valorPrevisto = Number(mensalidade.valor_cobrado || 0);
+    const novoStatus = valor < valorPrevisto ? MENSALIDADE_STATUS.PARCIAL : MENSALIDADE_STATUS.PAGO;
+    const pagamentoAntes = await tx.get('SELECT * FROM pagamento WHERE mensalidade_id = ?', [mensalidade_id]);
+    let pagamentoId;
+
+    if (pagamentoAntes) {
+      await tx.run(
+        'UPDATE pagamento SET data_pagamento = ?, valor_pago = ?, valor_previsto = ? WHERE id = ?',
+        [dataPagamentoFinal, valor, valorPrevisto, pagamentoAntes.id]
+      );
+      pagamentoId = pagamentoAntes.id;
+    } else {
+      const result = await tx.run(
+        'INSERT INTO pagamento (mensalidade_id, data_pagamento, valor_pago, valor_previsto) VALUES (?, ?, ?, ?)',
+        [mensalidade_id, dataPagamentoFinal, valor, valorPrevisto]
+      );
+      pagamentoId = result.lastID;
+    }
+
+    await tx.run(
+      'UPDATE mensalidade SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [novoStatus, mensalidade_id]
     );
-    pagamentoId = existente.id;
-  } else {
-    const result = await runExecute(
-      'INSERT INTO pagamento (mensalidade_id, data_pagamento, valor_pago, valor_previsto) VALUES (?, ?, ?, ?)',
-      [mensalidade_id, dataPagamentoFinal, valor, valorPrevisto]
-    );
-    pagamentoId = result.lastID;
-  }
 
-  await runExecute(
-    'UPDATE mensalidade SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [novoStatus, mensalidade_id]
-  );
+    await FinanceiroService.upsertLancamentoFinanceiro({
+      descricao: `Mensalidade ${mensalidade_id}`,
+      tipo: 'receita',
+      valor,
+      data_lancamento: dataPagamentoFinal,
+      status: 'pago',
+      plano_contas_id: 1,
+      origem: 'mensalidade',
+      origem_id: mensalidade_id,
+    }, tx);
 
-  return {
-    id: pagamentoId,
-    mensalidade_id,
-    data_pagamento: dataPagamentoFinal,
-    valor_pago: valor,
-    status_mensalidade: novoStatus,
-  };
+    const pagamentoDepois = await tx.get('SELECT * FROM pagamento WHERE id = ?', [pagamentoId]);
+    const mensalidadeDepois = await tx.get('SELECT * FROM mensalidade WHERE id = ?', [mensalidade_id]);
+
+    await AuditService.logAction({
+      actor,
+      action: 'registrar_pagamento_mensalidade',
+      module: 'mensalidades',
+      recordType: 'mensalidade',
+      recordId: mensalidade_id,
+      before: { mensalidade, pagamento: pagamentoAntes || null },
+      after: { mensalidade: mensalidadeDepois, pagamento: pagamentoDepois },
+    }, tx);
+
+    return {
+      id: pagamentoId,
+      mensalidade_id,
+      data_pagamento: dataPagamentoFinal,
+      valor_pago: valor,
+      status_mensalidade: novoStatus,
+    };
+  });
 }
 
 module.exports = {

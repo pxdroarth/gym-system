@@ -1,13 +1,18 @@
 const { runQuery, runGet, runExecute } = require('../dbHelper');
 
-async function upsertLancamentoFinanceiro(lancamento) {
-  const existente = await runGet(
+function clientOrDefault(client) {
+  return client || { all: runQuery, get: runGet, run: runExecute };
+}
+
+async function upsertLancamentoFinanceiro(lancamento, client = null) {
+  const db = clientOrDefault(client);
+  const existente = await db.get(
     'SELECT id FROM conta_financeira WHERE origem = ? AND origem_id = ?',
     [lancamento.origem, lancamento.origem_id]
   );
 
   if (existente) {
-    await runExecute(
+    await db.run(
       `UPDATE conta_financeira
        SET descricao = ?, tipo = ?, valor = ?, data_lancamento = ?, status = ?, plano_contas_id = ?, updated_at = datetime('now')
        WHERE id = ?`,
@@ -24,7 +29,7 @@ async function upsertLancamentoFinanceiro(lancamento) {
     return existente.id;
   }
 
-  const result = await runExecute(
+  const result = await db.run(
     `INSERT INTO conta_financeira
       (descricao, tipo, valor, data_lancamento, status, plano_contas_id, origem, origem_id, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
@@ -42,8 +47,9 @@ async function upsertLancamentoFinanceiro(lancamento) {
   return result.lastID;
 }
 
-async function sincronizarLancamentosMensalidades() {
-  const mensalidades = await runQuery(`
+async function sincronizarLancamentosMensalidades(client = null) {
+  const db = clientOrDefault(client);
+  const mensalidades = await db.all(`
     SELECT m.*,
            (
              SELECT MAX(p.data_pagamento)
@@ -76,12 +82,13 @@ async function sincronizarLancamentosMensalidades() {
       plano_contas_id: 1,
       origem: 'mensalidade',
       origem_id: m.id,
-    });
+    }, db);
   }
 }
 
-async function sincronizarLancamentosVendas() {
-  const vendas = await runQuery('SELECT * FROM venda_produto');
+async function sincronizarLancamentosVendas(client = null) {
+  const db = clientOrDefault(client);
+  const vendas = await db.all('SELECT * FROM venda_produto');
   for (const v of vendas) {
     const dataLancamento = v.data_venda || new Date().toISOString().slice(0, 10);
     await upsertLancamentoFinanceiro({
@@ -93,17 +100,18 @@ async function sincronizarLancamentosVendas() {
       plano_contas_id: 2,
       origem: 'venda_produto',
       origem_id: v.id,
-    });
+    }, db);
   }
 }
 
-async function sincronizarFinanceiro() {
-  await sincronizarLancamentosMensalidades();
-  await sincronizarLancamentosVendas();
+async function sincronizarFinanceiro(client = null) {
+  await sincronizarLancamentosMensalidades(client);
+  await sincronizarLancamentosVendas(client);
   return true;
 }
 
 module.exports = {
+  upsertLancamentoFinanceiro,
   sincronizarFinanceiro,
   sincronizarLancamentosMensalidades,
   sincronizarLancamentosVendas,

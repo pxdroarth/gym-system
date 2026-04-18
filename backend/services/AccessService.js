@@ -5,6 +5,7 @@ const {
   ACESSO_RESULTADO_VALUES,
   ACESSO_STATUS,
   MENSALIDADE_STATUS,
+  VINCULO_STATUS,
 } = require('../constants/domainStates');
 
 function resultadoBancoPorStatus(status) {
@@ -33,7 +34,14 @@ async function carregarAluno(alunoId) {
 }
 
 async function carregarVinculo(alunoId) {
-  return runGet('SELECT responsavel_id FROM plano_associado WHERE aluno_id = ? LIMIT 1', [alunoId]);
+  return runGet(
+    `SELECT responsavel_id, COALESCE(status, 'ativo') AS status
+     FROM plano_associado
+     WHERE aluno_id = ?
+       AND COALESCE(status, 'ativo') != ?
+     LIMIT 1`,
+    [alunoId, VINCULO_STATUS.ENCERRADO]
+  );
 }
 
 async function buscarMensalidadeCritica(alunoId) {
@@ -106,6 +114,17 @@ async function avaliarAcessoAluno(alunoId, options = {}) {
   }
 
   const vinculo = await carregarVinculo(id);
+  if (vinculo?.status === VINCULO_STATUS.PENDENTE_REGULARIZACAO) {
+    return {
+      ok: false,
+      status: ACESSO_STATUS.BLOQUEADO_PENDENTE_REGULARIZACAO,
+      resultado: ACESSO_RESULTADO.NEGADO,
+      motivo: 'Vinculo pendente de regularizacao',
+      aluno,
+      responsavel_id: vinculo.responsavel_id,
+    };
+  }
+
   const idFinanceiro = vinculo ? vinculo.responsavel_id : id;
   const responsavel = vinculo ? await carregarAluno(idFinanceiro) : aluno;
 

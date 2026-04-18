@@ -24,4 +24,27 @@ const runExecute = (sql, params = []) =>
     });
   });
 
-module.exports = { runQuery, runGet, runExecute };
+const runTransaction = async (callback) => {
+  await runExecute('BEGIN IMMEDIATE TRANSACTION');
+
+  const tx = {
+    all: runQuery,
+    get: runGet,
+    run: runExecute,
+  };
+
+  try {
+    const result = await callback(tx);
+    await runExecute('COMMIT');
+    return result;
+  } catch (error) {
+    try {
+      await runExecute('ROLLBACK');
+    } catch (rollbackError) {
+      console.error('[ERRO ROLLBACK]', rollbackError);
+    }
+    throw error;
+  }
+};
+
+module.exports = { runQuery, runGet, runExecute, runTransaction };

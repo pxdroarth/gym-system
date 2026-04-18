@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { runQuery, runGet, runExecute } = require('../dbHelper');
+const { runQuery, runGet, runExecute, runTransaction } = require('../dbHelper');
+const AuditService = require('../services/AuditService');
+const FechamentoMensalService = require('../services/FechamentoMensalService');
+const VinculoService = require('../services/VinculoService');
 
 function toISODate(d) {
   if (!d) return null;
@@ -61,7 +64,7 @@ const baseSelect = `
          ${statusOperacionalExpr} AS status_ativo,
          COALESCE(p.nome, 'Sem plano') AS plano_nome
   FROM aluno a
-  LEFT JOIN plano_associado pa ON pa.aluno_id = a.id
+  LEFT JOIN plano_associado pa ON pa.aluno_id = a.id AND COALESCE(pa.status, 'ativo') != 'encerrado'
   LEFT JOIN plano p ON a.plano_id = p.id
 `;
 
@@ -166,7 +169,7 @@ router.get('/:id/debito', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req, res, next) => {
   const id = parseInt(req.params.id);
   if (!id) return res.status(400).json({ error: 'ID inválido' });
 
@@ -196,20 +199,60 @@ router.put('/:id', async (req, res) => {
     }
 
     const statusFinal = (status || 'ativo') === 'inativo' ? 'inativo' : 'ativo';
+    const actor = AuditService.getActorFromRequest(req);
 
-    const result = await runExecute(
-      `UPDATE aluno
-         SET nome = ?, status = ?, dia_vencimento = ?, plano_id = ?, telefone = ?, data_nascimento = ?
-       WHERE id = ?`,
-      [String(nome).trim(), statusFinal, dv, planoIdFinal, telefone || null, dataNascISO, id]
-    );
+    const atualizado = await runTransaction(async (tx) => {
+      const antes = await tx.get('SELECT * FROM aluno WHERE id = ?', [id]);
+      if (!antes) return null;
 
-    if (result.changes === 0) return res.status(404).json({ error: 'Aluno não encontrado' });
+      const dependentes = await tx.all(
+        `SELECT * FROM plano_associado
+         WHERE responsavel_id = ?
+           AND COALESCE(status, 'ativo') = 'ativo'`,
+        [id]
+      );
+      const mudouPlanoComDependentes = Number(antes.plano_id) !== planoIdFinal && dependentes.length > 0;
 
-    const atualizado = await runGet(`SELECT * FROM aluno WHERE id = ?`, [id]);
+      if (mudouPlanoComDependentes) {
+        await FechamentoMensalService.assertPeriodoEditavelPorData(
+          new Date().toISOString().slice(0, 10),
+          'mudanca de plano com dependentes',
+          tx
+        );
+      }
+
+      const result = await tx.run(
+        `UPDATE aluno
+           SET nome = ?, status = ?, dia_vencimento = ?, plano_id = ?, telefone = ?, data_nascimento = ?
+         WHERE id = ?`,
+        [String(nome).trim(), statusFinal, dv, planoIdFinal, telefone || null, dataNascISO, id]
+      );
+
+      if (result.changes === 0) return null;
+
+      if (mudouPlanoComDependentes) {
+        await VinculoService.marcarDependentesPendenteRegularizacao(id, actor, tx);
+      }
+
+      const depois = await tx.get('SELECT * FROM aluno WHERE id = ?', [id]);
+      await AuditService.logAction({
+        actor,
+        action: mudouPlanoComDependentes ? 'alterar_aluno_e_regularizar_dependentes' : 'alterar_aluno',
+        module: 'alunos',
+        recordType: 'aluno',
+        recordId: id,
+        before: antes,
+        after: depois,
+        metadata: { mudou_plano_com_dependentes: mudouPlanoComDependentes },
+      }, tx);
+
+      return depois;
+    });
+
+    if (!atualizado) return res.status(404).json({ error: 'Aluno não encontrado' });
     res.json(atualizado);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 });
 

@@ -2,12 +2,14 @@ const express = require('express');
 const router = express.Router();
 const { runQuery } = require('../dbHelper');
 const MensalidadeService = require('../services/MensalidadeService');
-const { sincronizarFinanceiro } = require('../services/FinanceService');
+const AuditService = require('../services/AuditService');
 
 router.post('/', async (req, res, next) => {
   try {
-    const pagamento = await MensalidadeService.registrarPagamento(req.body || {});
-    await sincronizarFinanceiro();
+    const pagamento = await MensalidadeService.registrarPagamento(
+      req.body || {},
+      AuditService.getActorFromRequest(req)
+    );
     res.status(201).json(pagamento);
   } catch (error) {
     next(error);
