@@ -2,6 +2,7 @@ const { runQuery, runGet, runTransaction } = require('../dbHelper');
 const AppError = require('../errors/AppError');
 const AuditService = require('./AuditService');
 const { USER_ROLES, USER_STATUS, isValidRole, isValidStatus } = require('../constants/userRoles');
+const { hashPassword } = require('../utils/passwordHash');
 
 function normalizeUserPayload(payload = {}) {
   return {
@@ -10,7 +11,7 @@ function normalizeUserPayload(payload = {}) {
     login: payload.login ? String(payload.login).trim().toLowerCase() : null,
     papel: String(payload.papel || USER_ROLES.RECEPCAO).trim(),
     status: String(payload.status || USER_STATUS.ATIVO).trim(),
-    senha_hash: payload.senha_hash || null,
+    senha: payload.senha || payload.password || null,
   };
 }
 
@@ -35,6 +36,9 @@ async function criarUsuario(payload = {}, actor) {
   if (!data.login && !data.email) throw new AppError('login ou email e obrigatorio', 400, 'USUARIO_IDENTIFICADOR_OBRIGATORIO');
   if (!isValidRole(data.papel)) throw new AppError('papel invalido', 400, 'USUARIO_PAPEL_INVALIDO');
   if (!isValidStatus(data.status)) throw new AppError('status invalido', 400, 'USUARIO_STATUS_INVALIDO');
+  if (!data.senha) throw new AppError('senha inicial e obrigatoria', 400, 'USUARIO_SENHA_OBRIGATORIA');
+
+  const senhaHash = await hashPassword(data.senha);
 
   return runTransaction(async (tx) => {
     const result = await tx.run(
@@ -47,7 +51,7 @@ async function criarUsuario(payload = {}, actor) {
         data.login,
         data.papel,
         data.status,
-        data.senha_hash,
+        senhaHash,
         actor?.id || 'sistema',
         actor?.id || 'sistema',
       ]

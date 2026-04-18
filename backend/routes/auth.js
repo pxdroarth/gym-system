@@ -1,0 +1,44 @@
+const express = require('express');
+const router = express.Router();
+const AuthService = require('../services/AuthService');
+
+router.post('/login', async (req, res, next) => {
+  try {
+    const data = await AuthService.login(req.body || {}, req);
+    res.json({ ok: true, data, message: 'Login realizado com sucesso' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/logout', async (req, res, next) => {
+  try {
+    const token = AuthService.extractBearerToken(req);
+    const data = await AuthService.logout(token, req.operator, req);
+    res.json({ ok: true, data, message: 'Logout realizado com sucesso' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/me', (req, res) => {
+  if (req.authError) {
+    return res.status(401).json({
+      ok: false,
+      error: req.authError.message,
+      code: req.authError.code,
+    });
+  }
+
+  if (!req.operator || req.operator.blocked) {
+    return res.status(401).json({
+      ok: false,
+      error: 'Operador nao autenticado',
+      code: 'OPERADOR_NAO_AUTENTICADO',
+    });
+  }
+
+  res.json({ ok: true, data: req.operator });
+});
+
+module.exports = router;

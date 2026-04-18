@@ -2,6 +2,10 @@ const AppError = require('../errors/AppError');
 const { roleHasPermission, USER_STATUS } = require('../constants/userRoles');
 
 function assertActiveOperator(req) {
+  if (req?.authError) {
+    throw new AppError(req.authError.message, 401, req.authError.code);
+  }
+
   if (!req?.operator) {
     throw new AppError('Operador nao resolvido para esta acao', 401, 'OPERADOR_NAO_RESOLVIDO');
   }

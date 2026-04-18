@@ -6,6 +6,14 @@ const { requirePermission } = require('../middlewares/requirePermission');
 
 router.get('/me', (req, res, next) => {
   try {
+    if (req.authError) {
+      return res.status(401).json({
+        ok: false,
+        error: req.authError.message,
+        code: req.authError.code,
+      });
+    }
+
     if (!req.operator || req.operator.blocked) {
       return res.status(401).json({
         ok: false,

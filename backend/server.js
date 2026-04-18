@@ -45,6 +45,7 @@ async function start() {
   app.use('/dashboard/financeiro', require('./routes/dashboardFinanceiro'));
   app.use('/financeiro/ativos', require('./routes/ativos'));
   app.use('/financeiro/orcamento', require('./routes/orcamento'));
+  app.use('/auth', require('./routes/auth'));
   app.use('/planoContas', require('./routes/planoContas'));
   app.use('/plano-contas', require('./routes/planoContas'));
   app.use('/contasFinanceiras', require('./routes/contasFinanceiras'));

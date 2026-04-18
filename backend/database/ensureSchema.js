@@ -1,5 +1,6 @@
 const { runQuery, runGet, runExecute } = require('../dbHelper');
 const { USER_ROLES, USER_STATUS } = require('../constants/userRoles');
+const { hashPassword } = require('../utils/passwordHash');
 
 async function tableExists(tableName) {
   const row = await runGet(
@@ -125,22 +126,74 @@ async function ensureUsuarioInterno() {
   }
 
   const count = await runGet('SELECT COUNT(*) AS total FROM usuario_interno');
+  const bootstrapPassword = process.env.BOOTSTRAP_ADMIN_PASSWORD || 'admin123';
+  const bootstrapPasswordHash = await hashPassword(bootstrapPassword);
+
   if (Number(count?.total || 0) === 0) {
     await runExecute(
       `INSERT INTO usuario_interno
-        (nome, email, login, papel, status, created_by, updated_by, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+        (nome, email, login, papel, status, senha_hash, created_by, updated_by, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
       [
         'Administrador Bootstrap',
         'admin.local@sistema',
         'admin',
         USER_ROLES.ADMIN,
         USER_STATUS.ATIVO,
+        bootstrapPasswordHash,
         'bootstrap',
         'bootstrap',
       ]
     );
+
+    if (!process.env.BOOTSTRAP_ADMIN_PASSWORD) {
+      console.warn('[BOOTSTRAP] Admin inicial criado com senha local explicita: admin123. Defina BOOTSTRAP_ADMIN_PASSWORD para controlar isso.');
+    }
+    return;
   }
+
+  const bootstrapAdmin = await runGet(
+    `SELECT id FROM usuario_interno
+     WHERE login = 'admin'
+       AND papel = ?
+       AND created_by = 'bootstrap'
+       AND senha_hash IS NULL
+     LIMIT 1`,
+    [USER_ROLES.ADMIN]
+  );
+
+  if (bootstrapAdmin) {
+    await runExecute(
+      `UPDATE usuario_interno
+       SET senha_hash = ?, updated_by = 'bootstrap_auth_setup', updated_at = datetime('now')
+       WHERE id = ?`,
+      [bootstrapPasswordHash, bootstrapAdmin.id]
+    );
+
+    if (!process.env.BOOTSTRAP_ADMIN_PASSWORD) {
+      console.warn('[BOOTSTRAP] Senha local explicita aplicada apenas ao admin bootstrap existente: admin123. Defina BOOTSTRAP_ADMIN_PASSWORD para controlar isso.');
+    }
+  }
+}
+
+async function ensureAuthSession() {
+  if (await tableExists('auth_session')) return;
+
+  await runExecute(`
+    CREATE TABLE auth_session (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      usuario_id INTEGER NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'ativo',
+      created_at TEXT DEFAULT (datetime('now')),
+      expires_at TEXT,
+      revoked_at TEXT,
+      last_used_at TEXT,
+      ip TEXT,
+      user_agent TEXT,
+      FOREIGN KEY (usuario_id) REFERENCES usuario_interno(id)
+    )
+  `);
 }
 
 async function ensureSchema() {
@@ -150,6 +203,7 @@ async function ensureSchema() {
   await ensurePlanoAssociadoColumns();
   await ensureReversaoSoftDeleteColumns();
   await ensureUsuarioInterno();
+  await ensureAuthSession();
 }
 
 module.exports = ensureSchema;
