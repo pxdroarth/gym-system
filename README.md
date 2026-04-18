@@ -74,7 +74,7 @@ sistema-academia-main/
 │   ├── Máquina de estados de acesso.png
 │   ├── Máquina de estados de mensalidade.png
 │   └── notasextras.txt
-├── academia.sqlite
+├── backend/academia.sqlite
 ├── package.json
 └── README.md
 ```

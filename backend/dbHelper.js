@@ -20,7 +20,7 @@ const runExecute = (sql, params = []) =>
   new Promise((resolve, reject) => {
     db.run(sql, params, function (err) {
       if (err) reject(err);
-      else resolve({ id: this.lastID, changes: this.changes });
+      else resolve({ id: this.lastID, lastID: this.lastID, changes: this.changes });
     });
   });
 
