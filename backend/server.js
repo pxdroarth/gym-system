@@ -48,6 +48,7 @@ async function start() {
   app.use('/contasFinanceiras', require('./routes/contasFinanceiras'));
   app.use('/contas-financeiras', require('./routes/contasFinanceiras'));
   app.use('/fechamento-mensal', require('./routes/fechamentoMensal'));
+  app.use('/reversoes', require('./routes/reversoes'));
   app.use('/relatorios', require('./routes/relatorios'));
 
   app.get('/test-db', (req, res) => {

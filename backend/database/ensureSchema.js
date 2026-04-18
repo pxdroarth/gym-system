@@ -9,8 +9,14 @@ async function tableExists(tableName) {
 }
 
 async function columnExists(tableName, columnName) {
-  const columns = await runQuery(`PRAGMA table_info(${tableName})`);
-  return columns.some((column) => column.name === columnName);
+  const row = await runGet(
+    "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?",
+    [tableName]
+  );
+  if (!row?.sql) return false;
+
+  const normalizedSql = row.sql.replace(/["'`]/g, '').toLowerCase();
+  return new RegExp(`\\b${columnName.toLowerCase()}\\b`).test(normalizedSql);
 }
 
 async function addColumnIfMissing(tableName, columnDefinition) {
@@ -60,20 +66,23 @@ async function ensureFechamentoMensal() {
 }
 
 async function ensureReversaoControlada() {
-  if (await tableExists('reversao_controlada')) return;
+  if (!(await tableExists('reversao_controlada'))) {
+    await runExecute(`
+      CREATE TABLE reversao_controlada (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        modulo TEXT NOT NULL,
+        registro_origem_id TEXT NOT NULL,
+        lancamento_inverso_id TEXT,
+        motivo TEXT NOT NULL,
+        actor_id TEXT,
+        actor_name TEXT,
+        created_at TEXT DEFAULT (datetime('now'))
+      )
+    `);
+  }
 
-  await runExecute(`
-    CREATE TABLE reversao_controlada (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      modulo TEXT NOT NULL,
-      registro_origem_id TEXT NOT NULL,
-      lancamento_inverso_id TEXT,
-      motivo TEXT NOT NULL,
-      actor_id TEXT,
-      actor_name TEXT,
-      created_at TEXT DEFAULT (datetime('now'))
-    )
-  `);
+  await addColumnIfMissing('reversao_controlada', 'tipo TEXT');
+  await addColumnIfMissing('reversao_controlada', 'metadata_json TEXT');
 }
 
 async function ensurePlanoAssociadoColumns() {
@@ -83,11 +92,23 @@ async function ensurePlanoAssociadoColumns() {
   await addColumnIfMissing('plano_associado', 'encerrado_em TEXT');
 }
 
+async function ensureReversaoSoftDeleteColumns() {
+  await addColumnIfMissing('mensalidade', 'deleted_at TEXT');
+  await addColumnIfMissing('mensalidade', 'reversao_controlada_id INTEGER');
+
+  await addColumnIfMissing('venda_produto', 'deleted_at TEXT');
+  await addColumnIfMissing('venda_produto', 'reversao_controlada_id INTEGER');
+
+  await addColumnIfMissing('conta_financeira', 'deleted_at TEXT');
+  await addColumnIfMissing('conta_financeira', 'reversao_controlada_id INTEGER');
+}
+
 async function ensureSchema() {
   await ensureAuditLog();
   await ensureFechamentoMensal();
   await ensureReversaoControlada();
   await ensurePlanoAssociadoColumns();
+  await ensureReversaoSoftDeleteColumns();
 }
 
 module.exports = ensureSchema;

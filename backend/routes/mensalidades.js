@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const MensalidadeService = require('../services/MensalidadeService');
 const { sincronizarFinanceiro } = require('../services/FinanceService');
+const AuditService = require('../services/AuditService');
+const ReversaoControladaService = require('../services/ReversaoControladaService');
 
 router.post('/', async (req, res, next) => {
   try {
@@ -71,11 +73,28 @@ router.patch('/:id/status', async (req, res, next) => {
   }
 });
 
+router.post('/:id/reverter', async (req, res, next) => {
+  try {
+    const resultado = await ReversaoControladaService.reverterMensalidade(
+      req.params.id,
+      req.body || {},
+      AuditService.getActorFromRequest(req)
+    );
+    res.json({ ok: true, data: resultado, message: 'Mensalidade revertida com controle' });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.delete('/:id', async (req, res, next) => {
   try {
-    await MensalidadeService.removerMensalidade(req.params.id);
+    await MensalidadeService.removerMensalidade(
+      req.params.id,
+      AuditService.getActorFromRequest(req),
+      req.body?.motivo
+    );
     await sincronizarFinanceiro();
-    res.json({ message: 'Mensalidade deletada com sucesso' });
+    res.json({ message: 'Mensalidade removida logicamente com sucesso' });
   } catch (error) {
     next(error);
   }

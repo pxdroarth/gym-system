@@ -64,6 +64,7 @@ async function sincronizarLancamentosMensalidades(client = null) {
     FROM mensalidade m
     WHERE m.vencimento IS NOT NULL
       AND m.vencimento != '0000-00-00'
+      AND m.deleted_at IS NULL
       AND COALESCE(m.status, '') != 'cancelado'
   `);
 
@@ -88,7 +89,7 @@ async function sincronizarLancamentosMensalidades(client = null) {
 
 async function sincronizarLancamentosVendas(client = null) {
   const db = clientOrDefault(client);
-  const vendas = await db.all('SELECT * FROM venda_produto');
+  const vendas = await db.all('SELECT * FROM venda_produto WHERE deleted_at IS NULL');
   for (const v of vendas) {
     const dataLancamento = v.data_venda || new Date().toISOString().slice(0, 10);
     await upsertLancamentoFinanceiro({

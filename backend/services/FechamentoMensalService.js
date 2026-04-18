@@ -63,6 +63,7 @@ async function analisarPeriodo(ano, mes, client = null) {
      FROM mensalidade m
      LEFT JOIN conta_financeira cf ON cf.origem = 'mensalidade' AND cf.origem_id = m.id
      WHERE m.status IN ('pago', 'parcial')
+       AND m.deleted_at IS NULL
        AND DATE(COALESCE(m.updated_at, m.vencimento)) BETWEEN DATE(?) AND DATE(?)
        AND cf.id IS NULL`,
     [inicio, fim]
@@ -81,6 +82,7 @@ async function analisarPeriodo(ano, mes, client = null) {
      FROM venda_produto v
      LEFT JOIN conta_financeira cf ON cf.origem = 'venda_produto' AND cf.origem_id = v.id
      WHERE DATE(v.data_venda) BETWEEN DATE(?) AND DATE(?)
+       AND v.deleted_at IS NULL
        AND cf.id IS NULL`,
     [inicio, fim]
   );
@@ -99,6 +101,7 @@ async function analisarPeriodo(ano, mes, client = null) {
      LEFT JOIN mensalidade m ON cf.origem = 'mensalidade' AND cf.origem_id = m.id
      LEFT JOIN venda_produto v ON cf.origem = 'venda_produto' AND cf.origem_id = v.id
      WHERE DATE(cf.data_lancamento) BETWEEN DATE(?) AND DATE(?)
+       AND cf.deleted_at IS NULL
        AND cf.origem IN ('mensalidade', 'venda_produto')
        AND (
          (cf.origem = 'mensalidade' AND m.id IS NULL)
@@ -120,6 +123,7 @@ async function analisarPeriodo(ano, mes, client = null) {
      FROM venda_produto v
      LEFT JOIN produto p ON p.id = v.produto_id
      WHERE DATE(v.data_venda) BETWEEN DATE(?) AND DATE(?)
+       AND v.deleted_at IS NULL
        AND v.produto_id IS NOT NULL
        AND p.id IS NULL`,
     [inicio, fim]

@@ -1,23 +1,23 @@
 const express = require('express');
 const router = express.Router();
-const { runQuery, runGet, runExecute } = require('../dbHelper');
+const { runQuery, runGet, runExecute, runTransaction } = require('../dbHelper');
+const AppError = require('../errors/AppError');
+const AuditService = require('../services/AuditService');
+const FechamentoMensalService = require('../services/FechamentoMensalService');
+const ReversaoControladaService = require('../services/ReversaoControladaService');
 
-// Validação de campos obrigatórios
 function validarCamposObrigatorios(body, campos) {
   for (const campo of campos) {
-    if (!body[campo]) return `Campo obrigatório ausente: ${campo}`;
+    if (!body[campo]) return `Campo obrigatorio ausente: ${campo}`;
   }
   return null;
 }
 
-// GET /contas-financeiras?tipo=&status=&data_inicial=&data_final=&descricao=&page=&perPage=
-router.get('/', async (req, res) => {
-  const { tipo, status, data_inicial, data_final, descricao = "", page = 1, perPage = 10 } = req.query;
+router.get('/', async (req, res, next) => {
+  const { tipo, status, data_inicial, data_final, descricao = '', page = 1, perPage = 10 } = req.query;
   const params = [];
-  // FILTRA SÓ contas administrativas:
-  let where = "WHERE cf.origem = 'conta_financeira'";
+  let where = "WHERE cf.origem = 'conta_financeira' AND cf.deleted_at IS NULL";
 
-  // Filtros
   if (tipo && tipo !== 'todos') {
     where += ' AND cf.tipo = ?';
     params.push(tipo);
@@ -34,119 +34,206 @@ router.get('/', async (req, res) => {
     where += ' AND date(cf.data_lancamento) <= date(?)';
     params.push(data_final);
   }
-  if (descricao && descricao.trim() !== "") {
-    where += " AND LOWER(cf.descricao) LIKE ?";
+  if (descricao && descricao.trim() !== '') {
+    where += ' AND LOWER(cf.descricao) LIKE ?';
     params.push(`%${descricao.toLowerCase()}%`);
   }
 
-  // Paginação
   const limit = parseInt(perPage) || 10;
   const offset = ((parseInt(page) || 1) - 1) * limit;
 
-  // Query de dados
-  let sql = `
-    SELECT cf.*, pc.nome AS plano_nome
-    FROM conta_financeira cf
-    LEFT JOIN plano_contas pc ON cf.plano_contas_id = pc.id
-    ${where}
-    ORDER BY cf.data_lancamento DESC, cf.id DESC
-    LIMIT ? OFFSET ?
-  `;
-  // Query de contagem total
-  let sqlCount = `
-    SELECT COUNT(*) AS total
-    FROM conta_financeira cf
-    LEFT JOIN plano_contas pc ON cf.plano_contas_id = pc.id
-    ${where}
-  `;
-
   try {
-    const rows = await runQuery(sql, [...params, limit, offset]);
-    const countRow = await runGet(sqlCount, params);
+    const rows = await runQuery(`
+      SELECT cf.*, pc.nome AS plano_nome
+      FROM conta_financeira cf
+      LEFT JOIN plano_contas pc ON cf.plano_contas_id = pc.id
+      ${where}
+      ORDER BY cf.data_lancamento DESC, cf.id DESC
+      LIMIT ? OFFSET ?
+    `, [...params, limit, offset]);
+
+    const countRow = await runGet(`
+      SELECT COUNT(*) AS total
+      FROM conta_financeira cf
+      LEFT JOIN plano_contas pc ON cf.plano_contas_id = pc.id
+      ${where}
+    `, params);
+
     res.json({
       data: rows,
       total: countRow ? countRow.total : 0,
       page: parseInt(page),
-      perPage: limit
+      perPage: limit,
     });
-  } catch (e) {
-    console.error('[ERRO GET contas-financeiras]', e);
-    res.status(500).json({ error: 'Erro ao buscar contas financeiras' });
+  } catch (error) {
+    next(error);
   }
 });
 
-// POST /contas-financeiras
-router.post('/', async (req, res) => {
+router.post('/', async (req, res, next) => {
   const { descricao, tipo, valor, data_lancamento, status, plano_contas_id, observacao } = req.body;
   const erro = validarCamposObrigatorios(req.body, ['descricao', 'tipo', 'valor', 'data_lancamento', 'status']);
   if (erro) return res.status(400).json({ error: erro });
 
   try {
-    // Define a origem automaticamente como 'conta_financeira'
-    const result = await runExecute(`
-      INSERT INTO conta_financeira 
-      (descricao, tipo, valor, data_lancamento, status, plano_contas_id, observacao, origem, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'conta_financeira', datetime('now'), datetime('now'))
-    `, [descricao, tipo, valor, data_lancamento, status, plano_contas_id || null, observacao || null]);
-    res.status(201).json({ id: result.id });
-  } catch (e) {
-    console.error('[ERRO POST contas-financeiras]', e);
-    res.status(500).json({ error: 'Erro ao criar conta financeira' });
+    const actor = AuditService.getActorFromRequest(req);
+    const criada = await runTransaction(async (tx) => {
+      await FechamentoMensalService.assertPeriodoEditavelPorData(data_lancamento, 'criacao de conta financeira', tx);
+
+      const result = await tx.run(`
+        INSERT INTO conta_financeira
+        (descricao, tipo, valor, data_lancamento, status, plano_contas_id, observacao, origem, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'conta_financeira', datetime('now'), datetime('now'))
+      `, [descricao, tipo, valor, data_lancamento, status, plano_contas_id || null, observacao || null]);
+
+      const after = await tx.get('SELECT * FROM conta_financeira WHERE id = ?', [result.lastID]);
+      await AuditService.logAction({
+        actor,
+        action: 'criar_conta_financeira',
+        module: 'contas_financeiras',
+        recordType: 'conta_financeira',
+        recordId: result.lastID,
+        before: null,
+        after,
+      }, tx);
+
+      return after;
+    });
+
+    res.status(201).json({ id: criada.id });
+  } catch (error) {
+    next(error);
   }
 });
 
-// PUT /contas-financeiras/:id
-router.put('/:id', async (req, res) => {
+router.put('/:id', async (req, res, next) => {
   const id = parseInt(req.params.id);
   const { descricao, tipo, valor, data_lancamento, status, plano_contas_id, observacao } = req.body;
 
   try {
-    const result = await runExecute(`
-      UPDATE conta_financeira SET
-        descricao = ?, tipo = ?, valor = ?, data_lancamento = ?, status = ?, 
-        plano_contas_id = ?, observacao = ?, updated_at = datetime('now')
-      WHERE id = ?
-    `, [descricao, tipo, valor, data_lancamento, status, plano_contas_id || null, observacao || null, id]);
+    const actor = AuditService.getActorFromRequest(req);
+    const updated = await runTransaction(async (tx) => {
+      const before = await tx.get('SELECT * FROM conta_financeira WHERE id = ?', [id]);
+      if (!before || before.deleted_at) throw new AppError('Conta nao encontrada', 404, 'CONTA_NAO_ENCONTRADA');
 
-    if (result.changes === 0) return res.status(404).json({ error: 'Conta não encontrada' });
-    res.json({ message: 'Conta financeira atualizada com sucesso' });
-  } catch (e) {
-    console.error('[ERRO PUT contas-financeiras]', e);
-    res.status(500).json({ error: 'Erro ao atualizar conta financeira' });
+      await FechamentoMensalService.assertPeriodoEditavelPorData(
+        data_lancamento || before.data_lancamento,
+        'edicao de conta financeira',
+        tx
+      );
+
+      await tx.run(`
+        UPDATE conta_financeira SET
+          descricao = ?, tipo = ?, valor = ?, data_lancamento = ?, status = ?,
+          plano_contas_id = ?, observacao = ?, updated_at = datetime('now')
+        WHERE id = ?
+      `, [descricao, tipo, valor, data_lancamento, status, plano_contas_id || null, observacao || null, id]);
+
+      const after = await tx.get('SELECT * FROM conta_financeira WHERE id = ?', [id]);
+      await AuditService.logAction({
+        actor,
+        action: 'editar_conta_financeira',
+        module: 'contas_financeiras',
+        recordType: 'conta_financeira',
+        recordId: id,
+        before,
+        after,
+      }, tx);
+
+      return after;
+    });
+
+    res.json({ message: 'Conta financeira atualizada com sucesso', conta: updated });
+  } catch (error) {
+    next(error);
   }
 });
 
-// PATCH /contas-financeiras/:id/status   (confirmar pagamento)
-router.patch('/:id/status', async (req, res) => {
+router.patch('/:id/status', async (req, res, next) => {
   const id = parseInt(req.params.id);
   const { status } = req.body;
-  if (!status) return res.status(400).json({ error: 'Status é obrigatório' });
+  if (!status) return res.status(400).json({ error: 'Status e obrigatorio' });
 
   try {
-    const result = await runExecute(`
-      UPDATE conta_financeira 
-      SET status = ?, updated_at = datetime('now')
-      WHERE id = ?
-    `, [status, id]);
+    const actor = AuditService.getActorFromRequest(req);
+    await runTransaction(async (tx) => {
+      const before = await tx.get('SELECT * FROM conta_financeira WHERE id = ?', [id]);
+      if (!before || before.deleted_at) throw new AppError('Conta nao encontrada', 404, 'CONTA_NAO_ENCONTRADA');
 
-    if (result.changes === 0) return res.status(404).json({ error: 'Conta não encontrada' });
+      await FechamentoMensalService.assertPeriodoEditavelPorData(before.data_lancamento, 'alteracao de status de conta financeira', tx);
+
+      await tx.run(
+        'UPDATE conta_financeira SET status = ?, updated_at = datetime(\'now\') WHERE id = ?',
+        [status, id]
+      );
+
+      const after = await tx.get('SELECT * FROM conta_financeira WHERE id = ?', [id]);
+      await AuditService.logAction({
+        actor,
+        action: 'alterar_status_conta_financeira',
+        module: 'contas_financeiras',
+        recordType: 'conta_financeira',
+        recordId: id,
+        before,
+        after,
+      }, tx);
+    });
+
     res.json({ message: 'Status da conta atualizado com sucesso' });
-  } catch (e) {
-    console.error('[ERRO PATCH contas-financeiras status]', e);
-    res.status(500).json({ error: 'Erro ao atualizar status da conta' });
+  } catch (error) {
+    next(error);
   }
 });
 
-// DELETE /contas-financeiras/:id
-router.delete('/:id', async (req, res) => {
-  const id = parseInt(req.params.id);
+router.post('/:id/reverter', async (req, res, next) => {
   try {
-    const result = await runExecute('DELETE FROM conta_financeira WHERE id = ?', [id]);
-    if (result.changes === 0) return res.status(404).json({ error: 'Conta não encontrada para excluir' });
-    res.json({ message: 'Conta financeira excluída com sucesso' });
-  } catch (e) {
-    console.error('[ERRO DELETE contas-financeiras]', e);
-    res.status(500).json({ error: 'Erro ao excluir conta financeira' });
+    const data = await ReversaoControladaService.reverterContaFinanceira(
+      req.params.id,
+      req.body || {},
+      AuditService.getActorFromRequest(req)
+    );
+    res.json({ ok: true, data, message: 'Conta financeira revertida com controle' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/:id', async (req, res, next) => {
+  const id = parseInt(req.params.id);
+
+  try {
+    const actor = AuditService.getActorFromRequest(req);
+    const before = await runGet('SELECT * FROM conta_financeira WHERE id = ?', [id]);
+    if (!before || before.deleted_at) throw new AppError('Conta nao encontrada para excluir', 404, 'CONTA_NAO_ENCONTRADA');
+
+    if (before.status === 'pago') {
+      const data = await ReversaoControladaService.reverterContaFinanceira(id, req.body || {}, actor);
+      return res.json({ ok: true, data, message: 'Conta paga revertida com controle' });
+    }
+
+    await runTransaction(async (tx) => {
+      await FechamentoMensalService.assertPeriodoEditavelPorData(before.data_lancamento, 'remocao logica de conta financeira', tx);
+      await tx.run(
+        'UPDATE conta_financeira SET deleted_at = datetime(\'now\'), updated_at = datetime(\'now\') WHERE id = ?',
+        [id]
+      );
+
+      const after = await tx.get('SELECT * FROM conta_financeira WHERE id = ?', [id]);
+      await AuditService.logAction({
+        actor,
+        action: 'remover_conta_financeira_logicamente',
+        module: 'contas_financeiras',
+        recordType: 'conta_financeira',
+        recordId: id,
+        before,
+        after,
+        metadata: { motivo: req.body?.motivo || 'Remocao logica de conta pendente' },
+      }, tx);
+    });
+
+    res.json({ message: 'Conta financeira removida logicamente com sucesso' });
+  } catch (error) {
+    next(error);
   }
 });
 
