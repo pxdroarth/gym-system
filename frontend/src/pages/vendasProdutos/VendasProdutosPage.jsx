@@ -1,6 +1,33 @@
 import React, { useEffect, useState } from "react";
-import { fetchProdutos, fetchVendasProdutos, createVendaProduto } from "../../services/Api";
+import { CalendarDays, ShoppingCart, Wallet } from "lucide-react";
 import { toast } from "react-toastify";
+import { createVendaProduto, fetchProdutos, fetchVendasProdutos } from "../../services/Api";
+import Button from "../../components/ui/Button";
+import Card from "../../components/ui/Card";
+import EmptyState from "../../components/ui/EmptyState";
+import Input from "../../components/ui/Input";
+import KpiCard from "../../components/ui/KpiCard";
+import PageHeader from "../../components/ui/PageHeader";
+import Pagination from "../../components/ui/Pagination";
+import PillButton from "../../components/ui/PillButton";
+import Select from "../../components/ui/Select";
+import Table from "../../components/ui/Table";
+
+function formatarMoeda(valor) {
+  return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function periodoParaDatas(periodo) {
+  const hoje = new Date();
+  const fim = hoje.toISOString().slice(0, 10);
+  const inicio = new Date(hoje);
+
+  if (periodo === "diario") return { inicio: fim, fim };
+  if (periodo === "semanal") inicio.setDate(hoje.getDate() - 7);
+  if (periodo === "mensal") inicio.setMonth(hoje.getMonth() - 1);
+
+  return { inicio: inicio.toISOString().slice(0, 10), fim };
+}
 
 export default function VendasProdutosPage() {
   const [produtos, setProdutos] = useState([]);
@@ -12,6 +39,7 @@ export default function VendasProdutosPage() {
 
   const [dataInicial, setDataInicial] = useState("");
   const [dataFinal, setDataFinal] = useState("");
+  const [periodoRapido, setPeriodoRapido] = useState("personalizado");
 
   const [pagina, setPagina] = useState(1);
   const limite = 10;
@@ -68,80 +96,144 @@ export default function VendasProdutosPage() {
     }
   }
 
-  const totalPaginas = Math.ceil(total / limite);
+  function aplicarPeriodoRapido(periodo) {
+    setPeriodoRapido(periodo);
+    setPagina(1);
+
+    if (periodo === "personalizado") return;
+
+    const datas = periodoParaDatas(periodo);
+    setDataInicial(datas.inicio);
+    setDataFinal(datas.fim);
+  }
+
+  const totalPaginas = Math.max(1, Math.ceil(total / limite));
+  const totalPagina = vendas.reduce((soma, venda) => soma + Number(venda.preco_unitario || 0) * Number(venda.quantidade || 0), 0);
 
   return (
-    <div className="max-w-5xl mx-auto p-6 bg-white rounded shadow space-y-6">
-      <h2 className="text-2xl font-bold text-blue-700">Vendas de Produtos</h2>
+    <div className="space-y-6">
+      <PageHeader
+        title="Vendas de Produtos"
+        subtitle="Registre vendas da recepção e acompanhe o histórico operacional."
+      />
 
-      <form onSubmit={handleVenda} className="space-y-4 max-w-md">
-        <select
-          value={produtoSelecionado?.id || ""}
-          onChange={(e) => setProdutoSelecionado(produtos.find(p => p.id === Number(e.target.value)))}
-          className="w-full border px-3 py-2 rounded"
-        >
-          <option value="">Selecione um produto</option>
-          {produtos.map(p => (
-            <option key={p.id} value={p.id}>{p.nome} (Estoque: {p.estoque})</option>
-          ))}
-        </select>
-
-        <input
-          type="number"
-          value={quantidade}
-          onChange={(e) => setQuantidade(Number(e.target.value))}
-          className="w-full border px-3 py-2 rounded"
-          placeholder="Quantidade"
-          min="1"
-          max={produtoSelecionado?.estoque || 1}
-        />
-
-        <button className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700" type="submit">
-          Registrar Venda
-        </button>
-      </form>
-
-      <div className="flex gap-4 mt-4">
-        <input type="date" value={dataInicial} onChange={(e) => setDataInicial(e.target.value)} className="border px-3 py-2 rounded" />
-        <input type="date" value={dataFinal} onChange={(e) => setDataFinal(e.target.value)} className="border px-3 py-2 rounded" />
-        <button onClick={() => { setPagina(1); carregarVendas(); }} className="px-3 py-2 bg-blue-500 text-white rounded">Filtrar</button>
+      <div className="ui-status-grid">
+        <KpiCard label="Vendas Encontradas" value={total} icon={<ShoppingCart size={20} />} tone="blue" />
+        <KpiCard label="Total da Página" value={formatarMoeda(totalPagina)} icon={<Wallet size={20} />} tone="green" />
+        <KpiCard label="Produtos Disponíveis" value={produtos.length} icon={<CalendarDays size={20} />} tone="gray" />
       </div>
 
-      <table className="min-w-full border mt-4">
-        <thead className="bg-gray-200">
-          <tr>
-            <th className="p-3 border">Produto</th>
-            <th className="p-3 border">Quantidade</th>
-            <th className="p-3 border">Preço Unitário</th>
-            <th className="p-3 border">Data Venda</th>
-          </tr>
-        </thead>
-        <tbody>
-          {vendas.map(v => (
-            <tr key={v.id} className="border-t">
-              <td className="p-3 border">{v.produto_nome}</td>
-              <td className="p-3 border">{v.quantidade}</td>
-              <td className="p-3 border">R$ {Number(v.preco_unitario).toFixed(2)}</td>
-              <td className="p-3 border">{new Date(v.data_venda).toLocaleString("pt-BR")}</td>
-            </tr>
-          ))}
-          {vendas.length === 0 && (
-            <tr><td colSpan="4" className="text-center p-4">Nenhuma venda encontrada.</td></tr>
-          )}
-        </tbody>
-      </table>
+      <Card className="p-5">
+        <div className="ui-section-header px-0 pt-0">
+          <div>
+            <h2 className="ui-section-title">Registrar Venda</h2>
+            <p className="ui-section-subtitle">Selecione o produto, confirme a quantidade e registre a movimentação.</p>
+          </div>
+        </div>
 
-      <div className="flex gap-2 justify-center mt-4">
-        {Array.from({ length: totalPaginas }, (_, i) => i + 1).map(num => (
-          <button
-            key={num}
-            onClick={() => setPagina(num)}
-            className={`px-3 py-1 rounded ${num === pagina ? "bg-blue-600 text-white" : "bg-gray-200"}`}
+        <form onSubmit={handleVenda} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_auto] gap-4 items-end">
+          <Select
+            label="Produto"
+            value={produtoSelecionado?.id || ""}
+            onChange={(e) => setProdutoSelecionado(produtos.find((p) => p.id === Number(e.target.value)))}
           >
-            {num}
-          </button>
-        ))}
-      </div>
+            <option value="">Selecione um produto</option>
+            {produtos.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome} - Estoque: {p.estoque}
+              </option>
+            ))}
+          </Select>
+
+          <Input
+            label="Quantidade"
+            type="number"
+            value={quantidade}
+            onChange={(e) => setQuantidade(Number(e.target.value))}
+            min="1"
+            max={produtoSelecionado?.estoque || 1}
+          />
+
+          <Button type="submit">Registrar Venda</Button>
+        </form>
+      </Card>
+
+      <Card>
+        <div className="ui-section-header">
+          <div>
+            <h2 className="ui-section-title">Histórico de Vendas</h2>
+            <p className="ui-section-subtitle">{total} registro(s) encontrado(s).</p>
+          </div>
+        </div>
+
+        <div className="p-5 flex flex-wrap gap-3 items-end border-b">
+          <div className="flex gap-2 flex-wrap">
+            {[
+              { key: "diario", label: "Diário" },
+              { key: "semanal", label: "Semanal" },
+              { key: "mensal", label: "Mensal" },
+              { key: "personalizado", label: "Personalizado" },
+            ].map((p) => (
+              <PillButton key={p.key} active={periodoRapido === p.key} onClick={() => aplicarPeriodoRapido(p.key)}>
+                {p.label}
+              </PillButton>
+            ))}
+          </div>
+
+          <Input
+            label="Data inicial"
+            type="date"
+            value={dataInicial}
+            onChange={(e) => {
+              setPeriodoRapido("personalizado");
+              setDataInicial(e.target.value);
+            }}
+            className="max-w-44"
+          />
+          <Input
+            label="Data final"
+            type="date"
+            value={dataFinal}
+            onChange={(e) => {
+              setPeriodoRapido("personalizado");
+              setDataFinal(e.target.value);
+            }}
+            className="max-w-44"
+          />
+          <Button onClick={() => { setPagina(1); carregarVendas(); }}>Filtrar</Button>
+        </div>
+
+        {vendas.length === 0 ? (
+          <EmptyState title="Nenhuma venda encontrada." />
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                <th>Produto</th>
+                <th>Quantidade</th>
+                <th>Preço Unitário</th>
+                <th>Total</th>
+                <th>Data Venda</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vendas.map((v) => (
+                <tr key={v.id}>
+                  <td className="font-semibold">{v.produto_nome}</td>
+                  <td>{v.quantidade}</td>
+                  <td>{formatarMoeda(v.preco_unitario)}</td>
+                  <td className="font-semibold">{formatarMoeda(Number(v.preco_unitario || 0) * Number(v.quantidade || 0))}</td>
+                  <td>{new Date(v.data_venda).toLocaleString("pt-BR")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+
+        <div className="px-5 pb-5">
+          <Pagination page={pagina} totalPages={totalPaginas} onPageChange={setPagina} />
+        </div>
+      </Card>
     </div>
   );
 }

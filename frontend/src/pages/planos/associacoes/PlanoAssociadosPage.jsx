@@ -1,43 +1,44 @@
 import React, { useEffect, useState } from "react";
+import { Link2, Users } from "lucide-react";
 import { toast } from "react-toastify";
+import Badge from "../../../components/ui/Badge";
+import Button from "../../../components/ui/Button";
+import Card from "../../../components/ui/Card";
+import EmptyState from "../../../components/ui/EmptyState";
+import Input from "../../../components/ui/Input";
+import KpiCard from "../../../components/ui/KpiCard";
+import PageHeader from "../../../components/ui/PageHeader";
 
 const API = "http://localhost:3001";
 
-function Badge({ children, title }) {
+function AlunoLinha({ aluno, action, actionLabel, muted }) {
   return (
-    <span
-      title={title}
-      className="inline-flex items-center justify-center min-w-[1.5rem] px-2 h-6 text-xs font-semibold rounded-full bg-blue-100 text-blue-700"
-    >
-      {children}
-    </span>
+    <div className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-gray-50">
+      <div className="min-w-0">
+        <div className="font-semibold truncate">{aluno.nome}</div>
+        <div className="text-xs text-gray-500 font-mono">{aluno.matricula}</div>
+      </div>
+      {action && (
+        <Button size="sm" variant={muted ? "danger" : "primary"} onClick={action}>
+          {actionLabel}
+        </Button>
+      )}
+    </div>
   );
 }
 
-/**
- * Tela de vinculação de planos compartilhados (Responsável -> Associados)
- * Padrão: Transfer List (lista de busca à esquerda, associados à direita).
- * - Busca alunos por nome/matrícula (GET /alunos/pesquisa)
- * - Mostra associados do responsável (GET /plano-associado/:responsavelId)
- * - Adiciona vínculo (POST /plano-associado { aluno_id, responsavel_id })
- * - Remove vínculo (DELETE /plano-associado/:id)
- */
 export default function PlanoAssociadosPage() {
-  // Responsável selecionado
   const [responsavelBusca, setResponsavelBusca] = useState("");
   const [responsavelResultados, setResponsavelResultados] = useState([]);
-  const [responsavelSel, setResponsavelSel] = useState(null); // {id, nome, matricula}
+  const [responsavelSel, setResponsavelSel] = useState(null);
 
-  // Vinculados do responsável (lado direito)
-  const [associados, setAssociados] = useState([]); // [{id, aluno_id, nome, matricula}]
+  const [associados, setAssociados] = useState([]);
   const [carregandoAssociados, setCarregandoAssociados] = useState(false);
 
-  // Busca de alunos para adicionar (lado esquerdo)
   const [busca, setBusca] = useState("");
-  const [resultados, setResultados] = useState([]); // alunos encontrados
+  const [resultados, setResultados] = useState([]);
   const [buscando, setBuscando] = useState(false);
 
-  // --- Busca de RESPONSÁVEL (autocomplete simples) ---
   useEffect(() => {
     let active = true;
     const t = setTimeout(async () => {
@@ -61,7 +62,6 @@ export default function PlanoAssociadosPage() {
     return () => { active = false; clearTimeout(t); };
   }, [responsavelBusca]);
 
-  // Carrega vinculados ao mudar o responsável
   useEffect(() => {
     if (!responsavelSel?.id) {
       setAssociados([]);
@@ -73,10 +73,9 @@ export default function PlanoAssociadosPage() {
         const r = await fetch(`${API}/plano-associado/${responsavelSel.id}`);
         if (!r.ok) throw new Error("Erro ao carregar vínculos");
         const jr = await r.json();
-        // jr.associados: [{id, nome, matricula}] — nossa API retorna id do vínculo como id
         const arr = (jr.associados || []).map((a) => ({
-          id: a.id, // id do vínculo
-          aluno_id: a.aluno_id || a.id_aluno || a.aluno_id, // tolerância
+          id: a.id,
+          aluno_id: a.aluno_id || a.id_aluno || a.aluno_id,
           nome: a.nome,
           matricula: a.matricula,
         }));
@@ -89,7 +88,6 @@ export default function PlanoAssociadosPage() {
     })();
   }, [responsavelSel?.id]);
 
-  // Busca de alunos para ADICIONAR (lado esquerdo)
   useEffect(() => {
     let active = true;
     const t = setTimeout(async () => {
@@ -108,7 +106,6 @@ export default function PlanoAssociadosPage() {
         if (r.ok) {
           const jr = await r.json();
           let lista = jr.alunos || [];
-          // filtra: não mostrar o próprio responsável e nem quem já está vinculado
           const idsJa = new Set(associados.map((a) => a.aluno_id));
           lista = lista.filter((a) => a.id !== responsavelSel.id && !idsJa.has(a.id));
           if (active) setResultados(lista);
@@ -164,7 +161,6 @@ export default function PlanoAssociadosPage() {
     );
     if (!confirma) return;
 
-    // dispara em paralelo
     await Promise.allSettled(
       associados.map((v) =>
         fetch(`${API}/plano-associado/${v.id}`, { method: "DELETE" })
@@ -177,30 +173,36 @@ export default function PlanoAssociadosPage() {
   const bloqueado = !responsavelSel?.id;
 
   return (
-    <div className="mx-auto max-w-6xl p-6">
-      <h1 className="text-2xl font-bold text-blue-700 mb-6">
-        Vínculos de Planos Compartilhados
-      </h1>
+    <div className="space-y-6">
+      <PageHeader
+        title="Vínculos de Planos Compartilhados"
+        subtitle="Organize a relação dependente-responsável preservando a operação atual."
+      />
 
-      {/* Seleção do Responsável */}
-      <div className="bg-white rounded-xl shadow p-4 mb-6">
-        <label className="block text-sm font-semibold mb-2">
-          Selecione o responsável
-        </label>
+      <div className="ui-status-grid">
+        <KpiCard label="Responsável" value={responsavelSel ? "Selecionado" : "Pendente"} icon={<Users size={20} />} tone={responsavelSel ? "green" : "amber"} />
+        <KpiCard label="Vinculados" value={associados.length} icon={<Link2 size={20} />} tone="blue" />
+      </div>
+
+      <Card className="p-5">
+        <div className="ui-section-header px-0 pt-0">
+          <div>
+            <h2 className="ui-section-title">Selecione o responsável</h2>
+            <p className="ui-section-subtitle">Busque por matrícula ou nome para carregar os dependentes vinculados.</p>
+          </div>
+        </div>
 
         <div className="flex gap-3 items-start flex-col md:flex-row">
-          <div className="flex-1 relative">
-            <input
+          <div className="flex-1 relative w-full">
+            <Input
               type="text"
               placeholder="Buscar por matrícula ou nome..."
               value={responsavelBusca}
               onChange={(e) => setResponsavelBusca(e.target.value)}
-              className="w-full border rounded px-3 py-2"
             />
 
-            {/* dropdown simples com resultados */}
             {!!responsavelBusca && responsavelResultados.length > 0 && (
-              <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto border rounded bg-white shadow">
+              <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto border rounded-lg bg-white shadow">
                 {responsavelResultados.map((r) => (
                   <button
                     key={r.id}
@@ -216,7 +218,7 @@ export default function PlanoAssociadosPage() {
                     }}
                     className="w-full text-left px-3 py-2 hover:bg-gray-100"
                   >
-                    <span className="font-mono text-xs mr-2">{r.matricula}</span>{" "}
+                    <span className="font-mono text-xs mr-2">{r.matricula}</span>
                     {r.nome}
                   </button>
                 ))}
@@ -229,17 +231,14 @@ export default function PlanoAssociadosPage() {
           </div>
 
           {responsavelSel?.id && (
-            <div className="flex items-center gap-3 bg-blue-50 rounded px-3 py-2">
+            <div className="flex items-center gap-3 bg-blue-50 rounded-lg px-3 py-2 border border-blue-100">
               <div className="font-semibold text-blue-800">
-                Responsável:&nbsp;
-                <span className="font-mono text-xs">{responsavelSel.matricula}</span>{" "}
-                - {responsavelSel.nome}
+                <span className="font-mono text-xs">{responsavelSel.matricula}</span> - {responsavelSel.nome}
               </div>
-              <div className="text-sm text-blue-700">
-                Vinculados: <Badge>{associados.length}</Badge>
-              </div>
-              <button
-                className="text-blue-700 hover:underline"
+              <Badge tone="blue">{associados.length} vinculados</Badge>
+              <Button
+                size="sm"
+                variant="ghost"
                 onClick={() => {
                   setResponsavelSel(null);
                   setAssociados([]);
@@ -247,127 +246,69 @@ export default function PlanoAssociadosPage() {
                   setResponsavelBusca("");
                 }}
               >
-                trocar
-              </button>
+                Trocar
+              </Button>
             </div>
           )}
         </div>
-      </div>
+      </Card>
 
-      {/* Transfer List */}
-      <div
-        className={`grid md:grid-cols-2 gap-6 ${
-          bloqueado ? "opacity-50 pointer-events-none" : ""
-        }`}
-      >
-        {/* Painel ESQUERDO: Buscar e adicionar */}
-        <div className="bg-white rounded-xl shadow p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold">Alunos disponíveis</h3>
-            <div className="text-xs text-gray-600">
-              Resultados: <Badge title="Resultados da busca">{resultados.length}</Badge>
+      <div className={`grid md:grid-cols-2 gap-6 ${bloqueado ? "opacity-50 pointer-events-none" : ""}`}>
+        <Card>
+          <div className="ui-section-header">
+            <div>
+              <h3 className="ui-section-title">Alunos disponíveis</h3>
+              <p className="ui-section-subtitle">Pesquise e adicione dependentes ao responsável.</p>
             </div>
+            <Badge tone="gray">{resultados.length}</Badge>
           </div>
 
-          <input
-            type="text"
-            placeholder="Digite para buscar por matrícula ou nome…"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            className="w-full border rounded px-3 py-2 mb-3"
-            disabled={bloqueado}
-          />
+          <div className="p-4 border-b">
+            <Input
+              type="text"
+              placeholder="Digite para buscar por matrícula ou nome..."
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              disabled={bloqueado}
+            />
+          </div>
 
-          <div className="border rounded max-h-80 overflow-auto divide-y">
-            {buscando && (
-              <div className="p-3 text-sm text-gray-500">Buscando…</div>
-            )}
-            {!buscando && resultados.length === 0 && (
-              <div className="p-3 text-sm text-gray-500">Nenhum resultado.</div>
-            )}
+          <div className="max-h-80 overflow-auto divide-y">
+            {buscando && <EmptyState title="Buscando..." />}
+            {!buscando && resultados.length === 0 && <EmptyState title="Nenhum resultado." />}
             {resultados.map((a) => (
-              <div
-                key={a.id}
-                className="flex items-center justify-between px-3 py-2 hover:bg-gray-50"
-              >
-                <div>
-                  <div className="font-medium">{a.nome}</div>
-                  <div className="text-xs text-gray-500 font-mono">
-                    {a.matricula}
-                  </div>
-                </div>
-                <button
-                  className="px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
-                  onClick={() => adicionarAluno(a)}
-                >
-                  Adicionar
-                </button>
-              </div>
+              <AlunoLinha key={a.id} aluno={a} action={() => adicionarAluno(a)} actionLabel="Adicionar" />
             ))}
           </div>
+        </Card>
 
-          <p className="mt-2 text-xs text-gray-500">
-            Dica: pesquise e vá adicionando. Quem estiver à direita já está
-            vinculado ao responsável.
-          </p>
-        </div>
-
-        {/* Painel DIREITO: Associados do responsável */}
-        <div className="bg-white rounded-xl shadow p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold">Vinculados ao responsável</h3>
-            <div className="flex items-center gap-3">
-              <div className="text-xs text-gray-600">
-                Vinculados: <Badge title="Total de vinculados">{associados.length}</Badge>
-              </div>
-              <button
-                className={`px-3 py-1 rounded ${
-                  associados.length === 0
-                    ? "bg-gray-200 text-gray-500 cursor-not-allowed"
-                    : "bg-red-600 text-white hover:bg-red-700"
-                }`}
+        <Card>
+          <div className="ui-section-header">
+            <div>
+              <h3 className="ui-section-title">Vinculados ao responsável</h3>
+              <p className="ui-section-subtitle">Dependentes que compartilham a condição do responsável.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge tone="blue">{associados.length}</Badge>
+              <Button
+                size="sm"
+                variant="danger"
                 onClick={removerTodos}
                 disabled={associados.length === 0}
               >
                 Remover todos
-              </button>
+              </Button>
             </div>
           </div>
 
-          <div className="border rounded max-h-80 overflow-auto divide-y">
-            {carregandoAssociados && (
-              <div className="p-3 text-sm text-gray-500">Carregando…</div>
-            )}
-            {!carregandoAssociados && associados.length === 0 && (
-              <div className="p-3 text-sm text-gray-500">
-                Nenhum aluno vinculado.
-              </div>
-            )}
+          <div className="max-h-80 overflow-auto divide-y">
+            {carregandoAssociados && <EmptyState title="Carregando..." />}
+            {!carregandoAssociados && associados.length === 0 && <EmptyState title="Nenhum aluno vinculado." />}
             {associados.map((v) => (
-              <div
-                key={v.id}
-                className="flex items-center justify-between px-3 py-2 hover:bg-gray-50"
-              >
-                <div>
-                  <div className="font-medium">{v.nome}</div>
-                  <div className="text-xs text-gray-500 font-mono">
-                    {v.matricula}
-                  </div>
-                </div>
-                <button
-                  className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
-                  onClick={() => removerVinculo(v)}
-                >
-                  Remover
-                </button>
-              </div>
+              <AlunoLinha key={v.id} aluno={v} action={() => removerVinculo(v)} actionLabel="Remover" muted />
             ))}
           </div>
-
-          <p className="mt-2 text-xs text-gray-500">
-            Remover não altera o plano do responsável — apenas desvincula o aluno.
-          </p>
-        </div>
+        </Card>
       </div>
     </div>
   );

@@ -757,6 +757,72 @@ button.ui-kpi-card__inner:hover {
   font-weight: 700;
 }
 
+.ui-pill-button {
+  min-height: 2rem;
+  padding: 0.35rem 0.85rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--surface-panel);
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.ui-pill-button:hover,
+.ui-pill-button--active {
+  color: var(--color-primary);
+  border-color: var(--color-primary-soft);
+  background: #eff6ff;
+}
+
+.ui-pill-button--active {
+  color: var(--text-inverse);
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+}
+
+.ui-stock {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 9rem;
+}
+
+.ui-stock__value {
+  min-width: 2rem;
+  color: var(--text-primary);
+  font-size: 0.84rem;
+  font-weight: 800;
+  text-align: right;
+}
+
+.ui-stock__track {
+  flex: 1;
+  height: 0.45rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--surface-subtle);
+}
+
+.ui-stock__bar {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.ui-stock__bar--success {
+  background: var(--status-success);
+}
+
+.ui-stock__bar--warning {
+  background: #f59e0b;
+}
+
+.ui-stock__bar--danger {
+  background: #ef4444;
+}
+
 .ui-status-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));

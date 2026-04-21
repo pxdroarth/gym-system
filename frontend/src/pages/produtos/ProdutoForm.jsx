@@ -2,6 +2,8 @@ import React, { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { createProduto, updateProduto } from "../../services/Api";
 import { toast } from "react-toastify";
+import Button from "../../components/ui/Button";
+import Card from "../../components/ui/Card";
 
 export default function ProdutoForm({ produto, onSuccess, onCancel }) {
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm();
@@ -37,76 +39,82 @@ export default function ProdutoForm({ produto, onSuccess, onCancel }) {
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="bg-gray-50 p-4 rounded shadow space-y-4">
-      <div>
-        <label className="block mb-1">Nome*</label>
-        <input
-          {...register("nome", { required: "Nome é obrigatório" })}
-          className="w-full border px-3 py-2 rounded"
-          placeholder="Nome do Produto"
-        />
-        {errors.nome && <p className="text-red-500">{errors.nome.message}</p>}
+    <Card className="p-5">
+      <div className="ui-section-header px-0 pt-0">
+        <div>
+          <h2 className="ui-section-title">{produto ? "Editar Produto" : "Cadastrar Produto"}</h2>
+          <p className="ui-section-subtitle">
+            {produto ? "Atualize dados, estoque e imagem do produto." : "Cadastre itens vendidos na recepção."}
+          </p>
+        </div>
       </div>
 
-      <div>
-        <label className="block mb-1">Descrição</label>
-        <textarea
-          {...register("descricao")}
-          className="w-full border px-3 py-2 rounded"
-          placeholder="Descrição opcional"
-          rows={3}
-        />
-      </div>
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <label className="ui-field md:col-span-3">
+            <span className="ui-field__label">Nome *</span>
+            <input
+              {...register("nome", { required: "Nome é obrigatório" })}
+              className="ui-input"
+              placeholder="Nome do Produto"
+            />
+            {errors.nome && <p className="text-red-600 text-sm">{errors.nome.message}</p>}
+          </label>
 
-      <div>
-        <label className="block mb-1">Preço* (R$)</label>
-        <input
-          type="text"
-          {...register("preco", { required: "Preço é obrigatório" })}
-          className="w-full border px-3 py-2 rounded"
-          placeholder="0.00"
-        />
-        {errors.preco && <p className="text-red-500">{errors.preco.message}</p>}
-      </div>
+          <label className="ui-field md:col-span-3">
+            <span className="ui-field__label">Descrição</span>
+            <textarea
+              {...register("descricao")}
+              className="ui-input min-h-24"
+              placeholder="Descrição opcional"
+              rows={3}
+            />
+          </label>
 
-      <div>
-        <label className="block mb-1">Estoque*</label>
-        <input
-          type="number"
-          {...register("estoque", { required: "Estoque é obrigatório", min: { value: 0, message: "Mínimo 0" } })}
-          className="w-full border px-3 py-2 rounded"
-          placeholder="0"
-        />
-        {errors.estoque && <p className="text-red-500">{errors.estoque.message}</p>}
-      </div>
+          <label className="ui-field">
+            <span className="ui-field__label">Preço * (R$)</span>
+            <input
+              type="text"
+              {...register("preco", { required: "Preço é obrigatório" })}
+              className="ui-input"
+              placeholder="0.00"
+            />
+            {errors.preco && <p className="text-red-600 text-sm">{errors.preco.message}</p>}
+          </label>
 
-      <div>
-        <label className="block mb-1">Imagem</label>
-        <input
-          type="file"
-          {...register("imagem")}
-          accept="image/*"
-        />
-      </div>
+          <label className="ui-field">
+            <span className="ui-field__label">Estoque *</span>
+            <input
+              type="number"
+              {...register("estoque", { required: "Estoque é obrigatório", min: { value: 0, message: "Mínimo 0" } })}
+              className="ui-input"
+              placeholder="0"
+            />
+            {errors.estoque && <p className="text-red-600 text-sm">{errors.estoque.message}</p>}
+          </label>
 
-      <div className="flex gap-4">
-        <button
-          type="submit"
-          disabled={isSubmitting}
-          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-        >
-          {isSubmitting ? "Salvando..." : produto ? "Atualizar" : "Cadastrar"}
-        </button>
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600"
-          >
-            Cancelar
-          </button>
-        )}
-      </div>
-    </form>
+          <label className="ui-field">
+            <span className="ui-field__label">Imagem</span>
+            <input
+              type="file"
+              {...register("imagem")}
+              accept="image/*"
+              className="ui-input"
+            />
+          </label>
+        </div>
+
+        <div className="flex gap-3 justify-end pt-2">
+          {onCancel && (
+            <Button type="button" variant="ghost" onClick={onCancel}>
+              Cancelar
+            </Button>
+          )}
+          <Button type="submit" disabled={isSubmitting}>
+            {isSubmitting ? "Salvando..." : produto ? "Atualizar" : "Cadastrar"}
+          </Button>
+        </div>
+      </form>
+    </Card>
   );
 }
