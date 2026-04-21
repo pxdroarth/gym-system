@@ -16,7 +16,7 @@ export default function FinanceiroDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (periodo !== 'intervalo_datas' || (intervaloDatas.inicio && intervaloDatas.fim)) {
+    if (periodo !== 'personalizado' || (intervaloDatas.inicio && intervaloDatas.fim)) {
       carregarKPIs();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -26,7 +26,7 @@ export default function FinanceiroDashboard() {
     try {
       setLoading(true);
       const filtros = { periodo };
-      if (periodo === 'intervalo_datas' && intervaloDatas.inicio && intervaloDatas.fim) {
+      if (periodo === 'personalizado' && intervaloDatas.inicio && intervaloDatas.fim) {
         filtros.data_inicio = intervaloDatas.inicio;
         filtros.data_fim = intervaloDatas.fim;
       }
@@ -48,7 +48,7 @@ export default function FinanceiroDashboard() {
     { key: 'trimestre', label: 'Trimestre' },
     { key: 'semestre', label: 'Semestre' },
     { key: 'anual', label: 'Anual' },
-    { key: 'intervalo_datas', label: 'Intervalo' },
+    { key: 'personalizado', label: 'Personalizado' },
   ];
 
   const formatarValor = (valor) =>
@@ -80,7 +80,7 @@ export default function FinanceiroDashboard() {
             ))}
           </div>
 
-          {periodo === 'intervalo_datas' && (
+          {periodo === 'personalizado' && (
             <div className="flex items-end gap-3 flex-wrap">
               <Input
                 label="Data Inicial"

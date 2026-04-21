@@ -13,7 +13,7 @@ function obterIntervaloPorPeriodo(periodo, data_inicio, data_fim) {
       dataInicio = new Date(hoje);
       dataInicio.setDate(hoje.getDate() - diaSemana);
       dataFim = new Date(hoje);
-      dataFim.setDate(dataInicio.getDate() + 6);
+      dataFim.setDate(hoje.getDate() + (6 - diaSemana));
       break;
     }
     case 'mensal':
@@ -34,8 +34,14 @@ function obterIntervaloPorPeriodo(periodo, data_inicio, data_fim) {
       dataInicio = new Date(hoje.getFullYear(), 0, 1);
       dataFim = new Date(hoje.getFullYear(), 11, 31);
       break;
+    case 'personalizado':
     case 'intervalo_datas':
       // Recebe do frontend (YYYY-MM-DD)
+      if (!data_inicio || !data_fim) {
+        dataInicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+        dataFim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0);
+        break;
+      }
       dataInicio = new Date(data_inicio);
       dataFim = new Date(data_fim);
       break;
