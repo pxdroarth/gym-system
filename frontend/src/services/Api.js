@@ -101,7 +101,13 @@ export async function deleteProduto(id) {
 }
 
 // ============ VENDAS ============
-export async function fetchVendasProdutos({ data_inicial = "", data_final = "", pagina = 1, limite = 10 } = {}) {
+export async function fetchVendasProdutos(params = {}) {
+  if (typeof params === 'string') {
+    const parsed = Object.fromEntries(new URLSearchParams(params));
+    params = parsed;
+  }
+
+  const { data_inicial = "", data_final = "", pagina = 1, limite = 10 } = params;
   const response = await api.get('/vendas-produtos', {
     params: { data_inicial, data_final, pagina, limite },
   });

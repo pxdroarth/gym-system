@@ -7,6 +7,7 @@ import Card from "../../components/ui/Card";
 import EmptyState from "../../components/ui/EmptyState";
 import Input from "../../components/ui/Input";
 import KpiCard from "../../components/ui/KpiCard";
+import Modal from "../../components/ui/Modal";
 import PageHeader from "../../components/ui/PageHeader";
 import Pagination from "../../components/ui/Pagination";
 import PillButton from "../../components/ui/PillButton";
@@ -36,6 +37,8 @@ export default function VendasProdutosPage() {
 
   const [produtoSelecionado, setProdutoSelecionado] = useState(null);
   const [quantidade, setQuantidade] = useState(1);
+  const [registrandoVenda, setRegistrandoVenda] = useState(false);
+  const [modalVendaAberto, setModalVendaAberto] = useState(false);
 
   const [dataInicial, setDataInicial] = useState("");
   const [dataFinal, setDataFinal] = useState("");
@@ -60,18 +63,27 @@ export default function VendasProdutosPage() {
 
   async function carregarVendas() {
     try {
-      const params = new URLSearchParams();
-      if (dataInicial) params.append("data_inicial", dataInicial);
-      if (dataFinal) params.append("data_final", dataFinal);
-      params.append("pagina", pagina);
-      params.append("limite", limite);
-
-      const { vendas: vendasLista, total: totalVendas } = await fetchVendasProdutos(params.toString());
+      const { vendas: vendasLista, total: totalVendas } = await fetchVendasProdutos({
+        data_inicial: dataInicial,
+        data_final: dataFinal,
+        pagina,
+        limite,
+      });
       setVendas(vendasLista);
       setTotal(totalVendas);
     } catch (e) {
       toast.error("Erro ao carregar vendas");
     }
+  }
+
+  function resetVenda() {
+    setQuantidade(1);
+    setProdutoSelecionado(null);
+  }
+
+  function fecharModalVenda() {
+    resetVenda();
+    setModalVendaAberto(false);
   }
 
   async function handleVenda(e) {
@@ -81,18 +93,20 @@ export default function VendasProdutosPage() {
     if (quantidade > produtoSelecionado.estoque) return toast.error("Quantidade maior que o estoque disponível.");
 
     try {
+      setRegistrandoVenda(true);
       await createVendaProduto({
         produto_id: produtoSelecionado.id,
         quantidade,
         preco_unitario: Number(produtoSelecionado.preco),
       });
       toast.success("Venda registrada com sucesso!");
-      setQuantidade(1);
-      setProdutoSelecionado(null);
+      fecharModalVenda();
       carregarProdutos();
       carregarVendas();
     } catch (e) {
       toast.error("Erro ao registrar venda");
+    } finally {
+      setRegistrandoVenda(false);
     }
   }
 
@@ -115,6 +129,7 @@ export default function VendasProdutosPage() {
       <PageHeader
         title="Vendas de Produtos"
         subtitle="Registre vendas da recepção e acompanhe o histórico operacional."
+        actions={<Button onClick={() => setModalVendaAberto(true)}>+ Registrar Venda</Button>}
       />
 
       <div className="ui-status-grid">
@@ -122,41 +137,6 @@ export default function VendasProdutosPage() {
         <KpiCard label="Total da Página" value={formatarMoeda(totalPagina)} icon={<Wallet size={20} />} tone="green" />
         <KpiCard label="Produtos Disponíveis" value={produtos.length} icon={<CalendarDays size={20} />} tone="gray" />
       </div>
-
-      <Card className="p-5">
-        <div className="ui-section-header px-0 pt-0">
-          <div>
-            <h2 className="ui-section-title">Registrar Venda</h2>
-            <p className="ui-section-subtitle">Selecione o produto, confirme a quantidade e registre a movimentação.</p>
-          </div>
-        </div>
-
-        <form onSubmit={handleVenda} className="grid grid-cols-1 md:grid-cols-[2fr_1fr_auto] gap-4 items-end">
-          <Select
-            label="Produto"
-            value={produtoSelecionado?.id || ""}
-            onChange={(e) => setProdutoSelecionado(produtos.find((p) => p.id === Number(e.target.value)))}
-          >
-            <option value="">Selecione um produto</option>
-            {produtos.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nome} - Estoque: {p.estoque}
-              </option>
-            ))}
-          </Select>
-
-          <Input
-            label="Quantidade"
-            type="number"
-            value={quantidade}
-            onChange={(e) => setQuantidade(Number(e.target.value))}
-            min="1"
-            max={produtoSelecionado?.estoque || 1}
-          />
-
-          <Button type="submit">Registrar Venda</Button>
-        </form>
-      </Card>
 
       <Card>
         <div className="ui-section-header">
@@ -234,6 +214,52 @@ export default function VendasProdutosPage() {
           <Pagination page={pagina} totalPages={totalPaginas} onPageChange={setPagina} />
         </div>
       </Card>
+
+      {modalVendaAberto && (
+        <Modal title="Registrar Venda" onClose={fecharModalVenda}>
+          <form onSubmit={handleVenda} className="space-y-4">
+            <Select
+              label="Produto"
+              value={produtoSelecionado?.id || ""}
+              onChange={(e) => setProdutoSelecionado(produtos.find((p) => p.id === Number(e.target.value)))}
+            >
+              <option value="">Selecione um produto</option>
+              {produtos.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.nome} - Estoque: {p.estoque}
+                </option>
+              ))}
+            </Select>
+
+            <Input
+              label="Quantidade"
+              type="number"
+              value={quantidade}
+              onChange={(e) => setQuantidade(Number(e.target.value))}
+              min="1"
+              max={produtoSelecionado?.estoque || 1}
+            />
+
+            {produtoSelecionado && (
+              <div className="ui-info-item">
+                <div className="ui-info-item__label">Total estimado</div>
+                <div className="ui-info-item__value">
+                  {formatarMoeda(Number(produtoSelecionado.preco || 0) * Number(quantidade || 0))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button type="button" variant="ghost" onClick={fecharModalVenda}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={registrandoVenda}>
+                {registrandoVenda ? "Registrando..." : "Registrar Venda"}
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }

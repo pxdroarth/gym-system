@@ -7,6 +7,7 @@ import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import EmptyState from "../../components/ui/EmptyState";
 import KpiCard from "../../components/ui/KpiCard";
+import Modal from "../../components/ui/Modal";
 import PageHeader from "../../components/ui/PageHeader";
 import StockBar from "../../components/ui/StockBar";
 import Table from "../../components/ui/Table";
@@ -25,6 +26,7 @@ function estoqueBaixo(produto) {
 export default function ProdutosPage() {
   const [produtos, setProdutos] = useState([]);
   const [editProduto, setEditProduto] = useState(null);
+  const [modalProdutoAberto, setModalProdutoAberto] = useState(false);
 
   useEffect(() => {
     carregarProdutos();
@@ -51,6 +53,21 @@ export default function ProdutosPage() {
     }
   }
 
+  function abrirModalNovo() {
+    setEditProduto(null);
+    setModalProdutoAberto(true);
+  }
+
+  function abrirModalEdicao(produto) {
+    setEditProduto(produto);
+    setModalProdutoAberto(true);
+  }
+
+  function fecharModalProduto() {
+    setEditProduto(null);
+    setModalProdutoAberto(false);
+  }
+
   const estoqueTotal = useMemo(
     () => produtos.reduce((total, produto) => total + Number(produto.estoque || 0), 0),
     [produtos]
@@ -63,13 +80,7 @@ export default function ProdutosPage() {
       <PageHeader
         title="Produtos"
         subtitle="Catálogo de itens, preços e controle operacional de estoque."
-        actions={
-          editProduto && (
-            <Button variant="secondary" onClick={() => setEditProduto(null)}>
-              Novo cadastro
-            </Button>
-          )
-        }
+        actions={<Button onClick={abrirModalNovo}>+ Novo Produto</Button>}
       />
 
       <div className="ui-status-grid">
@@ -77,15 +88,6 @@ export default function ProdutosPage() {
         <KpiCard label="Estoque Total" value={estoqueTotal} icon={<Boxes size={20} />} tone="green" />
         <KpiCard label="Estoque Baixo" value={totalEstoqueBaixo} icon={<AlertTriangle size={20} />} tone="amber" />
       </div>
-
-      <ProdutoForm
-        produto={editProduto}
-        onSuccess={() => {
-          setEditProduto(null);
-          carregarProdutos();
-        }}
-        onCancel={() => setEditProduto(null)}
-      />
 
       <Card>
         <div className="ui-section-header">
@@ -137,7 +139,7 @@ export default function ProdutosPage() {
                   </td>
                   <td>
                     <div className="flex gap-2 flex-wrap">
-                      <Button size="sm" variant="secondary" onClick={() => setEditProduto(produto)}>
+                      <Button size="sm" variant="secondary" onClick={() => abrirModalEdicao(produto)}>
                         Editar
                       </Button>
                       <Button size="sm" variant="danger" onClick={() => handleDelete(produto.id)}>
@@ -151,6 +153,19 @@ export default function ProdutosPage() {
           </Table>
         )}
       </Card>
+
+      {modalProdutoAberto && (
+        <Modal title={editProduto ? "Editar Produto" : "Cadastrar Produto"} onClose={fecharModalProduto}>
+          <ProdutoForm
+            produto={editProduto}
+            onSuccess={() => {
+              fecharModalProduto();
+              carregarProdutos();
+            }}
+            onCancel={fecharModalProduto}
+          />
+        </Modal>
+      )}
     </div>
   );
 }

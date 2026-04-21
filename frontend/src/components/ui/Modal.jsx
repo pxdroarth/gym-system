@@ -1,8 +1,18 @@
-import React from "react";
+import React, { useEffect } from "react";
+import { createPortal } from "react-dom";
 import Button from "./Button";
 
 export default function Modal({ title, children, onClose, className = "", footer }) {
-  return (
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, []);
+
+  const content = (
     <div className="ui-modal-backdrop" role="presentation">
       <div className={["ui-modal", className].filter(Boolean).join(" ")} role="dialog" aria-modal="true">
         <header className="ui-modal__header">
@@ -18,4 +28,6 @@ export default function Modal({ title, children, onClose, className = "", footer
       </div>
     </div>
   );
+
+  return createPortal(content, document.body);
 }
