@@ -12,8 +12,7 @@ import PlanoContasPage from './pages/financeiro/PlanoContasPage';
 import FinanceiroLayout from './pages/financeiro/FinanceiroLayout';
 import FinanceiroDashboard from "./pages/financeiro/FinanceiroDashboard";
 import ContasFinanceirasPage from './pages/financeiro/ContasFinanceirasPage';
-import { ToastContainer } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import ToastProvider from "./components/ui/ToastProvider";
 import PlanoAssociadosPage from './pages/planos/associacoes/PlanoAssociadosPage'; 
 import React from 'react';
 
@@ -67,8 +66,7 @@ function App() {
           </Route>
         </Route>
       </Routes>
-      
-       <ToastContainer position="top-right" autoClose={3000} />
+      <ToastProvider />
     </Router>
     
   );

@@ -1,23 +1,33 @@
-import { NavLink } from "react-router-dom";
 import { useState } from "react";
+import { NavLink } from "react-router-dom";
+import {
+  BarChart3,
+  CalendarDays,
+  ChevronDown,
+  ChevronRight,
+  CircleDollarSign,
+  Link2,
+  Package,
+  ShoppingCart,
+  Users,
+} from "lucide-react";
 
 const menu = [
-  { to: "/dashboard", label: "Dashboard", icon: "📊" },
-  { to: "/alunos", label: "Alunos", icon: "👤" },
-  { to: "/produtos", label: "Produtos", icon: "🛒" },
-  { to: "/vendas-produtos", label: "Vendas", icon: "💰" },
-  { to: "/planos", label: "Planos", icon: "📅" },                // ✅ Novo
-  { to: "/planos/associacoes", label: "Associações", icon: "👥" }, // ✅ Novo
+  { to: "/dashboard", label: "Dashboard", icon: BarChart3 },
+  { to: "/alunos", label: "Alunos", icon: Users },
+  { to: "/produtos", label: "Produtos", icon: Package },
+  { to: "/vendas-produtos", label: "Vendas", icon: ShoppingCart },
+  { to: "/planos", label: "Planos", icon: CalendarDays },
+  { to: "/planos/associacoes", label: "Associações", icon: Link2 },
   {
     label: "Financeiro",
-    icon: "💸",
+    icon: CircleDollarSign,
     submenu: [
       { to: "/financeiro/dashboardFinanceiro", label: "Dashboard Financeiro" },
       { to: "/financeiro/contas-financeiras", label: "Contas Financeiras" },
       { to: "/financeiro/plano-contas", label: "Plano de Contas" },
     ],
-    to: "/financeiro/dashboard" // permite clique direto para dashboard
-  }
+  },
 ];
 
 export default function Sidebar({ aberta = true }) {
@@ -31,75 +41,87 @@ export default function Sidebar({ aberta = true }) {
 
   return (
     <aside
-      className={`transition-all duration-300 h-screen fixed top-0 left-0 bg-white shadow-lg border-r 
-        ${expanded ? "w-64" : "w-16"} 
-        flex flex-col z-50`}
+      className={`app-sidebar ${expanded ? "" : "app-sidebar--collapsed"}`}
       onMouseEnter={() => setHovering(true)}
       onMouseLeave={() => setHovering(false)}
     >
-      <div className="h-16 flex items-center justify-center font-bold text-blue-700 text-lg border-b">
-        {expanded ? "Academia SA" : "🏋️"}
+      <div className="app-sidebar__brand">
+        <div className="app-sidebar__mark">SA</div>
+        {expanded && (
+          <div>
+            <div className="app-sidebar__title">Academia SA</div>
+            <div className="app-sidebar__subtitle">Gestão Inteligente</div>
+          </div>
+        )}
       </div>
 
-      <nav className="flex-grow px-2 py-4 space-y-1 overflow-y-auto">
-        {menu.map((item) =>
-          item.submenu ? (
-            <div key={item.label}>
-              <div
-                className={`flex items-center gap-3 px-3 py-2 rounded-md font-medium cursor-pointer transition-colors duration-200 ${
-                  open[item.label] ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-100"
-                }`}
-                onClick={() => expanded && handleToggle(item.label)}
-                tabIndex={0}
-              >
-                <span className="text-xl">{item.icon}</span>
-                {expanded && (
-                  <>
-                    <span>{item.label}</span>
-                    <span className="ml-auto text-sm">
-                      {open[item.label] ? "▼" : "▶"}
-                    </span>
-                  </>
+      <nav className="app-sidebar__nav">
+        {menu.map((item) => {
+          const Icon = item.icon;
+
+          if (item.submenu) {
+            return (
+              <div key={item.label}>
+                <button
+                  type="button"
+                  className="app-sidebar__submenu-trigger"
+                  onClick={() => expanded && handleToggle(item.label)}
+                  aria-expanded={Boolean(open[item.label])}
+                >
+                  <span className="app-sidebar__icon">
+                    <Icon size={18} />
+                  </span>
+                  {expanded && (
+                    <>
+                      <span className="app-sidebar__label">{item.label}</span>
+                      <span className="app-sidebar__chevron">
+                        {open[item.label] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      </span>
+                    </>
+                  )}
+                </button>
+
+                {expanded && open[item.label] && (
+                  <div className="app-sidebar__submenu">
+                    {item.submenu.map((sub) => (
+                      <NavLink
+                        key={sub.to}
+                        to={sub.to}
+                        className={({ isActive }) => `app-sidebar__subitem ${isActive ? "active" : ""}`}
+                      >
+                        {sub.label}
+                      </NavLink>
+                    ))}
+                  </div>
                 )}
               </div>
-              {expanded && open[item.label] && (
-                <div className="ml-6 flex flex-col gap-1">
-                  {item.submenu.map((sub) => (
-                    <NavLink
-                      key={sub.to}
-                      to={sub.to}
-                      className={({ isActive }) =>
-                        `flex items-center gap-2 px-2 py-1 rounded font-normal text-sm transition-colors duration-150 ${
-                          isActive
-                            ? "bg-blue-100 text-blue-700"
-                            : "text-gray-700 hover:bg-gray-100"
-                        }`
-                      }
-                    >
-                      {sub.label}
-                    </NavLink>
-                  ))}
-                </div>
-              )}
-            </div>
-          ) : (
+            );
+          }
+
+          return (
             <NavLink
               key={item.to}
               to={item.to}
-              className={({ isActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-md font-medium transition-colors duration-200 ${
-                  isActive
-                    ? "bg-blue-100 text-blue-700"
-                    : "text-gray-700 hover:bg-gray-100"
-                }`
-              }
+              className={({ isActive }) => `app-sidebar__item ${isActive ? "active" : ""}`}
             >
-              <span className="text-xl">{item.icon}</span>
-              {expanded && <span>{item.label}</span>}
+              <span className="app-sidebar__icon">
+                <Icon size={18} />
+              </span>
+              {expanded && <span className="app-sidebar__label">{item.label}</span>}
             </NavLink>
-          )
-        )}
+          );
+        })}
       </nav>
+
+      <div className="app-sidebar__user">
+        <div className="app-sidebar__avatar">SA</div>
+        {expanded && (
+          <div>
+            <div className="app-sidebar__user-name">SA AGFIT</div>
+            <div className="app-sidebar__user-role">Operação</div>
+          </div>
+        )}
+      </div>
     </aside>
   );
 }

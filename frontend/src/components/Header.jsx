@@ -1,52 +1,32 @@
 import React from "react";
-import { Menu } from "lucide-react"; // ícone elegante opcional
+import { Bell, Menu, Search } from "lucide-react";
 
 export default function Header({ sidebarAberta, toggleSidebar }) {
   return (
-    <header
-      className={`fixed top-0 ${
-        sidebarAberta ? "left-64" : "left-16"
-      } right-0 h-16 bg-blue-800 text-white flex items-center justify-between px-4 sm:px-6 shadow-md z-40 transition-all duration-300`}
-    >
-      {/* Botão de retração da sidebar */}
-      <div className="flex items-center space-x-4">
+    <header className={`app-topbar ${sidebarAberta ? "app-topbar--expanded" : "app-topbar--collapsed"}`}>
+      <div className="app-topbar__left">
         <button
           onClick={toggleSidebar}
-          className="p-2 rounded hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-white"
+          className="app-topbar__button"
           title={sidebarAberta ? "Recolher menu" : "Expandir menu"}
+          type="button"
         >
-          {/* Ícone usando Lucide, se disponível, ou texto alternativo: */}
-          <Menu size={24} />
-          {/* Ou substitua por: <span className="text-xl font-bold">☰</span> */}
+          <Menu size={20} />
         </button>
 
-        {/* Título (oculto em telas menores) */}
-        <span className="text-lg sm:text-xl font-semibold hidden sm:inline-block">
-          SA - Gestão Academia
-        </span>
+        <span className="app-topbar__title">SA - Gestão Academia</span>
       </div>
 
-      {/* Ações do usuário */}
-      <div className="flex items-center space-x-4">
-        <button
-          className="hover:bg-blue-700 rounded-full p-2 transition duration-200"
-          title="Buscar"
-        >
-          🔍
+      <div className="app-topbar__right">
+        <button className="app-topbar__button" title="Buscar" type="button">
+          <Search size={17} />
         </button>
-        <button
-          className="hover:bg-blue-700 rounded-full p-2 transition duration-200"
-          title="Notificações"
-        >
-          🔔
+        <button className="app-topbar__button" title="Notificações" type="button">
+          <Bell size={17} />
         </button>
-        <div className="flex items-center space-x-2 cursor-pointer">
-          <img
-            src="/user-avatar.png"
-            alt="Usuário"
-            className="w-9 h-9 rounded-full border-2 border-white"
-          />
-          <span className="hidden sm:inline font-medium">SA AGFIT</span>
+        <div className="app-topbar__user">
+          <div className="app-topbar__avatar">SA</div>
+          <span className="app-topbar__user-name">SA AGFIT</span>
         </div>
       </div>
     </header>
