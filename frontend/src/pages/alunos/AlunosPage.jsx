@@ -1,31 +1,36 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { CheckCircle2, CircleSlash, Users, WalletCards } from 'lucide-react';
 import { fetchAlunos } from '../../services/Api';
+import Badge from '../../components/ui/Badge';
+import Button from '../../components/ui/Button';
+import Card from '../../components/ui/Card';
+import EmptyState from '../../components/ui/EmptyState';
+import Input from '../../components/ui/Input';
+import KpiCard from '../../components/ui/KpiCard';
+import PageHeader from '../../components/ui/PageHeader';
+import Pagination from '../../components/ui/Pagination';
+import Table from '../../components/ui/Table';
 
 const ORDER = (import.meta.env?.VITE_ALUNOS_ORDER || 'asc').toLowerCase();
 
-function obterCorMensalidade(status) {
+function obterBadgeMensalidade(status) {
   switch (status) {
     case 'em_dia':
-      return 'text-green-700';
+      return <Badge tone="green">Em dia</Badge>;
     case 'atrasado':
-      return 'text-red-700';
+      return <Badge tone="red">Atrasado</Badge>;
+    case 'sem_mensalidade':
+      return <Badge tone="gray">Sem mensalidade</Badge>;
     default:
-      return 'text-gray-600';
+      return <Badge tone="gray">{status || '-'}</Badge>;
   }
 }
 
-function obterLabelMensalidade(status) {
-  switch (status) {
-    case 'em_dia':
-      return '🟢 Em dia';
-    case 'atrasado':
-      return '🔴 Atrasado';
-    case 'sem_mensalidade':
-      return '⚪ Sem mensalidade';
-    default:
-      return status || '—';
-  }
+function obterBadgeStatus(status) {
+  return String(status).toLowerCase() === 'ativo'
+    ? <Badge tone="green">Ativo</Badge>
+    : <Badge tone="red">Inativo</Badge>;
 }
 
 export default function AlunosPage() {
@@ -77,101 +82,78 @@ export default function AlunosPage() {
   const totalPaginas = Math.max(1, Math.ceil(alunosFiltrados.length / itensPorPagina));
 
   return (
-    <div className="max-w-7xl mx-auto p-6 bg-white rounded shadow space-y-4">
-      <div className="flex justify-between items-center gap-4 flex-wrap">
-        <h2 className="text-2xl font-bold text-blue-700">Alunos</h2>
-        <input
-          type="text"
-          placeholder="Buscar por nome ou matrícula"
-          value={busca}
-          onChange={(e) => {
-            setBusca(e.target.value);
-            setPaginaAtual(1);
-          }}
-          className="border px-3 py-2 rounded"
-        />
+    <div className="space-y-6">
+      <PageHeader
+        title="Alunos"
+        subtitle="Cadastro, situação operacional e acompanhamento de mensalidades."
+        actions={
+          <Button as={Link} to="/alunos/novo" variant="primary">
+            + Novo Aluno
+          </Button>
+        }
+      />
+
+      <div className="ui-status-grid">
+        <KpiCard label="Total de Alunos" value={totalAlunos} icon={<Users size={20} />} tone="blue" />
+        <KpiCard label="Em Dia" value={totalEmDia} icon={<CheckCircle2 size={20} />} tone="green" />
+        <KpiCard label="Atrasados" value={totalAtrasados} icon={<CircleSlash size={20} />} tone="red" />
+        <KpiCard label="Sem Mensalidade" value={totalSemMensalidade} icon={<WalletCards size={20} />} tone="gray" />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-4">
-        <div className="p-4 bg-gray-100 rounded shadow text-center">
-          <p className="text-gray-600">Total de Alunos</p>
-          <p className="text-2xl font-bold">{totalAlunos}</p>
+      <Card>
+        <div className="ui-section-header">
+          <div>
+            <h2 className="ui-section-title">Lista de Alunos</h2>
+            <p className="ui-section-subtitle">{alunosFiltrados.length} registro(s) encontrado(s).</p>
+          </div>
+          <div className="w-full max-w-sm">
+            <Input
+              type="text"
+              placeholder="Buscar por nome ou matrícula"
+              value={busca}
+              onChange={(e) => {
+                setBusca(e.target.value);
+                setPaginaAtual(1);
+              }}
+            />
+          </div>
         </div>
-        <div className="p-4 bg-green-100 rounded shadow text-center">
-          <p className="text-gray-600">Em Dia</p>
-          <p className="text-2xl font-bold text-green-700">{totalEmDia}</p>
-        </div>
-        <div className="p-4 bg-red-100 rounded shadow text-center">
-          <p className="text-gray-600">Atrasados</p>
-          <p className="text-2xl font-bold text-red-700">{totalAtrasados}</p>
-        </div>
-        <div className="p-4 bg-slate-100 rounded shadow text-center">
-          <p className="text-gray-600">Sem Mensalidade</p>
-          <p className="text-2xl font-bold text-slate-700">{totalSemMensalidade}</p>
-        </div>
-      </div>
 
-      <div className="flex justify-end mb-4">
-        <Link to="/alunos/novo" className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition">
-          + Novo Aluno
-        </Link>
-      </div>
-
-      <table className="min-w-full border mt-4">
-        <thead className="bg-gray-200">
-          <tr>
-            <th className="p-2 border">Matrícula</th>
-            <th className="p-2 border">Nome</th>
-            <th className="p-2 border">Status</th>
-            <th className="p-2 border">Mensalidade</th>
-            <th className="p-2 border">Ações</th>
-          </tr>
-        </thead>
-        <tbody>
-          {alunosPaginados.length === 0 ? (
-            <tr>
-              <td colSpan={5} className="text-center p-4">Nenhum aluno encontrado.</td>
-            </tr>
-          ) : (
-            alunosPaginados.map((aluno) => (
-              <tr key={aluno.id} className="hover:bg-gray-50">
-                <td className="p-2 border font-mono text-sm">{aluno.matricula}</td>
-                <td className="p-2 border">{aluno.nome}</td>
-                <td className="p-2 border">
-                  {String(aluno.status_ativo).toLowerCase() === 'ativo' ? (
-                    <span className="text-green-600">✅ Ativo</span>
-                  ) : (
-                    <span className="text-red-600">❌ Inativo</span>
-                  )}
-                </td>
-                <td className={`p-2 border font-bold ${obterCorMensalidade(aluno.mensalidade_status)}`}>
-                  {obterLabelMensalidade(aluno.mensalidade_status)}
-                </td>
-                <td className="p-2 border">
-                  <button
-                    onClick={() => navigate(`/alunos/${aluno.id}`)}
-                    className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
-                  >
-                    Perfil
-                  </button>
-                </td>
+        {alunosPaginados.length === 0 ? (
+          <EmptyState title="Nenhum aluno encontrado." description="Tente ajustar a busca ou cadastre um novo aluno." />
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                <th>Matrícula</th>
+                <th>Nome</th>
+                <th>Status</th>
+                <th>Mensalidade</th>
+                <th>Ações</th>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
+            </thead>
+            <tbody>
+              {alunosPaginados.map((aluno) => (
+                <tr key={aluno.id}>
+                  <td className="font-mono text-sm">{aluno.matricula}</td>
+                  <td className="font-semibold">{aluno.nome}</td>
+                  <td>{obterBadgeStatus(aluno.status_ativo)}</td>
+                  <td>{obterBadgeMensalidade(aluno.mensalidade_status)}</td>
+                  <td>
+                    <Button size="sm" onClick={() => navigate(`/alunos/${aluno.id}`)}>
+                      Perfil
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
 
-      <div className="flex justify-center space-x-2 mt-4">
-        {Array.from({ length: totalPaginas }, (_, i) => i + 1).map((num) => (
-          <button
-            key={num}
-            onClick={() => setPaginaAtual(num)}
-            className={`px-3 py-1 border rounded ${num === paginaAtual ? 'bg-blue-600 text-white' : 'bg-white'}`}
-          >
-            {num}
-          </button>
-        ))}
-      </div>
+        <div className="px-5 pb-5">
+          <Pagination page={paginaAtual} totalPages={totalPaginas} onPageChange={setPaginaAtual} />
+        </div>
+      </Card>
     </div>
   );
 }

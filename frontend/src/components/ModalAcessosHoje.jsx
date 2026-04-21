@@ -1,5 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { fetchTodosAcessos, fetchAlunos } from '../services/Api';
+import React, { useEffect, useState } from 'react';
+import { fetchAlunos, fetchTodosAcessos } from '../services/Api';
+import Badge from './ui/Badge';
+import Button from './ui/Button';
+import EmptyState from './ui/EmptyState';
+import Input from './ui/Input';
+import Modal from './ui/Modal';
+import Table from './ui/Table';
+
+function badgeAcesso(resultado) {
+  const status = resultado?.toLowerCase();
+  const permitido = status === 'permitido' || status === 'liberado';
+  return <Badge tone={permitido ? 'green' : 'red'}>{permitido ? 'Permitido' : 'Negado'}</Badge>;
+}
 
 export default function ModalAcessosHoje({ onClose }) {
   const [acessos, setAcessos] = useState([]);
@@ -40,60 +52,63 @@ export default function ModalAcessosHoje({ onClose }) {
   }, []);
 
   const acessosFiltrados = acessos.filter((acesso) => acesso.nome.toLowerCase().includes(filtroNome.toLowerCase()));
-  const acessosOrdenados = acessosFiltrados.slice().sort((a, b) => (ordenAsc ? new Date(a.data_hora) - new Date(b.data_hora) : new Date(b.data_hora) - new Date(a.data_hora)));
+  const acessosOrdenados = acessosFiltrados.slice().sort((a, b) => (
+    ordenAsc
+      ? new Date(a.data_hora) - new Date(b.data_hora)
+      : new Date(b.data_hora) - new Date(a.data_hora)
+  ));
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-start pt-20 z-50">
-      <div className="bg-white rounded shadow-lg max-w-4xl w-full max-h-[80vh] overflow-auto p-6 relative">
-        <button onClick={onClose} className="absolute top-2 right-2 text-gray-600 hover:text-gray-900 font-bold text-xl" aria-label="Fechar modal">&times;</button>
+    <Modal
+      title="Acessos do Dia"
+      onClose={onClose}
+      className="max-w-4xl"
+      footer={
+        <div className="flex justify-between items-center w-full gap-3">
+          <span className="text-sm text-gray-500">{acessosOrdenados.length} acesso(s) encontrado(s)</span>
+          <Button variant="secondary" onClick={onClose}>Fechar</Button>
+        </div>
+      }
+    >
+      <div className="flex flex-col sm:flex-row items-start sm:items-center mb-4 gap-3">
+        <Button variant="secondary" onClick={() => setOrdenAsc(!ordenAsc)}>
+          Ordenar {ordenAsc ? 'crescente' : 'decrescente'}
+        </Button>
 
-        <h2 className="text-2xl mb-4 font-bold">Acessos do Dia</h2>
-
-        <div className="flex flex-col sm:flex-row items-start sm:items-center mb-4 gap-4">
-          <button onClick={() => setOrdenAsc(!ordenAsc)} className="px-3 py-1 bg-indigo-600 text-white rounded hover:bg-indigo-700">
-            Ordenar por Data/Hora {ordenAsc ? '↑ Crescente' : '↓ Decrescente'}
-          </button>
-
-          <input
+        <div className="flex-1 w-full">
+          <Input
             type="text"
             placeholder="Filtrar por nome"
             value={filtroNome}
             onChange={(e) => setFiltroNome(e.target.value)}
-            className="border border-gray-300 rounded px-3 py-1 focus:outline-none focus:ring focus:ring-indigo-300 flex-grow"
           />
         </div>
-
-        {loading ? (
-          <p>Carregando acessos...</p>
-        ) : acessosOrdenados.length === 0 ? (
-          <p>Nenhum acesso encontrado para o dia de hoje.</p>
-        ) : (
-          <table className="min-w-full text-left border">
-            <thead className="bg-gray-200">
-              <tr>
-                <th className="p-3 border">Aluno</th>
-                <th className="p-3 border">Data/Hora</th>
-                <th className="p-3 border">Resultado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {acessosOrdenados.map(({ id, nome, data_hora, resultado }) => {
-                const status = resultado?.toLowerCase();
-                const permitido = status === 'permitido';
-                return (
-                  <tr key={id} className="border-t hover:bg-gray-50">
-                    <td className="p-3 border">{nome}</td>
-                    <td className="p-3 border">{new Date(data_hora).toLocaleString('pt-BR')}</td>
-                    <td className={`p-3 border font-semibold ${permitido ? 'text-green-600' : 'text-red-600'}`}>
-                      {permitido ? '✅ Permitido' : '❌ Negado'}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
       </div>
-    </div>
+
+      {loading ? (
+        <EmptyState title="Carregando acessos..." />
+      ) : acessosOrdenados.length === 0 ? (
+        <EmptyState title="Nenhum acesso encontrado para hoje." />
+      ) : (
+        <Table>
+          <thead>
+            <tr>
+              <th>Aluno</th>
+              <th>Data/Hora</th>
+              <th>Resultado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {acessosOrdenados.map(({ id, nome, data_hora, resultado }) => (
+              <tr key={id}>
+                <td>{nome}</td>
+                <td>{new Date(data_hora).toLocaleString('pt-BR')}</td>
+                <td>{badgeAcesso(resultado)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      )}
+    </Modal>
   );
 }

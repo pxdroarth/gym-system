@@ -431,6 +431,100 @@ main {
   box-shadow: var(--shadow-sm);
 }
 
+.ui-kpi-card {
+  overflow: hidden;
+}
+
+.ui-kpi-card__inner {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  min-height: 7rem;
+  padding: 1.1rem 1.25rem;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  text-align: left;
+}
+
+button.ui-kpi-card__inner {
+  cursor: pointer;
+}
+
+button.ui-kpi-card__inner:hover {
+  background: var(--surface-muted);
+}
+
+.ui-kpi-card__label {
+  color: var(--text-subtle);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ui-kpi-card__value {
+  margin-top: 0.5rem;
+  color: var(--text-primary);
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.ui-kpi-card__subtitle {
+  margin-top: 0.45rem;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.ui-kpi-card__icon {
+  display: grid;
+  flex: 0 0 2.45rem;
+  width: 2.45rem;
+  height: 2.45rem;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-soft);
+}
+
+.ui-kpi-card--blue .ui-kpi-card__value {
+  color: var(--color-primary);
+}
+
+.ui-kpi-card--green .ui-kpi-card__value {
+  color: var(--status-success);
+}
+
+.ui-kpi-card--red .ui-kpi-card__value {
+  color: var(--status-danger);
+}
+
+.ui-kpi-card--amber .ui-kpi-card__value {
+  color: var(--status-warning);
+}
+
+.ui-kpi-card--gray .ui-kpi-card__value {
+  color: var(--text-muted);
+}
+
+.ui-kpi-card--green .ui-kpi-card__icon {
+  background: var(--status-success-bg);
+}
+
+.ui-kpi-card--red .ui-kpi-card__icon {
+  background: var(--status-danger-bg);
+}
+
+.ui-kpi-card--amber .ui-kpi-card__icon {
+  background: var(--status-warning-bg);
+}
+
+.ui-kpi-card--gray .ui-kpi-card__icon {
+  background: var(--surface-subtle);
+}
+
 .ui-badge {
   display: inline-flex;
   align-items: center;
@@ -605,6 +699,137 @@ main {
   align-items: center;
   gap: 0.6rem;
   flex-wrap: wrap;
+}
+
+.ui-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.ui-section-title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.ui-section-subtitle {
+  margin: 0.25rem 0 0;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.ui-empty-state {
+  padding: 2rem;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.ui-empty-state__title {
+  color: var(--text-primary);
+  font-weight: 800;
+}
+
+.ui-empty-state__description {
+  margin-top: 0.35rem;
+  font-size: 0.84rem;
+}
+
+.ui-empty-state__action {
+  margin-top: 1rem;
+}
+
+.ui-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.ui-pagination__status {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.ui-status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 1rem;
+}
+
+.ui-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0.85rem;
+}
+
+.ui-info-item {
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--surface-muted);
+}
+
+.ui-info-item__label {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.ui-info-item__value {
+  margin-top: 0.35rem;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.ui-profile-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem;
+}
+
+.ui-profile-hero__main {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.ui-profile-hero__avatar {
+  display: grid;
+  flex: 0 0 3.5rem;
+  width: 3.5rem;
+  height: 3.5rem;
+  place-items: center;
+  border-radius: var(--radius-lg);
+  color: var(--text-inverse);
+  font-weight: 900;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-strong));
+}
+
+.ui-profile-hero__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 1.35rem;
+  font-weight: 900;
+}
+
+.ui-profile-hero__meta {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 0.5rem;
 }
 
 .ui-modal-backdrop {

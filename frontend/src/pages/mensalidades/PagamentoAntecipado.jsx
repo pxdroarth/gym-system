@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
+import Badge from "../../components/ui/Badge";
+import Button from "../../components/ui/Button";
+import Card from "../../components/ui/Card";
+import EmptyState from "../../components/ui/EmptyState";
+import Input from "../../components/ui/Input";
+import PageHeader from "../../components/ui/PageHeader";
 
 export default function PagamentoAntecipado({ alunoId }) {
   const { control, handleSubmit, watch, setValue } = useForm({
@@ -38,7 +44,7 @@ export default function PagamentoAntecipado({ alunoId }) {
   const desconto = watch("desconto") || 0;
 
   const valorTotal = mensalidades
-    .filter(m => mensalidadesIds.includes(m.id))
+    .filter((m) => mensalidadesIds.includes(m.id))
     .reduce((acc, m) => acc + (Number(m.valor_cobrado) * (1 - desconto / 100)), 0);
 
   const onSubmit = async (data) => {
@@ -67,7 +73,7 @@ export default function PagamentoAntecipado({ alunoId }) {
       const resposta = await res.json();
       setMensagem(`Pagamento realizado para ${resposta.mensalidades.length} mensalidades`);
 
-      setMensalidades(prev => prev.filter(m => !data.mensalidadesIds.includes(m.id)));
+      setMensalidades((prev) => prev.filter((m) => !data.mensalidadesIds.includes(m.id)));
       setValue("mensalidadesIds", []);
       setValue("desconto", 0);
     } catch (error) {
@@ -79,59 +85,64 @@ export default function PagamentoAntecipado({ alunoId }) {
     if (checked) {
       setValue("mensalidadesIds", [...mensalidadesIds, id]);
     } else {
-      setValue("mensalidadesIds", mensalidadesIds.filter(i => i !== id));
+      setValue("mensalidadesIds", mensalidadesIds.filter((i) => i !== id));
     }
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="max-w-lg mx-auto p-6 bg-white rounded shadow space-y-4">
-      <h2 className="text-xl font-bold">Pagamento Antecipado</h2>
+    <div className="space-y-6">
+      <PageHeader
+        title="Pagamento Antecipado"
+        subtitle="Selecione mensalidades em aberto e aplique desconto quando necessário."
+      />
 
-      {mensagem && (
-        <p className={`p-2 rounded ${mensagem.startsWith("Erro") ? "bg-red-200 text-red-800" : "bg-green-200 text-green-800"}`}>
-          {mensagem}
-        </p>
-      )}
-
-      <div>
-        <label className="block mb-1 font-semibold">Desconto (%)</label>
-        <Controller
-          name="desconto"
-          control={control}
-          render={({ field }) => (
-            <input {...field} type="number" min="0" max="100" className="w-full border px-3 py-2 rounded" />
+      <Card className="p-5 max-w-3xl">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+          {mensagem && (
+            <Badge tone={mensagem.startsWith("Erro") ? "red" : "green"}>
+              {mensagem}
+            </Badge>
           )}
-        />
-      </div>
 
-      <div className="max-h-64 overflow-y-auto border rounded p-2">
-        {mensalidades.length === 0 ? (
-          <p>Nenhuma mensalidade pendente.</p>
-        ) : (
-          mensalidades.map((m) => (
-            <label key={m.id} className="flex items-center space-x-2 py-1">
-              <input
-                type="checkbox"
-                checked={mensalidadesIds.includes(m.id)}
-                onChange={e => toggleCheckbox(m.id, e.target.checked)}
-              />
-              <span>{`#${m.id} - Vencimento: ${new Date(m.vencimento).toLocaleDateString()} - Valor: R$ ${Number(m.valor_cobrado).toFixed(2)}`}</span>
-            </label>
-          ))
-        )}
-      </div>
+          <Controller
+            name="desconto"
+            control={control}
+            render={({ field }) => (
+              <Input {...field} label="Desconto (%)" type="number" min="0" max="100" />
+            )}
+          />
 
-      <div className="font-semibold text-lg">
-        Total com desconto: R$ {valorTotal.toFixed(2)}
-      </div>
+          <div className="border rounded-lg p-3 max-h-72 overflow-y-auto">
+            {mensalidades.length === 0 ? (
+              <EmptyState title="Nenhuma mensalidade pendente." />
+            ) : (
+              mensalidades.map((m) => (
+                <label key={m.id} className="flex items-center gap-3 py-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={mensalidadesIds.includes(m.id)}
+                    onChange={(e) => toggleCheckbox(m.id, e.target.checked)}
+                  />
+                  <span>
+                    #{m.id} - Vencimento: {new Date(m.vencimento).toLocaleDateString("pt-BR")} - Valor: R$ {Number(m.valor_cobrado).toFixed(2)}
+                  </span>
+                </label>
+              ))
+            )}
+          </div>
 
-      <button
-        type="submit"
-        disabled={mensalidadesIds.length === 0}
-        className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:opacity-50"
-      >
-        Confirmar Pagamento
-      </button>
-    </form>
+          <div className="ui-info-item">
+            <div className="ui-info-item__label">Total com desconto</div>
+            <div className="ui-info-item__value">
+              {valorTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+            </div>
+          </div>
+
+          <Button type="submit" disabled={mensalidadesIds.length === 0} className="w-full">
+            Confirmar Pagamento
+          </Button>
+        </form>
+      </Card>
+    </div>
   );
 }

@@ -1,7 +1,21 @@
 import React, { useEffect, useState } from 'react';
+import { Activity, UserCheck, Users, UserX } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { fetchAlunos, fetchTodosAcessos } from '../services/Api';
 import ModalAcessosHoje from '../components/ModalAcessosHoje';
-import { useNavigate } from 'react-router-dom';
+import Badge from '../components/ui/Badge';
+import Button from '../components/ui/Button';
+import Card from '../components/ui/Card';
+import EmptyState from '../components/ui/EmptyState';
+import KpiCard from '../components/ui/KpiCard';
+import PageHeader from '../components/ui/PageHeader';
+import Table from '../components/ui/Table';
+
+function badgeAcesso(resultado) {
+  const status = resultado?.toLowerCase().trim();
+  const permitido = status === 'permitido' || status === 'liberado';
+  return <Badge tone={permitido ? 'green' : 'red'}>{permitido ? 'Permitido' : 'Negado'}</Badge>;
+}
 
 export default function Dashboard() {
   const [alunos, setAlunos] = useState([]);
@@ -26,6 +40,7 @@ export default function Dashboard() {
       });
 
       setAcessos(acessosComNome.sort((a, b) => new Date(b.data_hora) - new Date(a.data_hora)));
+      setErro(null);
     } catch (error) {
       setErro('Erro ao carregar dados do dashboard.');
       console.error(error);
@@ -38,64 +53,83 @@ export default function Dashboard() {
   const ultimosAcessos = acessos.slice(0, 20);
 
   return (
-    <div className="pt-16 max-w-5xl mx-auto p-6 bg-white rounded shadow space-y-8">
-      <h2 className="text-2xl font-bold text-blue-700">Dashboard Geral</h2>
-      {erro && <p className="text-red-600">{erro}</p>}
+    <div className="space-y-6">
+      <PageHeader
+        title="Dashboard Geral"
+        subtitle="Visão operacional da academia, alunos e acessos recentes."
+        actions={
+          <>
+            <Button variant="secondary" onClick={carregarDados}>Atualizar</Button>
+            <Button onClick={() => setModalAberto(true)}>Acessos do Dia</Button>
+          </>
+        }
+      />
 
-      <div className="flex justify-between items-center gap-4 flex-wrap">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 flex-grow">
-          <div className="bg-blue-100 text-blue-900 p-4 rounded shadow text-center cursor-pointer" onClick={() => navigate('/alunos')}>
-            <p className="text-sm">Total de Alunos</p>
-            <p className="text-xl font-bold">{totalAlunos}</p>
-          </div>
-          <div className="bg-green-100 text-green-900 p-4 rounded shadow text-center">
-            <p className="text-sm">Status Operacional Ativo</p>
-            <p className="text-xl font-bold">{alunosAtivos}</p>
-          </div>
-          <div className="bg-red-100 text-red-900 p-4 rounded shadow text-center">
-            <p className="text-sm">Status Operacional Inativo</p>
-            <p className="text-xl font-bold">{alunosInativos}</p>
+      {erro && <Card className="p-4 text-red-700 font-semibold">{erro}</Card>}
+
+      <div className="ui-status-grid">
+        <KpiCard
+          label="Total de Alunos"
+          value={totalAlunos}
+          subtitle="Cadastrados no sistema"
+          icon={<Users size={20} />}
+          tone="blue"
+          onClick={() => navigate('/alunos')}
+        />
+        <KpiCard
+          label="Operacionais Ativos"
+          value={alunosAtivos}
+          subtitle="Liberados operacionalmente"
+          icon={<UserCheck size={20} />}
+          tone="green"
+        />
+        <KpiCard
+          label="Operacionais Inativos"
+          value={alunosInativos}
+          subtitle="Exigem atenção cadastral"
+          icon={<UserX size={20} />}
+          tone="red"
+        />
+        <KpiCard
+          label="Acessos Recentes"
+          value={ultimosAcessos.length}
+          subtitle="Últimos registros carregados"
+          icon={<Activity size={20} />}
+          tone="gray"
+        />
+      </div>
+
+      <Card>
+        <div className="ui-section-header">
+          <div>
+            <h2 className="ui-section-title">Últimos 20 Acessos</h2>
+            <p className="ui-section-subtitle">Histórico operacional recente sem dados financeiros sensíveis.</p>
           </div>
         </div>
 
-        <button onClick={() => setModalAberto(true)} className="ml-4 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 transition">
-          Mostrar todos acessos
-        </button>
-      </div>
-
-      <div className="mt-8">
-        <h3 className="text-lg font-semibold mb-4">Últimos 20 Acessos</h3>
-        <div className="overflow-x-auto">
-          <table className="min-w-full text-left border">
-            <thead className="bg-gray-200">
+        {ultimosAcessos.length === 0 ? (
+          <EmptyState title="Nenhum acesso encontrado." />
+        ) : (
+          <Table>
+            <thead>
               <tr>
-                <th className="p-3 border">Aluno</th>
-                <th className="p-3 border">Data/Hora</th>
-                <th className="p-3 border">Resultado</th>
+                <th>Aluno</th>
+                <th>Data/Hora</th>
+                <th>Resultado</th>
               </tr>
             </thead>
             <tbody>
-              {ultimosAcessos.length === 0 ? (
-                <tr><td colSpan={3} className="p-3 text-center">Nenhum acesso encontrado.</td></tr>
-              ) : (
-                ultimosAcessos.map(({ id, nome, data_hora, resultado }) => {
-                  const status = resultado?.toLowerCase().trim();
-                  const permitido = status === 'permitido';
-                  return (
-                    <tr key={`${id}-${data_hora}`} className="border-t hover:bg-gray-50">
-                      <td className="p-3 border">{nome}</td>
-                      <td className="p-3 border">{new Date(data_hora).toLocaleString('pt-BR')}</td>
-                      <td className={`p-3 border font-semibold ${permitido ? 'text-green-600' : 'text-red-600'}`}>
-                        {permitido ? '✅ Permitido' : '❌ Negado'}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
+              {ultimosAcessos.map(({ id, nome, data_hora, resultado }) => (
+                <tr key={`${id}-${data_hora}`}>
+                  <td>{nome}</td>
+                  <td>{new Date(data_hora).toLocaleString('pt-BR')}</td>
+                  <td>{badgeAcesso(resultado)}</td>
+                </tr>
+              ))}
             </tbody>
-          </table>
-        </div>
-      </div>
+          </Table>
+        )}
+      </Card>
 
       {modalAberto && <ModalAcessosHoje onClose={() => setModalAberto(false)} />}
     </div>

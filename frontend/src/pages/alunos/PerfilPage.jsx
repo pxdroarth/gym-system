@@ -1,12 +1,70 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { Activity, CreditCard, Edit3, UserRound } from 'lucide-react';
 import ToastNotification from '../../components/ToastNotification';
 import { useNavigate, useParams } from 'react-router-dom';
 import ModalNovaMensalidade from './ModalNovaMensalidade';
-import { fetchAlunoById, fetchAcessos, fetchMensalidadesPorAluno, fetchPlanos, registrarPagamento, simularAcesso } from '../../services/Api';
+import {
+  fetchAlunoById,
+  fetchAcessos,
+  fetchMensalidadesPorAluno,
+  fetchPlanos,
+  registrarPagamento,
+  simularAcesso,
+} from '../../services/Api';
+import Badge from '../../components/ui/Badge';
+import Button from '../../components/ui/Button';
+import Card from '../../components/ui/Card';
+import EmptyState from '../../components/ui/EmptyState';
+import Pagination from '../../components/ui/Pagination';
+import Table from '../../components/ui/Table';
+import { TabButton, Tabs } from '../../components/ui/Tabs';
 
 function formatarData(data) {
   if (!data) return '-';
   return new Date(data).toLocaleDateString('pt-BR');
+}
+
+function formatarMoeda(valor) {
+  return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function iniciais(nome) {
+  return String(nome || 'SA')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((parte) => parte[0])
+    .join('')
+    .toUpperCase();
+}
+
+function badgeStatusAluno(status) {
+  return String(status).toLowerCase() === 'ativo'
+    ? <Badge tone="green">Ativo</Badge>
+    : <Badge tone="red">Inativo</Badge>;
+}
+
+function badgeMensalidade(status) {
+  const normalized = String(status || '').toLowerCase();
+  if (['pago', 'em_dia'].includes(normalized)) return <Badge tone="green">{status}</Badge>;
+  if (['em_aberto', 'parcial'].includes(normalized)) return <Badge tone="amber">{status}</Badge>;
+  if (['vencido', 'atrasado', 'cancelado'].includes(normalized)) return <Badge tone="red">{status}</Badge>;
+  return <Badge tone="gray">{status || '-'}</Badge>;
+}
+
+function badgeAcesso(resultado) {
+  const normalized = String(resultado || '').toLowerCase();
+  const permitido = normalized === 'permitido' || normalized === 'liberado';
+  return <Badge tone={permitido ? 'green' : 'red'}>{permitido ? 'Permitido' : 'Negado'}</Badge>;
+}
+
+function InfoItem({ label, value }) {
+  return (
+    <div className="ui-info-item">
+      <div className="ui-info-item__label">{label}</div>
+      <div className="ui-info-item__value">{value || '-'}</div>
+    </div>
+  );
 }
 
 export default function PerfilPage() {
@@ -27,9 +85,6 @@ export default function PerfilPage() {
   const [toastMsg, setToastMsg] = useState(null);
   const [carregandoPagamentoId, setCarregandoPagamentoId] = useState(null);
   const [simulandoAcesso, setSimulandoAcesso] = useState(false);
-
-  const resultadoTexto = { permitido: 'Permitido', negado: 'Negado' };
-  const resultadoClasse = { permitido: 'text-green-700', negado: 'text-red-600' };
 
   async function carregarAluno() {
     try {
@@ -110,100 +165,136 @@ export default function PerfilPage() {
     }
   }
 
-  if (erro) return <div className="p-4 text-red-600 font-bold">Erro: {erro}</div>;
-  if (!aluno) return <div className="p-4">Carregando...</div>;
+  if (erro) return <Card className="p-4 text-red-700 font-bold">Erro: {erro}</Card>;
+  if (!aluno) return <Card className="p-4">Carregando perfil...</Card>;
+
+  const totalPaginasMensalidades = Math.max(1, Math.ceil(totalMensalidades / 10));
+  const totalPaginasAcessos = Math.max(1, Math.ceil(totalAcessos / 10));
 
   return (
-    <div className="max-w-5xl mx-auto p-6 bg-white rounded shadow">
-      <h2 className="text-xl font-bold mb-2 text-blue-700">Perfil de {aluno.nome}</h2>
+    <div className="space-y-6">
       <ToastNotification message={toastMsg} onClose={() => setToastMsg(null)} />
 
-      <div className="flex space-x-6 border-b mb-4">
-        {['informacoes', 'mensalidades', 'acessos'].map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setAbaAtiva(tab)}
-            className={`pb-2 ${abaAtiva === tab ? 'border-b-2 border-blue-600 font-semibold text-blue-600' : 'text-gray-600'}`}
-          >
-            {tab.charAt(0).toUpperCase() + tab.slice(1)}
-          </button>
-        ))}
-      </div>
+      <Card>
+        <div className="ui-profile-hero">
+          <div className="ui-profile-hero__main">
+            <div className="ui-profile-hero__avatar">{iniciais(aluno.nome)}</div>
+            <div>
+              <h1 className="ui-profile-hero__title">{aluno.nome}</h1>
+              <div className="ui-profile-hero__meta">
+                <Badge tone="blue">Matrícula {aluno.matricula || '-'}</Badge>
+                {badgeStatusAluno(aluno.status_ativo)}
+                {badgeMensalidade(aluno.mensalidade_status)}
+                <Badge tone="gray">{planoAtual?.nome || 'Sem plano'}</Badge>
+              </div>
+            </div>
+          </div>
 
-      {abaAtiva === 'informacoes' && (
-        <div className="space-y-2">
-          <p><strong>Matrícula:</strong> {aluno.matricula}</p>
-          <p><strong>Nome:</strong> {aluno.nome}</p>
-          <p><strong>Telefone:</strong> {aluno.telefone || '-'}</p>
-          <p><strong>Data de Nascimento:</strong> {aluno.data_nascimento?.slice(0, 10)}</p>
-          <p><strong>Status Cadastral:</strong> {aluno.status}</p>
-          <p><strong>Status Operacional:</strong> {aluno.status_ativo}</p>
-          <p><strong>Situação da Mensalidade:</strong> {aluno.mensalidade_status}</p>
-          <p><strong>Plano Atual:</strong> {planoAtual?.nome || 'Sem plano'}</p>
-
-          <div className="flex gap-3 pt-4 flex-wrap">
-            <button onClick={() => navigate(`/alunos/editar/${aluno.id}`)} className="bg-yellow-500 hover:bg-yellow-600 text-white px-4 py-2 rounded">
-              Editar Aluno
-            </button>
-            <button onClick={testarAcesso} disabled={simulandoAcesso} className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded disabled:opacity-50">
-              {simulandoAcesso ? 'Testando acesso...' : 'Testar Acesso'}
-            </button>
+          <div className="flex gap-2 flex-wrap justify-end">
+            <Button variant="secondary" onClick={() => navigate(`/alunos/editar/${aluno.id}`)}>
+              <Edit3 size={15} /> Editar
+            </Button>
+            <Button onClick={testarAcesso} disabled={simulandoAcesso}>
+              <Activity size={15} /> {simulandoAcesso ? 'Testando...' : 'Testar Acesso'}
+            </Button>
           </div>
         </div>
+      </Card>
+
+      <Tabs>
+        <TabButton active={abaAtiva === 'informacoes'} onClick={() => setAbaAtiva('informacoes')}>
+          Informações
+        </TabButton>
+        <TabButton active={abaAtiva === 'mensalidades'} onClick={() => setAbaAtiva('mensalidades')}>
+          Mensalidades
+        </TabButton>
+        <TabButton active={abaAtiva === 'acessos'} onClick={() => setAbaAtiva('acessos')}>
+          Acessos
+        </TabButton>
+      </Tabs>
+
+      {abaAtiva === 'informacoes' && (
+        <Card className="p-5">
+          <div className="ui-section-header px-0 pt-0">
+            <div>
+              <h2 className="ui-section-title">Dados do Aluno</h2>
+              <p className="ui-section-subtitle">Informações cadastrais e operacionais principais.</p>
+            </div>
+          </div>
+          <div className="ui-info-grid mt-5">
+            <InfoItem label="Matrícula" value={aluno.matricula} />
+            <InfoItem label="Nome" value={aluno.nome} />
+            <InfoItem label="Telefone" value={aluno.telefone} />
+            <InfoItem label="Data de Nascimento" value={aluno.data_nascimento?.slice(0, 10)} />
+            <InfoItem label="Status Cadastral" value={aluno.status} />
+            <InfoItem label="Status Operacional" value={aluno.status_ativo} />
+            <InfoItem label="Situação da Mensalidade" value={aluno.mensalidade_status} />
+            <InfoItem label="Plano Atual" value={planoAtual?.nome || 'Sem plano'} />
+          </div>
+        </Card>
       )}
 
       {abaAtiva === 'mensalidades' && (
-        <div>
-          <div className="flex justify-between mb-2">
-            <h3 className="font-semibold">Mensalidades ({totalMensalidades})</h3>
-            <button onClick={() => setShowModal(true)} className="bg-green-600 text-white rounded px-4 py-2">
-              + Registrar Mensalidade
-            </button>
+        <Card>
+          <div className="ui-section-header">
+            <div>
+              <h2 className="ui-section-title">Mensalidades</h2>
+              <p className="ui-section-subtitle">{totalMensalidades} registro(s) financeiro(s) do aluno.</p>
+            </div>
+            <Button onClick={() => setShowModal(true)}>+ Registrar Mensalidade</Button>
           </div>
-          <table className="min-w-full border text-sm mb-2">
-            <thead className="bg-blue-600 text-white">
-              <tr>
-                <th className="p-2 border">Vencimento</th>
-                <th className="p-2 border">Valor</th>
-                <th className="p-2 border">Desconto</th>
-                <th className="p-2 border">Status</th>
-                <th className="p-2 border">Observações</th>
-                <th className="p-2 border">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {mensalidades.length === 0 ? (
+
+          {mensalidades.length === 0 ? (
+            <EmptyState title="Nenhuma mensalidade encontrada." />
+          ) : (
+            <Table>
+              <thead>
                 <tr>
-                  <td colSpan={6} className="p-2 border text-center">Nenhuma mensalidade encontrada.</td>
+                  <th>Vencimento</th>
+                  <th>Valor</th>
+                  <th>Desconto</th>
+                  <th>Status</th>
+                  <th>Observações</th>
+                  <th>Ações</th>
                 </tr>
-              ) : mensalidades.map((m) => (
-                <tr key={m.id}>
-                  <td className="p-2 border">{formatarData(m.vencimento)}</td>
-                  <td className="p-2 border">R$ {Number(m.valor_cobrado || 0).toFixed(2)}</td>
-                  <td className="p-2 border">R$ {Number(m.desconto_aplicado || 0).toFixed(2)}</td>
-                  <td className={`p-2 border font-semibold ${m.status === 'pago' ? 'text-green-700' : 'text-red-600'}`}>{m.status}</td>
-                  <td className="p-2 border">{m.observacoes || '-'}</td>
-                  <td className="p-2 border">
-                    {m.status === 'em_aberto' ? (
-                      <button
-                        onClick={() => pagarMensalidade(m)}
-                        disabled={carregandoPagamentoId === m.id}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded disabled:opacity-50"
-                      >
-                        {carregandoPagamentoId === m.id ? 'Pagando...' : 'Pagar'}
-                      </button>
-                    ) : (
-                      <span className="text-gray-500">Quitada</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="flex justify-between">
-            <button disabled={paginaMensalidade === 1} onClick={() => setPaginaMensalidade((p) => p - 1)} className="bg-gray-300 px-4 py-1 rounded disabled:opacity-50">Anterior</button>
-            <button disabled={paginaMensalidade * 10 >= totalMensalidades} onClick={() => setPaginaMensalidade((p) => p + 1)} className="bg-gray-300 px-4 py-1 rounded disabled:opacity-50">Próxima</button>
+              </thead>
+              <tbody>
+                {mensalidades.map((m) => (
+                  <tr key={m.id}>
+                    <td>{formatarData(m.vencimento)}</td>
+                    <td>{formatarMoeda(m.valor_cobrado)}</td>
+                    <td>{formatarMoeda(m.desconto_aplicado)}</td>
+                    <td>{badgeMensalidade(m.status)}</td>
+                    <td>{m.observacoes || '-'}</td>
+                    <td>
+                      {m.status === 'em_aberto' ? (
+                        <Button
+                          size="sm"
+                          variant="success"
+                          onClick={() => pagarMensalidade(m)}
+                          disabled={carregandoPagamentoId === m.id}
+                        >
+                          <CreditCard size={14} /> {carregandoPagamentoId === m.id ? 'Pagando...' : 'Pagar'}
+                        </Button>
+                      ) : (
+                        <Badge tone="green">Quitada</Badge>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+
+          <div className="px-5 pb-5">
+            <Pagination
+              page={paginaMensalidade}
+              totalPages={totalPaginasMensalidades}
+              onPageChange={setPaginaMensalidade}
+              canNext={paginaMensalidade * 10 < totalMensalidades}
+            />
           </div>
+
           {showModal && (
             <ModalNovaMensalidade
               open={showModal}
@@ -216,39 +307,51 @@ export default function PerfilPage() {
               }}
             />
           )}
-        </div>
+        </Card>
       )}
 
       {abaAtiva === 'acessos' && (
-        <div>
-          <h3 className="font-semibold mb-2">Total de Acessos: {totalAcessos}</h3>
-          <table className="min-w-full border text-sm mb-2">
-            <thead className="bg-blue-600 text-white">
-              <tr>
-                <th className="p-2 border">Data/Hora</th>
-                <th className="p-2 border">Resultado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {acessos.length === 0 ? (
-                <tr>
-                  <td colSpan={2} className="p-2 border text-center">Nenhum acesso encontrado.</td>
-                </tr>
-              ) : acessos.map((acesso) => (
-                <tr key={acesso.id}>
-                  <td className="p-2 border">{new Date(acesso.data_hora).toLocaleString()}</td>
-                  <td className={`p-2 border ${resultadoClasse[acesso.resultado] || 'text-gray-700'}`}>
-                    {resultadoTexto[acesso.resultado] || acesso.resultado}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <div className="flex justify-between">
-            <button disabled={paginaAcesso === 1} onClick={() => setPaginaAcesso((p) => p - 1)} className="bg-gray-300 px-4 py-1 rounded disabled:opacity-50">Anterior</button>
-            <button disabled={paginaAcesso * 10 >= totalAcessos} onClick={() => setPaginaAcesso((p) => p + 1)} className="bg-gray-300 px-4 py-1 rounded disabled:opacity-50">Próxima</button>
+        <Card>
+          <div className="ui-section-header">
+            <div>
+              <h2 className="ui-section-title">Histórico de Acessos</h2>
+              <p className="ui-section-subtitle">{totalAcessos} tentativa(s) registrada(s).</p>
+            </div>
+            <Button onClick={testarAcesso} disabled={simulandoAcesso}>
+              {simulandoAcesso ? 'Testando...' : 'Testar Acesso'}
+            </Button>
           </div>
-        </div>
+
+          {acessos.length === 0 ? (
+            <EmptyState title="Nenhum acesso encontrado." />
+          ) : (
+            <Table>
+              <thead>
+                <tr>
+                  <th>Data/Hora</th>
+                  <th>Resultado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {acessos.map((acesso) => (
+                  <tr key={acesso.id}>
+                    <td>{new Date(acesso.data_hora).toLocaleString('pt-BR')}</td>
+                    <td>{badgeAcesso(acesso.resultado)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+
+          <div className="px-5 pb-5">
+            <Pagination
+              page={paginaAcesso}
+              totalPages={totalPaginasAcessos}
+              onPageChange={setPaginaAcesso}
+              canNext={paginaAcesso * 10 < totalAcessos}
+            />
+          </div>
+        </Card>
       )}
     </div>
   );
