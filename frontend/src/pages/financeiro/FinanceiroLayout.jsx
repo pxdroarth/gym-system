@@ -1,41 +1,47 @@
 import React from "react";
-import { Outlet, Link, useLocation } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
+import { BarChart3, FileText, WalletCards } from "lucide-react";
+import PageHeader from "../../components/ui/PageHeader";
+import RestrictedAreaNotice from "../../components/ui/RestrictedAreaNotice";
+import { TabButton, Tabs } from "../../components/ui/Tabs";
+
+const tabs = [
+  { to: "dashboardFinanceiro", path: "dashboardFinanceiro", label: "Dashboard", icon: BarChart3 },
+  { to: "contas-financeiras", path: "contas-financeiras", label: "Contas Financeiras", icon: WalletCards },
+  { to: "plano-contas", path: "plano-contas", label: "Plano de Contas", icon: FileText },
+];
 
 export default function FinanceiroLayout() {
   const location = useLocation();
 
-  const isActive = (path) =>
-    location.pathname.includes(path) ? "bg-blue-600 text-white" : "bg-gray-200";
-
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6 text-blue-700">Módulo Financeiro</h1>
+    <div className="space-y-6">
+      <PageHeader
+        title="Módulo Financeiro"
+        subtitle="Área crítica para receitas, despesas, saldo, contas e governança financeira."
+      />
 
-      {/* Navegação interna do módulo */}
-      <div className="flex gap-3 mb-6">
-        <Link
-          to="dashboardFinanceiro"
-          className={`px-4 py-2 rounded font-medium ${isActive("dashboard")}`}
-        >
-          Dashboard
-        </Link>
-        <Link
-          to="contas-financeiras"
-          className={`px-4 py-2 rounded font-medium ${isActive("contas-financeiras")}`}
-        >
-          Contas Financeiras
-        </Link>
-        <Link
-          to="plano-contas"
-          className={`px-4 py-2 rounded font-medium ${isActive("plano-contas")}`}
-        >
-          Plano de Contas
-        </Link>
-        {/* Adicione mais links aqui futuramente como Relatórios, Consolidação etc */}
-      </div>
+      <RestrictedAreaNotice
+        title="Financeiro restrito"
+        description="Este módulo concentra valores, saldos e indicadores sensíveis. A tela está preparada para integração futura com permissões reais por perfil."
+      />
 
-      {/* Área onde será renderizado o conteúdo da subrota */}
-      <div className="bg-white p-4 rounded shadow animate-fadeIn min-h-[60vh]">
+      <Tabs>
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const active = location.pathname.includes(tab.path);
+          return (
+            <TabButton key={tab.to} as={Link} active={active} to={tab.to}>
+              <span className="inline-flex items-center gap-2">
+                <Icon size={15} />
+                {tab.label}
+              </span>
+            </TabButton>
+          );
+        })}
+      </Tabs>
+
+      <div className="animate-fadeIn min-h-[60vh]">
         <Outlet />
       </div>
     </div>

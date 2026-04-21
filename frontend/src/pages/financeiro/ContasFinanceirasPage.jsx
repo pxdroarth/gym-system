@@ -1,21 +1,43 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import {
   getContasFinanceiras,
-  criarContaFinanceira,
-  atualizarContaFinanceira,
   marcarComoPago,
   deletarContaFinanceira,
 } from "../../services/contasFinanceiras";
+import Badge from "../../components/ui/Badge";
+import Button from "../../components/ui/Button";
+import Card from "../../components/ui/Card";
+import EmptyState from "../../components/ui/EmptyState";
+import Input from "../../components/ui/Input";
+import Pagination from "../../components/ui/Pagination";
+import Select from "../../components/ui/Select";
+import Table from "../../components/ui/Table";
 import ContaFinanceiraModal from "./modals/ContaFinanceiraModal";
 
 const perPage = 10;
+
+function formatarMoeda(valor) {
+  return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function statusBadge(status) {
+  if (status === "pago") return <Badge tone="green">Pago</Badge>;
+  if (status === "pendente") return <Badge tone="amber">Pendente</Badge>;
+  return <Badge tone="gray">{status || "-"}</Badge>;
+}
+
+function tipoBadge(tipo) {
+  return tipo === "receita"
+    ? <Badge tone="green">Receita</Badge>
+    : <Badge tone="red">Despesa</Badge>;
+}
 
 export default function ContasFinanceirasPage() {
   const [contas, setContas] = useState([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [modalAberto, setModalAberto] = useState(false);
-  const [contaEditando, setContaEditando] = useState(null); // Conta sendo editada
+  const [contaEditando, setContaEditando] = useState(null);
   const [erro, setErro] = useState(null);
 
   const [filtros, setFiltros] = useState({
@@ -26,7 +48,6 @@ export default function ContasFinanceirasPage() {
     descricao: ''
   });
 
-  // Carrega contas do backend com filtros e paginação
   async function carregar(pageParam = page) {
     setErro(null);
     try {
@@ -42,25 +63,21 @@ export default function ContasFinanceirasPage() {
     }
   }
 
-  // Sempre que filtros mudarem, volta pra página 1 e recarrega
   useEffect(() => {
     setPage(1);
     carregar(1);
     // eslint-disable-next-line
   }, [JSON.stringify(filtros)]);
 
-  // Sempre que a página mudar (sem mudar filtro)
   useEffect(() => {
     carregar(page);
     // eslint-disable-next-line
   }, [page]);
 
-  // Manipula filtros
   function handleFiltro(e) {
     setFiltros(f => ({ ...f, [e.target.name]: e.target.value }));
   }
 
-  // Limpa todos filtros
   function limparFiltros() {
     setFiltros({
       tipo: 'todos',
@@ -71,20 +88,17 @@ export default function ContasFinanceirasPage() {
     });
   }
 
-  // Paginação: calcula total de páginas
-  const totalPaginas = Math.ceil(total / perPage);
+  const totalPaginas = Math.max(1, Math.ceil(total / perPage));
 
-  // Confirmar pagamento (status "pago")
   async function confirmarPagamento(id) {
     try {
-      await marcarComoPago(id); // CORRIGIDO!
+      await marcarComoPago(id);
       carregar(page);
     } catch {
       alert("Erro ao confirmar pagamento");
     }
   }
 
-  // Excluir conta
   async function excluirConta(id) {
     if (!window.confirm("Deseja realmente excluir esta conta?")) return;
     try {
@@ -95,170 +109,103 @@ export default function ContasFinanceirasPage() {
     }
   }
 
-  // Abrir modal para novo OU edição
   function abrirModal(conta = null) {
     setContaEditando(conta);
     setModalAberto(true);
   }
 
   return (
-    <div className="bg-white rounded shadow p-6">
-      {/* Barra de filtros */}
-      <div className="flex flex-wrap items-end gap-3 mb-4">
-        <input
-          type="text"
-          name="descricao"
-          className="border p-2 rounded"
-          placeholder="Descrição"
-          value={filtros.descricao}
-          onChange={handleFiltro}
-        />
-        <select
-          name="tipo"
-          className="border p-2 rounded"
-          value={filtros.tipo}
-          onChange={handleFiltro}
-        >
-          <option value="todos">Todos Tipos</option>
-          <option value="despesa">Despesa</option>
-          <option value="receita">Receita</option>
-        </select>
-        <select
-          name="status"
-          className="border p-2 rounded"
-          value={filtros.status}
-          onChange={handleFiltro}
-        >
-          <option value="todos">Todos Status</option>
-          <option value="pendente">Pendente</option>
-          <option value="pago">Pago</option>
-        </select>
-        <input
-          type="date"
-          name="data_inicial"
-          className="border p-2 rounded"
-          value={filtros.data_inicial}
-          onChange={handleFiltro}
-        />
-        <input
-          type="date"
-          name="data_final"
-          className="border p-2 rounded"
-          value={filtros.data_final}
-          onChange={handleFiltro}
-        />
-        <button
-          onClick={limparFiltros}
-          className="bg-gray-200 text-gray-700 px-3 py-2 rounded hover:bg-gray-300"
-        >
-          Limpar Filtros
-        </button>
-        <button
-          onClick={() => abrirModal(null)}
-          className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700 ml-auto"
-        >
-          + Nova Conta Financeira
-        </button>
-      </div>
+    <div className="space-y-6">
+      <Card>
+        <div className="ui-section-header">
+          <div>
+            <h2 className="ui-section-title">Contas Financeiras</h2>
+            <p className="ui-section-subtitle">Lançamentos, status de pagamento e plano de contas vinculado.</p>
+          </div>
+          <Button onClick={() => abrirModal(null)}>+ Nova Conta Financeira</Button>
+        </div>
 
-      {/* Tabela */}
-      <div className="overflow-x-auto rounded">
-        <table className="min-w-full text-sm">
-          <thead>
-            <tr className="bg-gray-50">
-              <th className="px-3 py-2 text-left font-semibold">Descrição</th>
-              <th className="px-3 py-2 text-left font-semibold">Tipo</th>
-              <th className="px-3 py-2 text-left font-semibold">Valor</th>
-              <th className="px-3 py-2 text-left font-semibold">Plano de Contas</th>
-              <th className="px-3 py-2 text-left font-semibold">Status</th>
-              <th className="px-3 py-2 text-left font-semibold">Data</th>
-              <th className="px-3 py-2 text-left font-semibold">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {erro ? (
+        <div className="p-5 grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-3 items-end border-b">
+          <Input
+            label="Descrição"
+            type="text"
+            name="descricao"
+            placeholder="Buscar descrição"
+            value={filtros.descricao}
+            onChange={handleFiltro}
+          />
+          <Select label="Tipo" name="tipo" value={filtros.tipo} onChange={handleFiltro}>
+            <option value="todos">Todos Tipos</option>
+            <option value="despesa">Despesa</option>
+            <option value="receita">Receita</option>
+          </Select>
+          <Select label="Status" name="status" value={filtros.status} onChange={handleFiltro}>
+            <option value="todos">Todos Status</option>
+            <option value="pendente">Pendente</option>
+            <option value="pago">Pago</option>
+          </Select>
+          <Input label="Data inicial" type="date" name="data_inicial" value={filtros.data_inicial} onChange={handleFiltro} />
+          <Input label="Data final" type="date" name="data_final" value={filtros.data_final} onChange={handleFiltro} />
+          <Button variant="ghost" onClick={limparFiltros}>Limpar Filtros</Button>
+        </div>
+
+        {erro ? (
+          <EmptyState title={erro} />
+        ) : contas.length === 0 ? (
+          <EmptyState title="Nenhuma conta financeira encontrada." />
+        ) : (
+          <Table>
+            <thead>
               <tr>
-                <td colSpan={7} className="text-center py-10 text-red-600">{erro}</td>
+                <th>Descrição</th>
+                <th>Tipo</th>
+                <th>Valor</th>
+                <th>Plano de Contas</th>
+                <th>Status</th>
+                <th>Data</th>
+                <th>Ações</th>
               </tr>
-            ) : contas.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="text-center py-10 text-gray-400">
-                  Nenhuma conta financeira encontrada.
-                </td>
-              </tr>
-            ) : (
-              contas.map(conta => (
-                <tr key={conta.id} className="hover:bg-blue-50 transition">
-                  <td className="px-3 py-2">{conta.descricao}</td>
-                  <td className="px-3 py-2 capitalize">{conta.tipo}</td>
-                  <td className="px-3 py-2">R$ {Number(conta.valor).toLocaleString("pt-BR", {minimumFractionDigits: 2})}</td>
-                  <td className="px-3 py-2">{conta.plano_nome || "-"}</td>
-                  <td className="px-3 py-2 capitalize">
-                    <span className={
-                      conta.status === "pago"
-                        ? "text-green-600 font-semibold"
-                        : conta.status === "pendente"
-                        ? "text-orange-500 font-semibold"
-                        : "text-gray-800"
-                    }>
-                      {conta.status}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">
+            </thead>
+            <tbody>
+              {contas.map(conta => (
+                <tr key={conta.id}>
+                  <td className="font-semibold">{conta.descricao}</td>
+                  <td>{tipoBadge(conta.tipo)}</td>
+                  <td className="font-semibold">{formatarMoeda(conta.valor)}</td>
+                  <td>{conta.plano_nome || "-"}</td>
+                  <td>{statusBadge(conta.status)}</td>
+                  <td>
                     {conta.data_lancamento
                       ? new Date(conta.data_lancamento).toLocaleDateString("pt-BR")
                       : "-"}
                   </td>
-                  <td className="px-3 py-2 space-x-1">
-                    {conta.status === "pendente" && (
-                      <button
-                        className="text-green-700 border border-green-600 px-2 py-1 rounded text-xs hover:bg-green-100"
-                        onClick={() => confirmarPagamento(conta.id)}
-                      >
-                        Confirmar Pagamento
-                      </button>
-                    )}
-                    <button
-                      className="text-blue-600 underline text-xs"
-                      onClick={() => abrirModal(conta)}
-                    >
-                      Editar
-                    </button>
-                    <button
-                      className="text-red-600 underline text-xs"
-                      onClick={() => excluirConta(conta.id)}
-                    >
-                      Excluir
-                    </button>
+                  <td>
+                    <div className="flex gap-2 flex-wrap">
+                      {conta.status === "pendente" && (
+                        <Button size="sm" variant="success" onClick={() => confirmarPagamento(conta.id)}>
+                          Confirmar
+                        </Button>
+                      )}
+                      <Button size="sm" variant="secondary" onClick={() => abrirModal(conta)}>
+                        Editar
+                      </Button>
+                      <Button size="sm" variant="danger" onClick={() => excluirConta(conta.id)}>
+                        Excluir
+                      </Button>
+                    </div>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ))}
+            </tbody>
+          </Table>
+        )}
 
-      {/* Paginação */}
-      <div className="flex justify-between items-center mt-4">
-        <span className="text-gray-500">
-          {total} registro(s) encontrado(s)
-        </span>
-        <div className="flex gap-1">
-          <button
-            onClick={() => setPage(page - 1)}
-            disabled={page <= 1}
-            className="px-3 py-1 border rounded disabled:opacity-50"
-          >Anterior</button>
-          <span className="px-3 py-1">{page} / {totalPaginas || 1}</span>
-          <button
-            onClick={() => setPage(page + 1)}
-            disabled={page >= totalPaginas}
-            className="px-3 py-1 border rounded disabled:opacity-50"
-          >Próxima</button>
+        <div className="px-5 pb-5">
+          <Pagination page={page} totalPages={totalPaginas} onPageChange={setPage} />
+          <div className="text-sm text-gray-500 mt-2">{total} registro(s) encontrado(s)</div>
         </div>
-      </div>
+      </Card>
 
-      {/* Modal para nova conta ou edição */}
       <ContaFinanceiraModal
         aberto={modalAberto}
         conta={contaEditando}

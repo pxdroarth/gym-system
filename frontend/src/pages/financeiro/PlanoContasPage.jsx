@@ -5,6 +5,20 @@ import {
   updatePlanoConta,
   deletePlanoConta,
 } from '../../services/planoContasService';
+import Badge from "../../components/ui/Badge";
+import Button from "../../components/ui/Button";
+import Card from "../../components/ui/Card";
+import EmptyState from "../../components/ui/EmptyState";
+import Input from "../../components/ui/Input";
+import Modal from "../../components/ui/Modal";
+import Select from "../../components/ui/Select";
+import Table from "../../components/ui/Table";
+
+function tipoBadge(tipo) {
+  return tipo === "receita"
+    ? <Badge tone="green">Receita</Badge>
+    : <Badge tone="red">Despesa</Badge>;
+}
 
 export default function PlanoContasPage() {
   const [contas, setContas] = useState([]);
@@ -84,104 +98,103 @@ export default function PlanoContasPage() {
   };
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-bold text-blue-800">Plano de Contas</h2>
-        <button
-          onClick={() => abrirModal()}
-          className="bg-blue-600 text-white px-4 py-2 rounded shadow hover:bg-blue-700"
-        >
-          + Nova Conta
-        </button>
-      </div>
+    <div className="space-y-6">
+      <Card>
+        <div className="ui-section-header">
+          <div>
+            <h2 className="ui-section-title">Plano de Contas</h2>
+            <p className="ui-section-subtitle">Categorias financeiras usadas para organizar receitas e despesas.</p>
+          </div>
+          <Button onClick={() => abrirModal()}>+ Nova Conta</Button>
+        </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full bg-white rounded shadow">
-          <thead>
-            <tr className="bg-gray-200 text-left">
-              <th className="p-3">Nome</th>
-              <th className="p-3">Tipo</th>
-              <th className="p-3">Descrição</th>
-              <th className="p-3">Qtde Sug.</th>
-              <th className="p-3">Dia Sug.</th>
-              <th className="p-3">Ações</th>
-            </tr>
-          </thead>
-          <tbody>
-            {contas.map((conta) => (
-              <tr key={conta.id} className="border-t">
-                <td className="p-3">{conta.nome}</td>
-                <td className="p-3 capitalize">{conta.tipo}</td>
-                <td className="p-3 text-sm">{conta.descricao}</td>
-                <td className="p-3">{conta.quantidade_sugerida || "-"}</td>
-                <td className="p-3">{conta.dia_sugerido || "-"}</td>
-                <td className="p-3 space-x-2">
-                  <button onClick={() => abrirModal(conta)} className="text-blue-600 hover:underline text-sm">
-                    Editar
-                  </button>
-                  <button onClick={() => remover(conta.id)} className="text-red-600 hover:underline text-sm">
-                    Excluir
-                  </button>
-                </td>
+        {erro && !modalAberto ? (
+          <EmptyState title={erro} />
+        ) : contas.length === 0 ? (
+          <EmptyState title="Nenhuma conta cadastrada." />
+        ) : (
+          <Table>
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Tipo</th>
+                <th>Descrição</th>
+                <th>Qtde Sug.</th>
+                <th>Dia Sug.</th>
+                <th>Ações</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {contas.map((conta) => (
+                <tr key={conta.id}>
+                  <td className="font-semibold">{conta.nome}</td>
+                  <td>{tipoBadge(conta.tipo)}</td>
+                  <td>{conta.descricao || "-"}</td>
+                  <td>{conta.quantidade_sugerida || "-"}</td>
+                  <td>{conta.dia_sugerido || "-"}</td>
+                  <td>
+                    <div className="flex gap-2 flex-wrap">
+                      <Button size="sm" variant="secondary" onClick={() => abrirModal(conta)}>
+                        Editar
+                      </Button>
+                      <Button size="sm" variant="danger" onClick={() => remover(conta.id)}>
+                        Excluir
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </Table>
+        )}
+      </Card>
 
       {modalAberto && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-lg animate-fadeIn">
-            <h3 className="text-lg font-bold mb-4">{editandoId ? "Editar" : "Nova"} Conta</h3>
+        <Modal title={`${editandoId ? "Editar" : "Nova"} Conta`} onClose={fecharModal}>
+          {erro && <p className="text-red-700 font-semibold mb-3">{erro}</p>}
 
-            {erro && <p className="text-red-600 text-sm mb-2">{erro}</p>}
-
-            <div className="grid grid-cols-1 gap-3">
-              <input
-                type="text"
-                placeholder="Nome"
-                className="border p-2 rounded"
-                value={form.nome}
-                onChange={(e) => setForm({ ...form, nome: e.target.value })}
-              />
-              <select
-                className="border p-2 rounded"
-                value={form.tipo}
-                onChange={(e) => setForm({ ...form, tipo: e.target.value })}
-              >
-                <option value="despesa">Despesa</option>
-                <option value="receita">Receita</option>
-              </select>
+          <div className="grid grid-cols-1 gap-3">
+            <Input
+              label="Nome"
+              type="text"
+              placeholder="Nome"
+              value={form.nome}
+              onChange={(e) => setForm({ ...form, nome: e.target.value })}
+            />
+            <Select label="Tipo" value={form.tipo} onChange={(e) => setForm({ ...form, tipo: e.target.value })}>
+              <option value="despesa">Despesa</option>
+              <option value="receita">Receita</option>
+            </Select>
+            <label className="ui-field">
+              <span className="ui-field__label">Descrição</span>
               <textarea
                 placeholder="Descrição"
-                className="border p-2 rounded"
+                className="ui-input min-h-24"
                 value={form.descricao}
                 onChange={(e) => setForm({ ...form, descricao: e.target.value })}
               />
-              <input
-                type="number"
-                placeholder="Quantidade sugerida (opcional)"
-                className="border p-2 rounded"
-                value={form.quantidade_sugerida}
-                onChange={(e) => setForm({ ...form, quantidade_sugerida: e.target.value })}
-              />
-              <input
-                type="number"
-                placeholder="Dia sugerido (1-31, opcional)"
-                className="border p-2 rounded"
-                value={form.dia_sugerido}
-                onChange={(e) => setForm({ ...form, dia_sugerido: e.target.value })}
-              />
-            </div>
-
-            <div className="flex justify-end space-x-2 mt-4">
-              <button onClick={fecharModal} className="px-4 py-2 rounded border">Cancelar</button>
-              <button onClick={salvar} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-                Salvar
-              </button>
-            </div>
+            </label>
+            <Input
+              label="Quantidade sugerida"
+              type="number"
+              placeholder="Opcional"
+              value={form.quantidade_sugerida}
+              onChange={(e) => setForm({ ...form, quantidade_sugerida: e.target.value })}
+            />
+            <Input
+              label="Dia sugerido"
+              type="number"
+              placeholder="1-31, opcional"
+              value={form.dia_sugerido}
+              onChange={(e) => setForm({ ...form, dia_sugerido: e.target.value })}
+            />
           </div>
-        </div>
+
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="ghost" onClick={fecharModal}>Cancelar</Button>
+            <Button onClick={salvar}>Salvar</Button>
+          </div>
+        </Modal>
       )}
     </div>
   );

@@ -1,5 +1,12 @@
 import React, { useEffect, useState } from 'react';
+import { Banknote, CalendarDays, CircleDollarSign, TrendingDown, TrendingUp, Users } from 'lucide-react';
 import { getDashboardKPIs } from '../../services/dashboardService';
+import Button from '../../components/ui/Button';
+import Card from '../../components/ui/Card';
+import EmptyState from '../../components/ui/EmptyState';
+import Input from '../../components/ui/Input';
+import KpiCard from '../../components/ui/KpiCard';
+import PillButton from '../../components/ui/PillButton';
 
 export default function FinanceiroDashboard() {
   const [dados, setDados] = useState(null);
@@ -41,89 +48,87 @@ export default function FinanceiroDashboard() {
     { key: 'trimestre', label: 'Trimestre' },
     { key: 'semestre', label: 'Semestre' },
     { key: 'anual', label: 'Anual' },
-    { key: 'intervalo_datas', label: 'Intervalo de Datas' },
+    { key: 'intervalo_datas', label: 'Intervalo' },
   ];
 
   const formatarValor = (valor) =>
     Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   return (
-    <div className="p-6">
-      <h2 className="text-2xl font-bold mb-4">Dashboard Financeiro</h2>
-
-      <div className="flex flex-wrap gap-2 mb-6">
-        {periodos.map((p) => (
-          <button
-            key={p.key}
-            className={`px-4 py-2 rounded ${
-              periodo === p.key ? 'bg-blue-600 text-white' : 'bg-gray-100'
-            }`}
-            onClick={() => {
-              setPeriodo(p.key);
-              setIntervaloDatas({ inicio: '', fim: '' });
-            }}
-          >
-            {p.label}
-          </button>
-        ))}
-      </div>
-
-      {periodo === 'intervalo_datas' && (
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
-          <label>
-            Data Inicial:
-            <input
-              type="date"
-              className="ml-2 px-2 py-1 border rounded"
-              value={intervaloDatas.inicio}
-              onChange={(e) => setIntervaloDatas((d) => ({ ...d, inicio: e.target.value }))}
-            />
-          </label>
-          <label>
-            Data Final:
-            <input
-              type="date"
-              className="ml-2 px-2 py-1 border rounded"
-              value={intervaloDatas.fim}
-              onChange={(e) => setIntervaloDatas((d) => ({ ...d, fim: e.target.value }))}
-            />
-          </label>
-          <button
-            className="ml-4 bg-blue-600 text-white px-3 py-1 rounded"
-            onClick={carregarKPIs}
-            disabled={!intervaloDatas.inicio || !intervaloDatas.fim}
-          >
-            Filtrar
-          </button>
+    <div className="space-y-6">
+      <Card>
+        <div className="ui-section-header">
+          <div>
+            <h2 className="ui-section-title">Dashboard Financeiro</h2>
+            <p className="ui-section-subtitle">Indicadores financeiros restritos conforme o período selecionado.</p>
+          </div>
         </div>
-      )}
 
-      {erro && <div className="text-red-600 font-semibold mb-4">Falha ao carregar dashboard.</div>}
-      {loading && <div className="text-gray-500 mb-4">Carregando dashboard...</div>}
+        <div className="p-5 space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {periodos.map((p) => (
+              <PillButton
+                key={p.key}
+                active={periodo === p.key}
+                onClick={() => {
+                  setPeriodo(p.key);
+                  setIntervaloDatas({ inicio: '', fim: '' });
+                }}
+              >
+                {p.label}
+              </PillButton>
+            ))}
+          </div>
+
+          {periodo === 'intervalo_datas' && (
+            <div className="flex items-end gap-3 flex-wrap">
+              <Input
+                label="Data Inicial"
+                type="date"
+                value={intervaloDatas.inicio}
+                onChange={(e) => setIntervaloDatas((d) => ({ ...d, inicio: e.target.value }))}
+                className="max-w-44"
+              />
+              <Input
+                label="Data Final"
+                type="date"
+                value={intervaloDatas.fim}
+                onChange={(e) => setIntervaloDatas((d) => ({ ...d, fim: e.target.value }))}
+                className="max-w-44"
+              />
+              <Button onClick={carregarKPIs} disabled={!intervaloDatas.inicio || !intervaloDatas.fim}>
+                Filtrar
+              </Button>
+            </div>
+          )}
+        </div>
+      </Card>
+
+      {erro && <Card className="p-4 text-red-700 font-semibold">Falha ao carregar dashboard financeiro.</Card>}
+      {loading && <EmptyState title="Carregando dashboard financeiro..." />}
 
       {dados && !loading && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-          <Card titulo="Mensalidades Recebidas" valor={formatarValor(dados.mensalidades_recebidas)} cor="text-green-700" />
-          <Card titulo="Vendas Recebidas" valor={formatarValor(dados.vendas_recebidas)} cor="text-blue-600" />
-          <Card titulo="Receita Real Total" valor={formatarValor(dados.receita_real_total)} cor="text-green-700" />
-          <Card titulo="Despesas Pagas" valor={formatarValor(dados.despesas_pagas)} cor="text-red-600" />
-          <Card titulo="Lucro Real" valor={formatarValor(dados.lucro_real)} cor="text-green-700" />
-          <Card titulo="Saldo Atual" valor={formatarValor(dados.saldo_atual)} />
-          <Card titulo="Receitas a Receber" valor={formatarValor(dados.a_receber)} />
-          <Card titulo="Despesas a Pagar" valor={formatarValor(dados.despesas_a_pagar)} />
-          <Card titulo="Clientes Pendentes" valor={dados.clientes_pendentes ?? 0} />
-          <Card titulo="Variação Receita Mensal" valor={`${Number(dados.variacao_mensal || 0).toFixed(2)}%`} />
-        </div>
-      )}
-    </div>
-  );
-}
+        <>
+          <div className="ui-status-grid">
+            <KpiCard label="Receita Real Total" value={formatarValor(dados.receita_real_total)} icon={<TrendingUp size={20} />} tone="green" />
+            <KpiCard label="Lucro Real" value={formatarValor(dados.lucro_real)} icon={<CircleDollarSign size={20} />} tone="green" />
+            <KpiCard label="Saldo Atual" value={formatarValor(dados.saldo_atual)} icon={<Banknote size={20} />} tone="blue" />
+            <KpiCard label="Despesas Pagas" value={formatarValor(dados.despesas_pagas)} icon={<TrendingDown size={20} />} tone="red" />
+          </div>
 
-function Card({ titulo, valor, cor }) {
-  return (
-    <div className="bg-white p-4 rounded shadow text-center">
-      <div className="text-gray-500">{titulo}</div>
-      <div className={`text-lg font-bold ${cor ?? 'text-black'}`}>{valor}</div>
+          <div className="ui-status-grid">
+            <KpiCard label="Mensalidades Recebidas" value={formatarValor(dados.mensalidades_recebidas)} icon={<CalendarDays size={20} />} tone="green" />
+            <KpiCard label="Vendas Recebidas" value={formatarValor(dados.vendas_recebidas)} icon={<CircleDollarSign size={20} />} tone="blue" />
+            <KpiCard label="Receitas a Receber" value={formatarValor(dados.a_receber)} icon={<Banknote size={20} />} tone="amber" />
+            <KpiCard label="Despesas a Pagar" value={formatarValor(dados.despesas_a_pagar)} icon={<TrendingDown size={20} />} tone="amber" />
+          </div>
+
+          <div className="ui-status-grid">
+            <KpiCard label="Clientes Pendentes" value={dados.clientes_pendentes ?? 0} icon={<Users size={20} />} tone="gray" />
+            <KpiCard label="Variação Receita Mensal" value={`${Number(dados.variacao_mensal || 0).toFixed(2)}%`} icon={<TrendingUp size={20} />} tone="gray" />
+          </div>
+        </>
+      )}
     </div>
   );
 }
