@@ -6,6 +6,7 @@ import Card from "../../components/ui/Card";
 import EmptyState from "../../components/ui/EmptyState";
 import Input from "../../components/ui/Input";
 import PageHeader from "../../components/ui/PageHeader";
+import { fetchMensalidadesAlunoStatus, registrarPagamentoAntecipado } from "../../services/Api";
 
 export default function PagamentoAntecipado({ alunoId }) {
   const { control, handleSubmit, watch, setValue } = useForm({
@@ -21,9 +22,7 @@ export default function PagamentoAntecipado({ alunoId }) {
   useEffect(() => {
     async function fetchMensalidades() {
       try {
-        const res = await fetch(`http://localhost:3001/mensalidades/aluno/${alunoId}?status=em_aberto`);
-        if (!res.ok) throw new Error("Erro ao carregar mensalidades");
-        const data = await res.json();
+        const data = await fetchMensalidadesAlunoStatus(alunoId, "em_aberto");
         if (!data.mensalidades || data.mensalidades.length === 0) {
           setMensagem("Nenhuma mensalidade pendente.");
           setMensalidades([]);
@@ -56,21 +55,11 @@ export default function PagamentoAntecipado({ alunoId }) {
     setMensagem(null);
 
     try {
-      const res = await fetch("http://localhost:3001/mensalidades/pagamento-antecipado", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mensalidadesIds: data.mensalidadesIds,
-          desconto: Number(data.desconto),
-        }),
+      const resposta = await registrarPagamentoAntecipado({
+        mensalidadesIds: data.mensalidadesIds,
+        desconto: Number(data.desconto),
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Erro desconhecido");
-      }
-
-      const resposta = await res.json();
       setMensagem(`Pagamento realizado para ${resposta.mensalidades.length} mensalidades`);
 
       setMensalidades((prev) => prev.filter((m) => !data.mensalidadesIds.includes(m.id)));

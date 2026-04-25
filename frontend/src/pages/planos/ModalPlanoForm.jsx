@@ -3,6 +3,7 @@ import { toast } from "react-toastify";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Modal from "../../components/ui/Modal";
+import { createPlano, updatePlano } from "../../services/Api";
 
 function criarFormVazio() {
   return {
@@ -57,19 +58,11 @@ export default function ModalPlanoForm({ open, onClose, planoEdicao, onSalvar })
 
     setCarregando(true);
     try {
-      const metodo = planoEdicao ? "PUT" : "POST";
-      const url = planoEdicao
-        ? `http://localhost:3001/planos/${planoEdicao.id}`
-        : "http://localhost:3001/planos";
-
-      const res = await fetch(url, {
-        method: metodo,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const resposta = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(resposta.error || "Erro ao salvar plano");
+      if (planoEdicao) {
+        await updatePlano(planoEdicao.id, payload);
+      } else {
+        await createPlano(payload);
+      }
 
       toast.success("Plano salvo com sucesso!");
       onSalvar?.();

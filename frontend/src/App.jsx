@@ -1,33 +1,27 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, useParams } from "react-router-dom";
+import React from "react";
+import { BrowserRouter as Router, Navigate, Route, Routes, useParams } from "react-router-dom";
+import ProtectedRoute from "./components/auth/ProtectedRoute";
 import Layout from "./components/Layout";
+import ToastProvider from "./components/ui/ToastProvider";
+import { AuthProvider } from "./contexts/AuthContext";
 import Dashboard from "./pages/Dashboard";
 import AlunosPage from "./pages/alunos/AlunosPage";
-import FormAlunoPage from "./pages/alunos/FormAlunoPage"; // ✅ Corrigido
+import FormAlunoPage from "./pages/alunos/FormAlunoPage";
 import PerfilPage from "./pages/alunos/PerfilPage";
+import LoginPage from "./pages/auth/LoginPage";
+import FinanceiroDashboard from "./pages/financeiro/FinanceiroDashboard";
+import ContasFinanceirasPage from "./pages/financeiro/ContasFinanceirasPage";
+import FinanceiroLayout from "./pages/financeiro/FinanceiroLayout";
+import PlanoContasPage from "./pages/financeiro/PlanoContasPage";
+import PagamentoAntecipado from "./pages/mensalidades/PagamentoAntecipado";
+import OnboardingTenantPage from "./pages/platform/OnboardingTenantPage";
+import PlanoAssociadosPage from "./pages/planos/associacoes/PlanoAssociadosPage";
 import PlanosPage from "./pages/planos/PlanosPage";
 import ProdutosPage from "./pages/produtos/ProdutosPage";
+import TenantOverviewPage from "./pages/tenant/TenantOverviewPage";
+import UsuariosInternosPage from "./pages/usuarios/UsuariosInternosPage";
 import VendasProdutosPage from "./pages/vendasProdutos/VendasProdutosPage";
-import PagamentoAntecipado from './pages/mensalidades/PagamentoAntecipado';
-import PlanoContasPage from './pages/financeiro/PlanoContasPage';
-import FinanceiroLayout from './pages/financeiro/FinanceiroLayout';
-import FinanceiroDashboard from "./pages/financeiro/FinanceiroDashboard";
-import ContasFinanceirasPage from './pages/financeiro/ContasFinanceirasPage';
-import ToastProvider from "./components/ui/ToastProvider";
-import PlanoAssociadosPage from './pages/planos/associacoes/PlanoAssociadosPage'; 
-import React from 'react';
 
-// 🔹 Componente de teste
-function TesteVite() {
-  return (
-    <div style={{ padding: 40 }}>
-      <h1 style={{ color: "green", fontSize: "2rem" }}>
-        ✅ Vite está funcionando com React Router!
-      </h1>
-    </div>
-  );
-}
-
-// Wrapper para Pagamento Antecipado
 function PagamentoAntecipadoWrapper() {
   const params = useParams();
   const alunoId = parseInt(params.alunoId, 10);
@@ -36,39 +30,42 @@ function PagamentoAntecipadoWrapper() {
 
 function App() {
   return (
-    <Router>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
+    <AuthProvider>
+      <Router>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
 
-          {/* Alunos */}
-          <Route path="/alunos" element={<AlunosPage />} />
-          <Route path="/alunos/novo" element={<FormAlunoPage />} /> {/* ✅ Corrigido */}
-          <Route path="/alunos/editar/:id" element={<FormAlunoPage />} /> {/* ✅ Corrigido */}
-          <Route path="/alunos/:id" element={<PerfilPage />} />
+          <Route element={<ProtectedRoute />}>
+            <Route element={<Layout />}>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/dashboard" element={<Dashboard />} />
 
-          {/* Outros módulos */}
-          <Route path="/planos" element={<PlanosPage />} />
-          <Route path="/produtos" element={<ProdutosPage />} />
-          <Route path="/vendas-produtos" element={<VendasProdutosPage />} />
-          <Route path="/mensalidades/pagamento-antecipado/:alunoId" element={<PagamentoAntecipadoWrapper />} />
-          <Route path="/planos/associacoes" element={<PlanoAssociadosPage />} />
+              <Route path="/alunos" element={<AlunosPage />} />
+              <Route path="/alunos/novo" element={<FormAlunoPage />} />
+              <Route path="/alunos/editar/:id" element={<FormAlunoPage />} />
+              <Route path="/alunos/:id" element={<PerfilPage />} />
 
+              <Route path="/planos" element={<PlanosPage />} />
+              <Route path="/produtos" element={<ProdutosPage />} />
+              <Route path="/vendas-produtos" element={<VendasProdutosPage />} />
+              <Route path="/mensalidades/pagamento-antecipado/:alunoId" element={<PagamentoAntecipadoWrapper />} />
+              <Route path="/planos/associacoes" element={<PlanoAssociadosPage />} />
+              <Route path="/usuarios-internos" element={<UsuariosInternosPage />} />
+              <Route path="/tenant/overview" element={<TenantOverviewPage />} />
+              <Route path="/platform/onboarding" element={<OnboardingTenantPage />} />
 
-
-          {/* Financeiro */}
-          <Route path="/financeiro" element={<FinanceiroLayout />}>
-            <Route index element={<FinanceiroDashboard />} />
-            <Route path="dashboardFinanceiro" element={<FinanceiroDashboard />} />
-            <Route path="contas-financeiras" element={<ContasFinanceirasPage />} />
-            <Route path="plano-contas" element={<PlanoContasPage />} />
+              <Route path="/financeiro" element={<FinanceiroLayout />}>
+                <Route index element={<FinanceiroDashboard />} />
+                <Route path="dashboardFinanceiro" element={<FinanceiroDashboard />} />
+                <Route path="contas-financeiras" element={<ContasFinanceirasPage />} />
+                <Route path="plano-contas" element={<PlanoContasPage />} />
+              </Route>
+            </Route>
           </Route>
-        </Route>
-      </Routes>
-      <ToastProvider />
-    </Router>
-    
+        </Routes>
+        <ToastProvider />
+      </Router>
+    </AuthProvider>
   );
 }
 

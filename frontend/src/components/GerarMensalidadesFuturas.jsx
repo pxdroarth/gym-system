@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { gerarMensalidadesFuturas } from "../services/Api";
 
 export default function GerarMensalidadesFuturas({ alunoId, planoId, onGerar }) {
   const [meses, setMeses] = useState(3);
@@ -15,18 +16,7 @@ export default function GerarMensalidadesFuturas({ alunoId, planoId, onGerar }) 
 
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:3001/mensalidades/gerar-futuras", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ alunoId, planoId, meses }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.error || "Erro desconhecido");
-      }
-
-      const data = await res.json();
+      const data = await gerarMensalidadesFuturas({ alunoId, planoId, meses });
       setMensagem(data.message);
 
       if (onGerar) onGerar(); // Atualiza lista no componente pai

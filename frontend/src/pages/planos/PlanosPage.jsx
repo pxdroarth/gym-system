@@ -6,6 +6,7 @@ import Card from "../../components/ui/Card";
 import EmptyState from "../../components/ui/EmptyState";
 import PageHeader from "../../components/ui/PageHeader";
 import Table from "../../components/ui/Table";
+import { fetchPlanos } from "../../services/Api";
 import ModalPlanoForm from "./ModalPlanoForm";
 
 export default function PlanosPage() {
@@ -21,8 +22,7 @@ export default function PlanosPage() {
   async function carregarPlanos() {
     setCarregando(true);
     try {
-      const res = await fetch("http://localhost:3001/planos");
-      const data = await res.json();
+      const data = await fetchPlanos();
       setPlanos(data);
     } catch (err) {
       toast.error("Erro ao carregar planos");

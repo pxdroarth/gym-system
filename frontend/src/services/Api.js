@@ -1,9 +1,22 @@
 import axios from "axios";
+import { getAuthToken, getStoredUser } from "../utils/authStorage";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
+});
+
+api.interceptors.request.use((config) => {
+  const token = getAuthToken();
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  const currentUnitId = getStoredUser()?.currentUnit?.id;
+  if (currentUnitId) {
+    config.headers["X-Unit-Id"] = currentUnitId;
+  }
+  return config;
 });
 
 // ============ ALUNOS ============
@@ -24,6 +37,13 @@ export async function createAluno(dadosAluno) {
 
 export async function updateAluno(id, dadosAluno) {
   const response = await api.put(`/alunos/${id}`, dadosAluno);
+  return response.data;
+}
+
+export async function fetchAlunosPesquisa({ termo, pagina = 1, limite = 15 } = {}) {
+  const response = await api.get('/alunos/pesquisa', {
+    params: { termo, pagina, limite },
+  });
   return response.data;
 }
 
@@ -75,6 +95,32 @@ export async function fetchPlanos() {
   return response.data;
 }
 
+export async function createPlano(dadosPlano) {
+  const response = await api.post('/planos', dadosPlano);
+  return response.data;
+}
+
+export async function updatePlano(id, dadosPlano) {
+  const response = await api.put(`/planos/${id}`, dadosPlano);
+  return response.data;
+}
+
+// ============ VINCULOS ============
+export async function fetchPlanoAssociados(responsavelId) {
+  const response = await api.get(`/plano-associado/${responsavelId}`);
+  return response.data;
+}
+
+export async function createPlanoAssociado(payload) {
+  const response = await api.post('/plano-associado', payload);
+  return response.data;
+}
+
+export async function deletePlanoAssociado(id) {
+  const response = await api.delete(`/plano-associado/${id}`);
+  return response.data;
+}
+
 // ============ PRODUTOS ============
 export async function fetchProdutos() {
   const response = await api.get('/produtos');
@@ -116,5 +162,28 @@ export async function fetchVendasProdutos(params = {}) {
 
 export async function createVendaProduto(dadosVenda) {
   const response = await api.post('/vendas-produtos', dadosVenda);
+  return response.data;
+}
+
+// ============ MENSALIDADES LEGADAS ============
+export async function fetchMensalidadesAlunoStatus(alunoId, status) {
+  const response = await api.get(`/mensalidades/aluno/${alunoId}`, {
+    params: { status },
+  });
+  return response.data;
+}
+
+export async function registrarPagamentoAntecipado(payload) {
+  const response = await api.post('/mensalidades/pagamento-antecipado', payload);
+  return response.data;
+}
+
+export async function gerarMensalidadesFuturas(payload) {
+  const response = await api.post('/mensalidades/gerar-futuras', payload);
+  return response.data;
+}
+
+export async function updateMensalidadeStatus(id, status) {
+  const response = await api.patch(`/mensalidades/${id}/status`, { status });
   return response.data;
 }

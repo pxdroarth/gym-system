@@ -4,6 +4,7 @@ import Button from "./ui/Button";
 import Card from "./ui/Card";
 import EmptyState from "./ui/EmptyState";
 import Table from "./ui/Table";
+import { updateMensalidadeStatus } from "../services/Api";
 
 function formatValor(valor) {
   const num = Number(valor);
@@ -25,11 +26,7 @@ export default function TelaMensalidade({ mensalidades, atualizarMensalidades })
 
     try {
       setLoadingId(id);
-      await fetch(`http://localhost:3001/mensalidades/${id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "paga" }),
-      });
+      await updateMensalidadeStatus(id, "paga");
 
       if (typeof atualizarMensalidades === "function") {
         await atualizarMensalidades();

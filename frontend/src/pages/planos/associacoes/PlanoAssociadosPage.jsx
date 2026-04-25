@@ -8,8 +8,12 @@ import EmptyState from "../../../components/ui/EmptyState";
 import Input from "../../../components/ui/Input";
 import KpiCard from "../../../components/ui/KpiCard";
 import PageHeader from "../../../components/ui/PageHeader";
-
-const API = "http://localhost:3001";
+import {
+  createPlanoAssociado,
+  deletePlanoAssociado,
+  fetchAlunosPesquisa,
+  fetchPlanoAssociados,
+} from "../../../services/Api";
 
 function AlunoLinha({ aluno, action, actionLabel, muted }) {
   return (
@@ -41,25 +45,24 @@ export default function PlanoAssociadosPage() {
 
   useEffect(() => {
     let active = true;
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       const termo = (responsavelBusca || "").trim();
       if (!termo) {
         if (active) setResponsavelResultados([]);
         return;
       }
       try {
-        const url = new URL(`${API}/alunos/pesquisa`);
-        url.searchParams.set("termo", termo);
-        url.searchParams.set("pagina", "1");
-        url.searchParams.set("limite", "10");
-        const r = await fetch(url);
-        if (r.ok) {
-          const jr = await r.json();
-          if (active) setResponsavelResultados(jr.alunos || []);
-        }
-      } catch {/* noop */}
+        const data = await fetchAlunosPesquisa({ termo, pagina: 1, limite: 10 });
+        if (active) setResponsavelResultados(data.alunos || []);
+      } catch {
+        if (active) setResponsavelResultados([]);
+      }
     }, 250);
-    return () => { active = false; clearTimeout(t); };
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [responsavelBusca]);
 
   useEffect(() => {
@@ -70,10 +73,8 @@ export default function PlanoAssociadosPage() {
     (async () => {
       try {
         setCarregandoAssociados(true);
-        const r = await fetch(`${API}/plano-associado/${responsavelSel.id}`);
-        if (!r.ok) throw new Error("Erro ao carregar vínculos");
-        const jr = await r.json();
-        const arr = (jr.associados || []).map((a) => ({
+        const data = await fetchPlanoAssociados(responsavelSel.id);
+        const arr = (data.associados || []).map((a) => ({
           id: a.id,
           aluno_id: a.aluno_id || a.id_aluno || a.aluno_id,
           nome: a.nome,
@@ -81,7 +82,7 @@ export default function PlanoAssociadosPage() {
         }));
         setAssociados(arr);
       } catch (e) {
-        toast.error(e.message);
+        toast.error(e.message || "Erro ao carregar vínculos");
       } finally {
         setCarregandoAssociados(false);
       }
@@ -90,7 +91,7 @@ export default function PlanoAssociadosPage() {
 
   useEffect(() => {
     let active = true;
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       const termo = (busca || "").trim();
       if (!termo || !responsavelSel?.id) {
         if (active) setResultados([]);
@@ -98,38 +99,31 @@ export default function PlanoAssociadosPage() {
       }
       setBuscando(true);
       try {
-        const url = new URL(`${API}/alunos/pesquisa`);
-        url.searchParams.set("termo", termo);
-        url.searchParams.set("pagina", "1");
-        url.searchParams.set("limite", "20");
-        const r = await fetch(url);
-        if (r.ok) {
-          const jr = await r.json();
-          let lista = jr.alunos || [];
-          const idsJa = new Set(associados.map((a) => a.aluno_id));
-          lista = lista.filter((a) => a.id !== responsavelSel.id && !idsJa.has(a.id));
-          if (active) setResultados(lista);
-        }
-      } catch {/* noop */}
-      finally { setBuscando(false); }
+        const data = await fetchAlunosPesquisa({ termo, pagina: 1, limite: 20 });
+        let lista = data.alunos || [];
+        const idsJa = new Set(associados.map((a) => a.aluno_id));
+        lista = lista.filter((a) => a.id !== responsavelSel.id && !idsJa.has(a.id));
+        if (active) setResultados(lista);
+      } catch {
+        if (active) setResultados([]);
+      } finally {
+        setBuscando(false);
+      }
     }, 250);
-    return () => { active = false; clearTimeout(t); };
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [busca, responsavelSel?.id, associados]);
 
   async function adicionarAluno(aluno) {
     if (!responsavelSel?.id) return;
     try {
-      const resp = await fetch(`${API}/plano-associado`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          aluno_id: Number(aluno.id),
-          responsavel_id: Number(responsavelSel.id),
-        }),
+      const body = await createPlanoAssociado({
+        aluno_id: Number(aluno.id),
+        responsavel_id: Number(responsavelSel.id),
       });
-      const txt = await resp.text();
-      if (!resp.ok) throw new Error(txt || "Falha ao vincular");
-      const body = txt ? JSON.parse(txt) : {};
       toast.success(`Vinculado: ${aluno.matricula} - ${aluno.nome}`);
       setAssociados((prev) => [
         ...prev,
@@ -138,34 +132,26 @@ export default function PlanoAssociadosPage() {
       setResultados((prev) => prev.filter((x) => x.id !== aluno.id));
       setBusca("");
     } catch (e) {
-      toast.error(e.message);
+      toast.error(e.message || "Falha ao vincular");
     }
   }
 
   async function removerVinculo(v) {
     try {
-      const r = await fetch(`${API}/plano-associado/${v.id}`, { method: "DELETE" });
-      const txt = await r.text();
-      if (!r.ok) throw new Error(txt || "Falha ao remover vínculo");
+      await deletePlanoAssociado(v.id);
       toast.info(`Removido: ${v.matricula} - ${v.nome}`);
       setAssociados((prev) => prev.filter((a) => a.id !== v.id));
     } catch (e) {
-      toast.error(e.message);
+      toast.error(e.message || "Falha ao remover vínculo");
     }
   }
 
   async function removerTodos() {
     if (associados.length === 0) return;
-    const confirma = confirm(
-      `Remover TODOS os ${associados.length} vínculos deste responsável?`
-    );
+    const confirma = confirm(`Remover TODOS os ${associados.length} vínculos deste responsável?`);
     if (!confirma) return;
 
-    await Promise.allSettled(
-      associados.map((v) =>
-        fetch(`${API}/plano-associado/${v.id}`, { method: "DELETE" })
-      )
-    );
+    await Promise.allSettled(associados.map((v) => deletePlanoAssociado(v.id)));
     toast.info("Todos os vínculos foram removidos.");
     setAssociados([]);
   }
@@ -290,12 +276,7 @@ export default function PlanoAssociadosPage() {
             </div>
             <div className="flex items-center gap-2">
               <Badge tone="blue">{associados.length}</Badge>
-              <Button
-                size="sm"
-                variant="danger"
-                onClick={removerTodos}
-                disabled={associados.length === 0}
-              >
+              <Button size="sm" variant="danger" onClick={removerTodos} disabled={associados.length === 0}>
                 Remover todos
               </Button>
             </div>

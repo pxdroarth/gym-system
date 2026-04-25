@@ -1,8 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
-
-const API = "http://localhost:3001";
+import {
+  createAluno,
+  createPlanoAssociado,
+  fetchAlunoById,
+  fetchAlunosPesquisa,
+  fetchPlanos,
+  updateAluno,
+} from "../../services/Api";
 
 export default function FormAlunoPage() {
   const { id } = useParams();
@@ -14,7 +20,7 @@ export default function FormAlunoPage() {
     status: "ativo",
     dia_vencimento: "",
     plano_id: "",
-    telefone: "",            // OPCIONAL
+    telefone: "",
     data_nascimento: "",
     matricula: "",
   });
@@ -23,23 +29,22 @@ export default function FormAlunoPage() {
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState(null);
 
-  // Responsável via pesquisa
   const [ehResponsavel, setEhResponsavel] = useState(true);
   const [responsavelBusca, setResponsavelBusca] = useState("");
   const [responsavelResultados, setResponsavelResultados] = useState([]);
   const [responsavelId, setResponsavelId] = useState(null);
 
   useEffect(() => {
-    fetch(`${API}/planos`).then(r=>r.json()).then(setPlanos).catch(()=>setErro("Erro ao carregar planos"));
+    fetchPlanos()
+      .then(setPlanos)
+      .catch(() => setErro("Erro ao carregar planos"));
   }, []);
 
   useEffect(() => {
     if (isNovo) return;
     (async () => {
       try {
-        const res = await fetch(`${API}/alunos/${id}`);
-        if (!res.ok) throw new Error("Aluno não encontrado");
-        const data = await res.json();
+        const data = await fetchAlunoById(id);
         setForm({
           nome: data.nome || "",
           status: data.status || "ativo",
@@ -50,34 +55,35 @@ export default function FormAlunoPage() {
           matricula: data.matricula || "",
         });
       } catch (err) {
-        setErro(err.message);
+        setErro(err.message || "Aluno não encontrado");
       }
     })();
   }, [id, isNovo]);
 
   function handleChange(e) {
-    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   }
 
-  // Busca de responsável (debounce)
   useEffect(() => {
     let active = true;
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       const termo = (responsavelBusca || "").trim();
-      if (!termo) { if (active) setResponsavelResultados([]); return; }
+      if (!termo) {
+        if (active) setResponsavelResultados([]);
+        return;
+      }
       try {
-        const url = new URL(`${API}/alunos/pesquisa`);
-        url.searchParams.set("termo", termo);
-        url.searchParams.set("pagina", "1");
-        url.searchParams.set("limite", "15");
-        const r = await fetch(url.toString());
-        if (r.ok) {
-          const jr = await r.json();
-          if (active) setResponsavelResultados(jr.alunos || []);
-        }
-      } catch {}
+        const data = await fetchAlunosPesquisa({ termo, pagina: 1, limite: 15 });
+        if (active) setResponsavelResultados(data.alunos || []);
+      } catch {
+        if (active) setResponsavelResultados([]);
+      }
     }, 250);
-    return () => { active = false; clearTimeout(t); };
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
   }, [responsavelBusca]);
 
   async function handleSubmit(e) {
@@ -86,17 +92,12 @@ export default function FormAlunoPage() {
     setErro(null);
 
     try {
-      const metodo = isNovo ? "POST" : "PUT";
-      const url = isNovo ? `${API}/alunos` : `${API}/alunos/${id}`;
-
       const payload = {
         ...form,
         dia_vencimento: form.dia_vencimento ? Number(form.dia_vencimento) : null,
         plano_id: form.plano_id ? Number(form.plano_id) : null,
-        // telefone pode ser "" (backend trata como NULL)
       };
 
-      // ✅ Validações obrigatórias (telefone é opcional)
       if (!payload.nome) throw new Error("Informe o nome.");
       if (!payload.data_nascimento) throw new Error("Informe a data de nascimento.");
       if (!payload.plano_id) throw new Error("Selecione o plano.");
@@ -104,27 +105,15 @@ export default function FormAlunoPage() {
         throw new Error("Dia de vencimento deve estar entre 1 e 31.");
       }
 
-      const resAluno = await fetch(url, {
-        method: metodo,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const txt = await resAluno.text();
-      if (!resAluno.ok) throw new Error(txt || "Erro ao salvar aluno");
-
-      const alunoSalvo = txt ? JSON.parse(txt) : {};
+      const alunoSalvo = isNovo ? await createAluno(payload) : await updateAluno(id, payload);
       const alunoId = isNovo ? alunoSalvo.id : Number(id);
 
       if (!ehResponsavel) {
         if (!responsavelId) throw new Error("Selecione um responsável.");
-        const resp = await fetch(`${API}/plano-associado`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ aluno_id: alunoId, responsavel_id: Number(responsavelId) }),
+        await createPlanoAssociado({
+          aluno_id: alunoId,
+          responsavel_id: Number(responsavelId),
         });
-        const respTxt = await resp.text();
-        if (!resp.ok) throw new Error(respTxt || "Falha ao vincular responsável");
       }
 
       toast.success(isNovo ? "Aluno cadastrado com sucesso!" : "Aluno atualizado com sucesso!");
@@ -184,7 +173,7 @@ export default function FormAlunoPage() {
           <label className="font-semibold">Plano:</label>
           <select name="plano_id" value={form.plano_id} onChange={handleChange} required className="w-full border rounded px-4 py-2">
             <option value="">Selecione o plano</option>
-            {planos.map(plano => (
+            {planos.map((plano) => (
               <option key={plano.id} value={plano.id}>{plano.nome}</option>
             ))}
           </select>
@@ -227,7 +216,7 @@ export default function FormAlunoPage() {
             )}
 
             {responsavelBusca && responsavelResultados.length === 0 && (
-              <div className="text-sm text-gray-500">Nenhum resultado para “{responsavelBusca}”.</div>
+              <div className="text-sm text-gray-500">Nenhum resultado para "{responsavelBusca}".</div>
             )}
           </div>
         )}

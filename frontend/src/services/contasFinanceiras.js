@@ -1,54 +1,28 @@
-// src/services/contasFinanceiras.js
+import { api } from "./Api";
 
-const API_URL = 'http://localhost:3001/contas-financeiras';
-
-// Buscar contas financeiras com paginação e filtros opcionais
 export async function getContasFinanceiras({ page = 1, perPage = 10, ...filtros } = {}) {
-  const params = new URLSearchParams({ page, perPage, ...filtros });
-  const res = await fetch(`${API_URL}?${params.toString()}`);
-  if (!res.ok) throw new Error('Erro ao buscar contas financeiras');
-  return await res.json(); // { data, total }
+  const { data } = await api.get('/contas-financeiras', {
+    params: { page, perPage, ...filtros },
+  });
+  return data;
 }
 
-// Criar nova conta financeira
 export async function criarContaFinanceira(dados) {
-  const res = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(dados),
-  });
-  if (!res.ok) throw new Error('Erro ao criar conta');
-  return await res.json();
+  const { data } = await api.post('/contas-financeiras', dados);
+  return data;
 }
 
-// Atualizar conta financeira
 export async function atualizarContaFinanceira(id, dados) {
-  const res = await fetch(`${API_URL}/${id}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(dados),
-  });
-  if (!res.ok) throw new Error('Erro ao atualizar conta');
-  return await res.json();
+  const { data } = await api.put(`/contas-financeiras/${id}`, dados);
+  return data;
 }
 
-// Confirmar pagamento da conta (muda status para "pago")
 export async function marcarComoPago(id) {
-  const res = await fetch(`http://localhost:3001/contas-financeiras/${id}/status`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ status: "pago" })  // Envia o novo status
-  });
-  if (!res.ok) throw new Error("Erro ao marcar como pago");
-  return res.json();
+  const { data } = await api.patch(`/contas-financeiras/${id}/status`, { status: "pago" });
+  return data;
 }
 
-
-// Deletar conta financeira
 export async function deletarContaFinanceira(id) {
-  const res = await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
-  if (!res.ok) throw new Error('Erro ao excluir conta');
-  return await res.json();
+  const { data } = await api.delete(`/contas-financeiras/${id}`);
+  return data;
 }

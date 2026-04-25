@@ -6,6 +6,7 @@ import Card from "./Card";
 export default function RestrictedAreaNotice({
   title = "Área restrita",
   description = "Dados sensíveis devem ser acessados apenas por perfis autorizados.",
+  badgeLabel = "Financeiro",
 }) {
   return (
     <Card className="p-4 border-amber-200 bg-amber-50">
@@ -16,7 +17,7 @@ export default function RestrictedAreaNotice({
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h2 className="font-extrabold text-amber-900 m-0">{title}</h2>
-            <Badge tone="amber">Financeiro</Badge>
+            <Badge tone="amber">{badgeLabel}</Badge>
           </div>
           <p className="text-sm text-amber-800 mt-1 mb-0">{description}</p>
         </div>

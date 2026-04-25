@@ -1,5 +1,7 @@
 import React from "react";
 import { Bell, Menu, Search } from "lucide-react";
+import UnitScopeSelector from "./layout/UnitScopeSelector";
+import UserMenu from "./layout/UserMenu";
 
 export default function Header({ sidebarAberta, toggleSidebar }) {
   return (
@@ -24,10 +26,8 @@ export default function Header({ sidebarAberta, toggleSidebar }) {
         <button className="app-topbar__button" title="Notificações" type="button">
           <Bell size={17} />
         </button>
-        <div className="app-topbar__user">
-          <div className="app-topbar__avatar">SA</div>
-          <span className="app-topbar__user-name">SA AGFIT</span>
-        </div>
+        <UnitScopeSelector />
+        <UserMenu />
       </div>
     </header>
   );
