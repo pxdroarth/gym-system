@@ -6,15 +6,18 @@ const AppError = require('../errors/AppError');
 const AuditService = require('../services/AuditService');
 const { PERMISSIONS } = require('../constants/userRoles');
 const { assertPermission } = require('../middlewares/requirePermission');
+const { actorWithScope, requireScope } = require('../helpers/scope');
 
-router.get('/', async (_req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
+    const scope = requireScope(req);
     const rows = await runQuery(`
       SELECT ac.*, a.nome AS aluno_nome
       FROM acesso ac
-      LEFT JOIN aluno a ON a.id = ac.aluno_id
+      LEFT JOIN aluno a ON a.id = ac.aluno_id AND a.tenant_id = ac.tenant_id AND a.unit_id = ac.unit_id
+      WHERE ac.tenant_id = ? AND ac.unit_id = ?
       ORDER BY datetime(ac.data_hora) DESC, ac.id DESC
-    `);
+    `, [scope.tenant_id, scope.unit_id]);
     res.json(rows);
   } catch (error) {
     next(error);
@@ -33,12 +36,16 @@ router.get('/aluno/:alunoId', async (req, res, next) => {
   const offset = (pagina - 1) * limite;
 
   try {
-    const totalRow = await runGet('SELECT COUNT(*) as total FROM acesso WHERE aluno_id = ?', [alunoId]);
+    const scope = requireScope(req);
+    const totalRow = await runGet(
+      'SELECT COUNT(*) as total FROM acesso WHERE aluno_id = ? AND tenant_id = ? AND unit_id = ?',
+      [alunoId, scope.tenant_id, scope.unit_id]
+    );
     const total = totalRow?.total || 0;
 
     const acessos = await runQuery(
-      'SELECT * FROM acesso WHERE aluno_id = ? ORDER BY datetime(data_hora) DESC, id DESC LIMIT ? OFFSET ?',
-      [alunoId, limite, offset]
+      'SELECT * FROM acesso WHERE aluno_id = ? AND tenant_id = ? AND unit_id = ? ORDER BY datetime(data_hora) DESC, id DESC LIMIT ? OFFSET ?',
+      [alunoId, scope.tenant_id, scope.unit_id, limite, offset]
     );
 
     res.json({ acessos, total, pagina, limite });
@@ -50,7 +57,8 @@ router.get('/aluno/:alunoId', async (req, res, next) => {
 router.get('/:id', async (req, res, next) => {
   const id = parseInt(req.params.id);
   try {
-    const row = await runGet('SELECT * FROM acesso WHERE id = ?', [id]);
+    const scope = requireScope(req);
+    const row = await runGet('SELECT * FROM acesso WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
     if (!row) return next(new AppError('Acesso nao encontrado', 404, 'ACESSO_NAO_ENCONTRADO'));
     res.json(row);
   } catch (error) {
@@ -64,7 +72,8 @@ router.post('/', async (req, res, next) => {
       assertPermission(req, PERMISSIONS.ACESSO_LIBERACAO_MANUAL);
     }
 
-    const acesso = await AccessService.registrarAcesso(req.body || {});
+    const scope = requireScope(req);
+    const acesso = await AccessService.registrarAcesso(req.body || {}, scope);
     res.status(201).json(acesso);
   } catch (error) {
     next(error);
@@ -80,10 +89,11 @@ router.put('/:id', async (req, res, next) => {
   }
 
   try {
+    const scope = requireScope(req);
     const resultadoNormalizado = String(resultado).toLowerCase();
     const result = await runExecute(
-      'UPDATE acesso SET aluno_id = ?, data_hora = ?, resultado = ?, motivo_bloqueio = ? WHERE id = ?',
-      [aluno_id, data_hora, resultadoNormalizado, motivo_bloqueio || null, id]
+      'UPDATE acesso SET aluno_id = ?, data_hora = ?, resultado = ?, motivo_bloqueio = ? WHERE id = ? AND tenant_id = ? AND unit_id = ?',
+      [aluno_id, data_hora, resultadoNormalizado, motivo_bloqueio || null, id, scope.tenant_id, scope.unit_id]
     );
 
     if (result.changes === 0) {
@@ -99,7 +109,8 @@ router.put('/:id', async (req, res, next) => {
 router.delete('/:id', async (req, res, next) => {
   const id = parseInt(req.params.id);
   try {
-    const result = await runExecute('DELETE FROM acesso WHERE id = ?', [id]);
+    const scope = requireScope(req);
+    const result = await runExecute('DELETE FROM acesso WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
     if (result.changes === 0) {
       return next(new AppError('Acesso nao encontrado para deletar', 404, 'ACESSO_NAO_ENCONTRADO'));
     }
@@ -117,7 +128,8 @@ router.post('/mock-hikvision', async (req, res, next) => {
   }
 
   try {
-    const actor = AuditService.getActorFromRequest(req);
+    const scope = requireScope(req);
+    const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
     if (liberacao_manual) {
       assertPermission(req, PERMISSIONS.ACESSO_LIBERACAO_MANUAL);
     }
@@ -127,6 +139,7 @@ router.post('/mock-hikvision', async (req, res, next) => {
       motivo,
       operador: actor.name,
       actor,
+      scope,
     });
     res.status(201).json(resultado);
   } catch (error) {

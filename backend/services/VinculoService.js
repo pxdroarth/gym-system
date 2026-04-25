@@ -12,8 +12,10 @@ function maxVinculados(qtdMaxPessoas) {
   return Math.max(0, Number(qtdMaxPessoas || 1) - 1);
 }
 
-async function carregarResponsavel(responsavelId, client = null) {
+async function carregarResponsavel(responsavelId, client = null, scope = null) {
   const db = clientOrDefault(client);
+  const scoped = scope?.tenant_id && scope?.unit_id ? 'AND a.tenant_id = ? AND a.unit_id = ?' : '';
+  const params = scope?.tenant_id && scope?.unit_id ? [responsavelId, scope.tenant_id, scope.unit_id] : [responsavelId];
   return db.get(`
     SELECT a.id, a.nome, a.matricula, a.status, a.plano_id,
            p.nome AS plano_nome,
@@ -22,13 +24,16 @@ async function carregarResponsavel(responsavelId, client = null) {
            p.valor_base,
            p.duracao_em_dias
     FROM aluno a
-    LEFT JOIN plano p ON p.id = a.plano_id
+    LEFT JOIN plano p ON p.id = a.plano_id AND p.tenant_id = a.tenant_id
     WHERE a.id = ?
-  `, [responsavelId]);
+      ${scoped}
+  `, params);
 }
 
-async function listarTodos(client = null) {
+async function listarTodos(client = null, scope = null) {
   const db = clientOrDefault(client);
+  const scoped = scope?.tenant_id && scope?.unit_id ? 'AND pa.tenant_id = ? AND pa.unit_id = ?' : '';
+  const params = scope?.tenant_id && scope?.unit_id ? [VINCULO_STATUS.ENCERRADO, scope.tenant_id, scope.unit_id] : [VINCULO_STATUS.ENCERRADO];
   const associados = await db.all(`
     SELECT
       pa.id,
@@ -47,30 +52,34 @@ async function listarTodos(client = null) {
     JOIN aluno r ON r.id = pa.responsavel_id
     LEFT JOIN plano p ON p.id = r.plano_id
     WHERE COALESCE(pa.status, 'ativo') != ?
+      ${scoped}
     ORDER BY r.nome ASC, a.nome ASC
-  `, [VINCULO_STATUS.ENCERRADO]);
+  `, params);
   return { associados };
 }
 
-async function listarPorResponsavel(responsavelId, client = null) {
+async function listarPorResponsavel(responsavelId, client = null, scope = null) {
   const db = clientOrDefault(client);
+  const scoped = scope?.tenant_id && scope?.unit_id ? 'AND pa.tenant_id = ? AND pa.unit_id = ?' : '';
+  const params = scope?.tenant_id && scope?.unit_id ? [responsavelId, VINCULO_STATUS.ENCERRADO, scope.tenant_id, scope.unit_id] : [responsavelId, VINCULO_STATUS.ENCERRADO];
   const associados = await db.all(`
     SELECT pa.id, a.id AS aluno_id, a.nome, a.matricula, COALESCE(pa.status, 'ativo') AS status
     FROM plano_associado pa
     JOIN aluno a ON a.id = pa.aluno_id
     WHERE pa.responsavel_id = ?
       AND COALESCE(pa.status, 'ativo') != ?
+      ${scoped}
     ORDER BY a.nome ASC
-  `, [responsavelId, VINCULO_STATUS.ENCERRADO]);
+  `, params);
   return { associados };
 }
 
-async function detalheResponsavel(responsavelId, client = null) {
+async function detalheResponsavel(responsavelId, client = null, scope = null) {
   const db = clientOrDefault(client);
-  const responsavel = await carregarResponsavel(responsavelId, db);
+  const responsavel = await carregarResponsavel(responsavelId, db, scope);
   if (!responsavel) throw new AppError('Responsavel nao encontrado', 404, 'RESPONSAVEL_NAO_ENCONTRADO');
 
-  const { associados: vinculados } = await listarPorResponsavel(responsavelId, db);
+  const { associados: vinculados } = await listarPorResponsavel(responsavelId, db, scope);
   const limite_vinculados = maxVinculados(responsavel.quantidade_max_pessoas);
 
   return {
@@ -82,7 +91,7 @@ async function detalheResponsavel(responsavelId, client = null) {
   };
 }
 
-async function criarVinculo(payload = {}, actor) {
+async function criarVinculo(payload = {}, actor, scope = null) {
   const alunoId = parseInt(payload.aluno_id);
   const responsavelId = parseInt(payload.responsavel_id);
 
@@ -94,10 +103,12 @@ async function criarVinculo(payload = {}, actor) {
   }
 
   return runTransaction(async (tx) => {
-    await FechamentoMensalService.assertPeriodoEditavelPorData(new Date().toISOString().slice(0, 10), 'alteracao de vinculo', tx);
+    await FechamentoMensalService.assertPeriodoEditavelPorData(new Date().toISOString().slice(0, 10), 'alteracao de vinculo', tx, scope);
 
-    const aluno = await tx.get('SELECT * FROM aluno WHERE id = ?', [alunoId]);
-    const responsavel = await carregarResponsavel(responsavelId, tx);
+    const aluno = scope?.tenant_id && scope?.unit_id
+      ? await tx.get('SELECT * FROM aluno WHERE id = ? AND tenant_id = ? AND unit_id = ?', [alunoId, scope.tenant_id, scope.unit_id])
+      : await tx.get('SELECT * FROM aluno WHERE id = ?', [alunoId]);
+    const responsavel = await carregarResponsavel(responsavelId, tx, scope);
 
     if (!aluno) throw new AppError('Aluno nao encontrado', 404, 'ALUNO_NAO_ENCONTRADO');
     if (!responsavel) throw new AppError('Responsavel nao encontrado', 404, 'RESPONSAVEL_NAO_ENCONTRADO');
@@ -112,16 +123,19 @@ async function criarVinculo(payload = {}, actor) {
     const alunoEhResponsavel = await tx.get(
       `SELECT id FROM plano_associado
        WHERE responsavel_id = ? AND COALESCE(status, 'ativo') != ?
+       ${scope?.tenant_id && scope?.unit_id ? 'AND tenant_id = ? AND unit_id = ?' : ''}
        LIMIT 1`,
-      [alunoId, VINCULO_STATUS.ENCERRADO]
+      scope?.tenant_id && scope?.unit_id ? [alunoId, VINCULO_STATUS.ENCERRADO, scope.tenant_id, scope.unit_id] : [alunoId, VINCULO_STATUS.ENCERRADO]
     );
     if (alunoEhResponsavel) {
       throw new AppError('Este aluno e responsavel por outros vinculos e nao pode ser vinculado', 400, 'ALUNO_EH_RESPONSAVEL');
     }
 
     const mensalidadeAberta = await tx.get(
-      `SELECT id FROM mensalidade WHERE aluno_id = ? AND status = 'em_aberto' LIMIT 1`,
-      [alunoId]
+      `SELECT id FROM mensalidade WHERE aluno_id = ? AND status = 'em_aberto'
+       ${scope?.tenant_id && scope?.unit_id ? 'AND tenant_id = ? AND unit_id = ?' : ''}
+       LIMIT 1`,
+      scope?.tenant_id && scope?.unit_id ? [alunoId, scope.tenant_id, scope.unit_id] : [alunoId]
     );
     if (mensalidadeAberta) {
       throw new AppError('Aluno possui mensalidade em aberto e nao pode ser vinculado ate regularizar', 400, 'ALUNO_COM_MENSALIDADE_ABERTA');
@@ -130,13 +144,19 @@ async function criarVinculo(payload = {}, actor) {
     const vinculoAtual = await tx.get(
       `SELECT * FROM plano_associado
        WHERE aluno_id = ? AND COALESCE(status, 'ativo') != ?
+       ${scope?.tenant_id && scope?.unit_id ? 'AND tenant_id = ? AND unit_id = ?' : ''}
        LIMIT 1`,
-      [alunoId, VINCULO_STATUS.ENCERRADO]
+      scope?.tenant_id && scope?.unit_id ? [alunoId, VINCULO_STATUS.ENCERRADO, scope.tenant_id, scope.unit_id] : [alunoId, VINCULO_STATUS.ENCERRADO]
     );
     const totalAtual = await tx.get(
-      `SELECT COUNT(*) AS total FROM plano_associado
-       WHERE responsavel_id = ? AND COALESCE(status, 'ativo') != ?`,
-      [responsavelId, VINCULO_STATUS.ENCERRADO]
+      scope?.tenant_id && scope?.unit_id
+        ? `SELECT COUNT(*) AS total FROM plano_associado
+           WHERE responsavel_id = ? AND COALESCE(status, 'ativo') != ? AND tenant_id = ? AND unit_id = ?`
+        : `SELECT COUNT(*) AS total FROM plano_associado
+           WHERE responsavel_id = ? AND COALESCE(status, 'ativo') != ?`,
+      scope?.tenant_id && scope?.unit_id
+        ? [responsavelId, VINCULO_STATUS.ENCERRADO, scope.tenant_id, scope.unit_id]
+        : [responsavelId, VINCULO_STATUS.ENCERRADO]
     );
     const jaContaNoMesmoResponsavel = vinculoAtual && Number(vinculoAtual.responsavel_id) === responsavelId ? 1 : 0;
     const totalProjetado = (Number(totalAtual?.total || 0) - jaContaNoMesmoResponsavel) + 1;
@@ -155,9 +175,9 @@ async function criarVinculo(payload = {}, actor) {
     }
 
     const result = await tx.run(
-      `INSERT INTO plano_associado (aluno_id, responsavel_id, status, created_at, updated_at)
-       VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
-      [alunoId, responsavelId, VINCULO_STATUS.ATIVO]
+      `INSERT INTO plano_associado (aluno_id, responsavel_id, status, tenant_id, unit_id, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      [alunoId, responsavelId, VINCULO_STATUS.ATIVO, scope?.tenant_id || aluno.tenant_id || null, scope?.unit_id || aluno.unit_id || null]
     );
 
     const vinculoCriado = await tx.get('SELECT * FROM plano_associado WHERE id = ?', [result.lastID]);
@@ -169,6 +189,8 @@ async function criarVinculo(payload = {}, actor) {
       recordId: result.lastID,
       before: vinculoAtual || null,
       after: vinculoCriado,
+      tenant_id: scope?.tenant_id,
+      unit_id: scope?.unit_id,
     }, tx);
 
     return {
@@ -181,14 +203,16 @@ async function criarVinculo(payload = {}, actor) {
   });
 }
 
-async function encerrarVinculo(id, actor) {
+async function encerrarVinculo(id, actor, scope = null) {
   const vinculoId = parseInt(id);
   if (!vinculoId) throw new AppError('ID invalido', 400, 'VINCULO_ID_INVALIDO');
 
   return runTransaction(async (tx) => {
-    await FechamentoMensalService.assertPeriodoEditavelPorData(new Date().toISOString().slice(0, 10), 'alteracao de vinculo', tx);
+    await FechamentoMensalService.assertPeriodoEditavelPorData(new Date().toISOString().slice(0, 10), 'alteracao de vinculo', tx, scope);
 
-    const before = await tx.get('SELECT * FROM plano_associado WHERE id = ?', [vinculoId]);
+    const before = scope?.tenant_id && scope?.unit_id
+      ? await tx.get('SELECT * FROM plano_associado WHERE id = ? AND tenant_id = ? AND unit_id = ?', [vinculoId, scope.tenant_id, scope.unit_id])
+      : await tx.get('SELECT * FROM plano_associado WHERE id = ?', [vinculoId]);
     if (!before || before.status === VINCULO_STATUS.ENCERRADO) {
       throw new AppError('Vinculo nao encontrado', 404, 'VINCULO_NAO_ENCONTRADO');
     }
@@ -209,6 +233,8 @@ async function encerrarVinculo(id, actor) {
       recordId: vinculoId,
       before,
       after,
+      tenant_id: scope?.tenant_id,
+      unit_id: scope?.unit_id,
     }, tx);
 
     return { sucesso: true };

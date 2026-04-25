@@ -32,8 +32,8 @@ async function logAction(entry = {}, client = null) {
 
   await db.run(
     `INSERT INTO audit_log
-      (actor_id, actor_name, action, module, record_type, record_id, before_json, after_json, metadata_json)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (actor_id, actor_name, action, module, record_type, record_id, before_json, after_json, metadata_json, tenant_id, unit_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       actor.id || 'sistema',
       actor.name || 'sistema',
@@ -44,6 +44,8 @@ async function logAction(entry = {}, client = null) {
       safeJson(entry.before),
       safeJson(entry.after),
       safeJson(entry.metadata),
+      entry.tenant_id || entry.tenantId || actor.tenant_id || actor.tenantId || null,
+      entry.unit_id || entry.unitId || actor.unit_id || actor.unitId || null,
     ]
   );
 }

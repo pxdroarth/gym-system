@@ -30,27 +30,53 @@ function estaVencida(vencimento) {
   return String(vencimento).slice(0, 10) < hoje;
 }
 
-async function carregarAluno(alunoId) {
+async function carregarAluno(alunoId, scope = null) {
+  if (scope?.tenant_id && scope?.unit_id) {
+    return runGet('SELECT * FROM aluno WHERE id = ? AND tenant_id = ? AND unit_id = ?', [alunoId, scope.tenant_id, scope.unit_id]);
+  }
   return runGet('SELECT * FROM aluno WHERE id = ?', [alunoId]);
 }
 
-async function carregarVinculo(alunoId) {
+async function carregarVinculo(alunoId, scope = null) {
+  const scoped = scope?.tenant_id && scope?.unit_id
+    ? 'AND tenant_id = ? AND unit_id = ?'
+    : '';
+  const params = scope?.tenant_id && scope?.unit_id
+    ? [alunoId, VINCULO_STATUS.ENCERRADO, scope.tenant_id, scope.unit_id]
+    : [alunoId, VINCULO_STATUS.ENCERRADO];
   return runGet(
     `SELECT responsavel_id, COALESCE(status, 'ativo') AS status
      FROM plano_associado
      WHERE aluno_id = ?
        AND COALESCE(status, 'ativo') != ?
+       ${scoped}
      LIMIT 1`,
-    [alunoId, VINCULO_STATUS.ENCERRADO]
+    params
   );
 }
 
-async function buscarMensalidadeCritica(alunoId) {
+async function buscarMensalidadeCritica(alunoId, scope = null) {
+  const scoped = scope?.tenant_id && scope?.unit_id
+    ? 'AND tenant_id = ? AND unit_id = ?'
+    : '';
+  const params = [
+    alunoId,
+    MENSALIDADE_STATUS.CANCELADO,
+  ];
+  if (scope?.tenant_id && scope?.unit_id) params.push(scope.tenant_id, scope.unit_id);
+  params.push(
+    MENSALIDADE_STATUS.BLOQUEADA_POR_FECHAMENTO,
+    MENSALIDADE_STATUS.EM_ABERTO,
+    MENSALIDADE_STATUS.VENCIDO,
+    MENSALIDADE_STATUS.PARCIAL,
+    MENSALIDADE_STATUS.EM_REVERSAO_CONTROLADA,
+  );
   return runGet(
     `SELECT *
      FROM mensalidade
      WHERE aluno_id = ?
        AND status != ?
+       ${scoped}
      ORDER BY
        CASE
          WHEN status = ? THEN 1
@@ -63,15 +89,7 @@ async function buscarMensalidadeCritica(alunoId) {
        DATE(vencimento) ASC,
        id ASC
      LIMIT 1`,
-    [
-      alunoId,
-      MENSALIDADE_STATUS.CANCELADO,
-      MENSALIDADE_STATUS.BLOQUEADA_POR_FECHAMENTO,
-      MENSALIDADE_STATUS.EM_ABERTO,
-      MENSALIDADE_STATUS.VENCIDO,
-      MENSALIDADE_STATUS.PARCIAL,
-      MENSALIDADE_STATUS.EM_REVERSAO_CONTROLADA,
-    ]
+    params
   );
 }
 
@@ -98,7 +116,7 @@ async function avaliarAcessoAluno(alunoId, options = {}) {
     };
   }
 
-  const aluno = await carregarAluno(id);
+  const aluno = await carregarAluno(id, options.scope);
   if (!aluno) {
     return {
       ok: false,
@@ -118,7 +136,7 @@ async function avaliarAcessoAluno(alunoId, options = {}) {
     };
   }
 
-  const vinculo = await carregarVinculo(id);
+  const vinculo = await carregarVinculo(id, options.scope);
   if (vinculo?.status === VINCULO_STATUS.PENDENTE_REGULARIZACAO) {
     return {
       ok: false,
@@ -131,7 +149,7 @@ async function avaliarAcessoAluno(alunoId, options = {}) {
   }
 
   const idFinanceiro = vinculo ? vinculo.responsavel_id : id;
-  const responsavel = vinculo ? await carregarAluno(idFinanceiro) : aluno;
+  const responsavel = vinculo ? await carregarAluno(idFinanceiro, options.scope) : aluno;
 
   if (!responsavel) {
     return {
@@ -154,7 +172,7 @@ async function avaliarAcessoAluno(alunoId, options = {}) {
     };
   }
 
-  const mensalidade = await buscarMensalidadeCritica(idFinanceiro);
+  const mensalidade = await buscarMensalidadeCritica(idFinanceiro, options.scope);
   const responsavel_id = vinculo ? vinculo.responsavel_id : null;
 
   if (!mensalidade) {
@@ -236,7 +254,7 @@ async function avaliarAcessoAluno(alunoId, options = {}) {
   };
 }
 
-async function registrarAcesso(payload = {}) {
+async function registrarAcesso(payload = {}, scope = null) {
   const { aluno_id, data_hora, resultado, motivo_bloqueio } = payload;
   if (!aluno_id || !resultado) {
     throw new AppError('Campos obrigatorios: aluno_id e resultado', 400, 'ACESSO_PAYLOAD_INVALIDO');
@@ -251,10 +269,15 @@ async function registrarAcesso(payload = {}) {
     );
   }
 
+  const aluno = await carregarAluno(aluno_id, scope);
+  if (!aluno) {
+    throw new AppError('Aluno nao encontrado na unidade atual', 404, 'ALUNO_NAO_ENCONTRADO_NO_ESCOPO');
+  }
+
   const dataHoraParaInserir = normalizarDataHora(data_hora);
   const result = await runExecute(
-    'INSERT INTO acesso (aluno_id, data_hora, resultado, motivo_bloqueio) VALUES (?, ?, ?, ?)',
-    [aluno_id, dataHoraParaInserir, resultadoNormalizado, motivo_bloqueio || null]
+    'INSERT INTO acesso (aluno_id, data_hora, resultado, motivo_bloqueio, tenant_id, unit_id) VALUES (?, ?, ?, ?, ?, ?)',
+    [aluno_id, dataHoraParaInserir, resultadoNormalizado, motivo_bloqueio || null, scope?.tenant_id || null, scope?.unit_id || null]
   );
 
   return {
@@ -263,6 +286,8 @@ async function registrarAcesso(payload = {}) {
     data_hora: dataHoraParaInserir,
     resultado: resultadoNormalizado,
     motivo_bloqueio: motivo_bloqueio || null,
+    tenant_id: scope?.tenant_id || null,
+    unit_id: scope?.unit_id || null,
   };
 }
 
@@ -273,7 +298,7 @@ async function registrarTentativaAcesso(alunoId, options = {}) {
     aluno_id: alunoId,
     resultado: resultadoBanco,
     motivo_bloqueio: avaliacao.motivo || null,
-  });
+  }, options.scope);
 
   return {
     mensagem: `Acesso ${resultadoBanco} registrado com sucesso.`,

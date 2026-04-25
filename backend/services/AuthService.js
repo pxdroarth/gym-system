@@ -1,6 +1,7 @@
 const { runGet, runExecute, runTransaction } = require('../dbHelper');
 const AppError = require('../errors/AppError');
 const AuditService = require('./AuditService');
+const UnitService = require('./UnitService');
 const { USER_STATUS } = require('../constants/userRoles');
 const { verifyPassword, hashToken, generateToken } = require('../utils/passwordHash');
 
@@ -72,6 +73,8 @@ async function login(payload = {}, req = null) {
       [user.id]
     );
 
+    const userScope = await UnitService.ensureUserDefaultScope(user.id, user.papel, tx);
+
     await AuditService.logAction({
       actor: { id: String(user.id), name: user.nome || user.login, role: user.papel },
       action: 'auth_login',
@@ -81,14 +84,23 @@ async function login(payload = {}, req = null) {
       before: null,
       after: sanitizeUser(user),
       metadata: { session_id: sessionResult.lastID, ip: client.ip, user_agent: client.user_agent },
+      tenant_id: userScope.tenant_id,
+      unit_id: userScope.unit_id,
     }, tx);
 
     const updatedUser = await tx.get('SELECT * FROM usuario_interno WHERE id = ?', [user.id]);
+    const allowedUnits = await UnitService.listAllowedUnits(user.id);
+    const currentUnit = allowedUnits.find((unit) => Number(unit.is_default) === 1) || allowedUnits[0] || null;
 
     return {
       token,
       expires_at: expiresAt,
-      usuario: sanitizeUser(updatedUser),
+      usuario: {
+        ...sanitizeUser(updatedUser),
+        tenant: currentUnit ? { id: currentUnit.tenant_id } : null,
+        currentUnit,
+        allowedUnits,
+      },
     };
   });
 }
@@ -113,6 +125,9 @@ async function resolveSessionToken(token) {
   if (row.usuario_status !== USER_STATUS.ATIVO) return null;
 
   await runExecute('UPDATE auth_session SET last_used_at = datetime(\'now\') WHERE id = ?', [row.id]);
+  await UnitService.ensureUserDefaultScope(row.usuario_id, row.papel);
+  const allowedUnits = await UnitService.listAllowedUnits(row.usuario_id);
+  const currentUnit = allowedUnits.find((unit) => Number(unit.is_default) === 1) || allowedUnits[0] || null;
 
   return {
     session: {
@@ -127,6 +142,11 @@ async function resolveSessionToken(token) {
       login: row.login,
       papel: row.papel,
       status: row.usuario_status,
+      tenant_id: currentUnit?.tenant_id || null,
+      unit_id: currentUnit?.id || null,
+      tenant: currentUnit ? { id: currentUnit.tenant_id } : null,
+      currentUnit,
+      allowedUnits,
       authSource: 'auth',
     },
   };
@@ -156,6 +176,8 @@ async function logout(token, actor, req = null) {
       before: session,
       after: { ...session, status: 'revogado' },
       metadata: getClientInfo(req),
+      tenant_id: actor?.tenant_id,
+      unit_id: actor?.unit_id,
     }, tx);
 
     return { ok: true };

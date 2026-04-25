@@ -4,7 +4,7 @@ const AuditService = require('./AuditService');
 const FechamentoMensalService = require('./FechamentoMensalService');
 const FinanceiroService = require('./FinanceiroService');
 
-async function registrarVenda(payload = {}, actor) {
+async function registrarVenda(payload = {}, actor, scope = null) {
   const { produto_id, quantidade, preco_unitario } = payload;
 
   if (!produto_id || !quantidade) {
@@ -12,7 +12,9 @@ async function registrarVenda(payload = {}, actor) {
   }
 
   return runTransaction(async (tx) => {
-    const produto = await tx.get('SELECT * FROM produto WHERE id = ?', [produto_id]);
+    const produto = scope?.tenant_id && scope?.unit_id
+      ? await tx.get('SELECT * FROM produto WHERE id = ? AND tenant_id = ? AND unit_id = ?', [produto_id, scope.tenant_id, scope.unit_id])
+      : await tx.get('SELECT * FROM produto WHERE id = ?', [produto_id]);
     if (!produto) throw new AppError('Produto nao encontrado', 404, 'PRODUTO_NAO_ENCONTRADO');
 
     const qtd = Number(quantidade);
@@ -27,13 +29,19 @@ async function registrarVenda(payload = {}, actor) {
 
     const valor_total = qtd * precoUnit;
     const venda = await tx.run(
-      `INSERT INTO venda_produto (produto_id, produto_nome, quantidade, preco_unitario, valor_total)
-       VALUES (?, ?, ?, ?, ?)`,
-      [produto_id, produto.nome, qtd, precoUnit, valor_total]
+      `INSERT INTO venda_produto (produto_id, produto_nome, quantidade, preco_unitario, valor_total, tenant_id, unit_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [produto_id, produto.nome, qtd, precoUnit, valor_total, scope?.tenant_id || produto.tenant_id || null, scope?.unit_id || produto.unit_id || null]
     );
 
-    await tx.run('UPDATE produto SET estoque = estoque - ? WHERE id = ?', [qtd, produto_id]);
-    const produtoDepois = await tx.get('SELECT * FROM produto WHERE id = ?', [produto_id]);
+    if (scope?.tenant_id && scope?.unit_id) {
+      await tx.run('UPDATE produto SET estoque = estoque - ? WHERE id = ? AND tenant_id = ? AND unit_id = ?', [qtd, produto_id, scope.tenant_id, scope.unit_id]);
+    } else {
+      await tx.run('UPDATE produto SET estoque = estoque - ? WHERE id = ?', [qtd, produto_id]);
+    }
+    const produtoDepois = scope?.tenant_id && scope?.unit_id
+      ? await tx.get('SELECT * FROM produto WHERE id = ? AND tenant_id = ? AND unit_id = ?', [produto_id, scope.tenant_id, scope.unit_id])
+      : await tx.get('SELECT * FROM produto WHERE id = ?', [produto_id]);
 
     await FinanceiroService.upsertLancamentoFinanceiro({
       descricao: `Venda ${venda.lastID}`,
@@ -44,6 +52,8 @@ async function registrarVenda(payload = {}, actor) {
       plano_contas_id: 2,
       origem: 'venda_produto',
       origem_id: venda.lastID,
+      tenant_id: scope?.tenant_id || produto.tenant_id || null,
+      unit_id: scope?.unit_id || produto.unit_id || null,
     }, tx);
 
     const vendaCriada = {
@@ -53,6 +63,8 @@ async function registrarVenda(payload = {}, actor) {
       quantidade: qtd,
       preco_unitario: precoUnit,
       valor_total,
+      tenant_id: scope?.tenant_id || produto.tenant_id || null,
+      unit_id: scope?.unit_id || produto.unit_id || null,
     };
 
     await AuditService.logAction({
@@ -64,6 +76,8 @@ async function registrarVenda(payload = {}, actor) {
       before: { produto },
       after: { venda: vendaCriada, produto: produtoDepois },
       metadata: { estoque_anterior: produto.estoque, estoque_atual: produtoDepois?.estoque },
+      tenant_id: scope?.tenant_id || produto.tenant_id || null,
+      unit_id: scope?.unit_id || produto.unit_id || null,
     }, tx);
 
     return vendaCriada;

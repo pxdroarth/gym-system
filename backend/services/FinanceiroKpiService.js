@@ -5,18 +5,30 @@ function number(value) {
   return Number(value || 0);
 }
 
-async function somarPagamentoMensalidades(dataInicio, dataFim) {
+function scopeSql(scope, alias = '') {
+  if (!scope?.tenant_id || !scope?.unit_id) return { clause: '', params: [] };
+  const prefix = alias ? `${alias}.` : '';
+  return {
+    clause: ` AND ${prefix}tenant_id = ? AND ${prefix}unit_id = ?`,
+    params: [scope.tenant_id, scope.unit_id],
+  };
+}
+
+async function somarPagamentoMensalidades(dataInicio, dataFim, scope) {
+  const scoped = scopeSql(scope);
   const row = await db.runGet(`
     SELECT COALESCE(SUM(valor_pago), 0) AS total
     FROM pagamento
     WHERE data_pagamento IS NOT NULL
       AND DATE(data_pagamento) BETWEEN DATE(?) AND DATE(?)
-  `, [dataInicio, dataFim]);
+      ${scoped.clause}
+  `, [dataInicio, dataFim, ...scoped.params]);
 
   return number(row?.total);
 }
 
-async function somarMensalidadesPagasLegadas(dataInicio, dataFim) {
+async function somarMensalidadesPagasLegadas(dataInicio, dataFim, scope) {
+  const scoped = scopeSql(scope, 'm');
   const row = await db.runGet(`
     SELECT COALESCE(SUM(m.valor_cobrado), 0) AS total
     FROM mensalidade m
@@ -31,23 +43,27 @@ async function somarMensalidadesPagasLegadas(dataInicio, dataFim) {
       AND m.vencimento IS NOT NULL
       AND m.vencimento != '0000-00-00'
       AND DATE(COALESCE(m.updated_at, m.vencimento)) BETWEEN DATE(?) AND DATE(?)
-  `, [dataInicio, dataFim]);
+      ${scoped.clause}
+  `, [dataInicio, dataFim, ...scoped.params]);
 
   return number(row?.total);
 }
 
-async function somarVendasRecebidas(dataInicio, dataFim) {
+async function somarVendasRecebidas(dataInicio, dataFim, scope) {
+  const scoped = scopeSql(scope);
   const row = await db.runGet(`
     SELECT COALESCE(SUM(COALESCE(valor_total, quantidade * preco_unitario)), 0) AS total
     FROM venda_produto
     WHERE COALESCE(deleted_at, '') = ''
       AND DATE(data_venda) BETWEEN DATE(?) AND DATE(?)
-  `, [dataInicio, dataFim]);
+      ${scoped.clause}
+  `, [dataInicio, dataFim, ...scoped.params]);
 
   return number(row?.total);
 }
 
-async function somarReceitasFinanceirasAvulsas(dataInicio, dataFim) {
+async function somarReceitasFinanceirasAvulsas(dataInicio, dataFim, scope) {
+  const scoped = scopeSql(scope);
   const row = await db.runGet(`
     SELECT COALESCE(SUM(valor), 0) AS total
     FROM conta_financeira
@@ -60,12 +76,14 @@ async function somarReceitasFinanceirasAvulsas(dataInicio, dataFim) {
         OR origem = 'reversao_controlada'
       )
       AND DATE(data_lancamento) BETWEEN DATE(?) AND DATE(?)
-  `, [dataInicio, dataFim]);
+      ${scoped.clause}
+  `, [dataInicio, dataFim, ...scoped.params]);
 
   return number(row?.total);
 }
 
-async function obterDespesas(dataInicio, dataFim) {
+async function obterDespesas(dataInicio, dataFim, scope) {
+  const scoped = scopeSql(scope);
   const row = await db.runGet(`
     SELECT
       COALESCE(SUM(CASE WHEN status = 'pago' THEN valor ELSE 0 END), 0) AS pagas,
@@ -79,7 +97,8 @@ async function obterDespesas(dataInicio, dataFim) {
         OR origem = 'reversao_controlada'
       )
       AND DATE(data_lancamento) BETWEEN DATE(?) AND DATE(?)
-  `, [dataInicio, dataFim]);
+      ${scoped.clause}
+  `, [dataInicio, dataFim, ...scoped.params]);
 
   return {
     pagas: number(row?.pagas),
@@ -87,7 +106,8 @@ async function obterDespesas(dataInicio, dataFim) {
   };
 }
 
-async function obterReceitasAReceber(dataInicio, dataFim) {
+async function obterReceitasAReceber(dataInicio, dataFim, scope) {
+  const scoped = scopeSql(scope);
   const row = await db.runGet(`
     SELECT COALESCE(SUM(valor_cobrado), 0) AS a_receber,
            COUNT(DISTINCT aluno_id) AS clientes_pendentes
@@ -97,7 +117,8 @@ async function obterReceitasAReceber(dataInicio, dataFim) {
       AND vencimento IS NOT NULL
       AND vencimento != '0000-00-00'
       AND DATE(vencimento) BETWEEN DATE(?) AND DATE(?)
-  `, [dataInicio, dataFim]);
+      ${scoped.clause}
+  `, [dataInicio, dataFim, ...scoped.params]);
 
   return {
     aReceber: number(row?.a_receber),
@@ -105,7 +126,7 @@ async function obterReceitasAReceber(dataInicio, dataFim) {
   };
 }
 
-async function calcularKpisFinanceiros({ periodo = 'mensal', data_inicio, data_fim } = {}) {
+async function calcularKpisFinanceiros({ periodo = 'mensal', data_inicio, data_fim } = {}, scope = null) {
   const { dataInicio, dataFim } = obterIntervaloPorPeriodo(periodo, data_inicio, data_fim);
 
   const [
@@ -116,12 +137,12 @@ async function calcularKpisFinanceiros({ periodo = 'mensal', data_inicio, data_f
     despesas,
     pendencias,
   ] = await Promise.all([
-    somarPagamentoMensalidades(dataInicio, dataFim),
-    somarMensalidadesPagasLegadas(dataInicio, dataFim),
-    somarVendasRecebidas(dataInicio, dataFim),
-    somarReceitasFinanceirasAvulsas(dataInicio, dataFim),
-    obterDespesas(dataInicio, dataFim),
-    obterReceitasAReceber(dataInicio, dataFim),
+    somarPagamentoMensalidades(dataInicio, dataFim, scope),
+    somarMensalidadesPagasLegadas(dataInicio, dataFim, scope),
+    somarVendasRecebidas(dataInicio, dataFim, scope),
+    somarReceitasFinanceirasAvulsas(dataInicio, dataFim, scope),
+    obterDespesas(dataInicio, dataFim, scope),
+    obterReceitasAReceber(dataInicio, dataFim, scope),
   ]);
 
   const mensalidadesRecebidas = pagamentosMensalidades + mensalidadesLegadas;

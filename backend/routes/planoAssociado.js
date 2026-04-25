@@ -2,10 +2,12 @@ const express = require('express');
 const router = express.Router();
 const VinculoService = require('../services/VinculoService');
 const AuditService = require('../services/AuditService');
+const { actorWithScope, requireScope } = require('../helpers/scope');
 
-router.get('/', async (_req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
-    res.json(await VinculoService.listarTodos());
+    const scope = requireScope(req);
+    res.json(await VinculoService.listarTodos(null, scope));
   } catch (err) {
     next(err);
   }
@@ -16,7 +18,8 @@ router.get('/responsavel/:responsavelId/detalhe', async (req, res, next) => {
   if (!responsavelId) return res.status(400).json({ error: 'Responsavel invalido' });
 
   try {
-    res.json(await VinculoService.detalheResponsavel(responsavelId));
+    const scope = requireScope(req);
+    res.json(await VinculoService.detalheResponsavel(responsavelId, null, scope));
   } catch (err) {
     next(err);
   }
@@ -27,7 +30,8 @@ router.get('/:responsavelId', async (req, res, next) => {
   if (!responsavelId) return res.status(400).json({ error: 'Responsavel invalido' });
 
   try {
-    res.json(await VinculoService.listarPorResponsavel(responsavelId));
+    const scope = requireScope(req);
+    res.json(await VinculoService.listarPorResponsavel(responsavelId, null, scope));
   } catch (err) {
     next(err);
   }
@@ -35,9 +39,11 @@ router.get('/:responsavelId', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
+    const scope = requireScope(req);
     const vinculo = await VinculoService.criarVinculo(
       req.body || {},
-      AuditService.getActorFromRequest(req)
+      actorWithScope(AuditService.getActorFromRequest(req), scope),
+      scope
     );
     res.status(201).json(vinculo);
   } catch (err) {
@@ -47,9 +53,11 @@ router.post('/', async (req, res, next) => {
 
 router.delete('/:id', async (req, res, next) => {
   try {
+    const scope = requireScope(req);
     res.json(await VinculoService.encerrarVinculo(
       req.params.id,
-      AuditService.getActorFromRequest(req)
+      actorWithScope(AuditService.getActorFromRequest(req), scope),
+      scope
     ));
   } catch (err) {
     next(err);

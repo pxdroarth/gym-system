@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { runQuery, runGet, runExecute } = require('../dbHelper');
+const { requireScope } = require('../helpers/scope');
 
 const uploadDir = path.join(__dirname, '../uploads/produtos');
 if (!fs.existsSync(uploadDir)) {
@@ -38,9 +39,10 @@ function validarProduto(payload) {
 
 router.get('/', async (req, res) => {
   try {
+    const scope = requireScope(req);
     const { q, estoque_baixo, sem_estoque } = req.query;
-    const filtros = [];
-    const params = [];
+    const filtros = ['tenant_id = ?', 'unit_id = ?'];
+    const params = [scope.tenant_id, scope.unit_id];
 
     if (q) {
       filtros.push(`(LOWER(nome) LIKE ? OR LOWER(COALESCE(descricao, '')) LIKE ?)`);
@@ -53,7 +55,7 @@ router.get('/', async (req, res) => {
       filtros.push('estoque > 0 AND estoque <= 5');
     }
 
-    const where = filtros.length ? `WHERE ${filtros.join(' AND ')}` : '';
+    const where = `WHERE ${filtros.join(' AND ')}`;
     const rows = await runQuery(`
       SELECT *,
              CASE
@@ -76,7 +78,8 @@ router.get('/:id', async (req, res) => {
   if (!id) return res.status(400).json({ error: 'ID inválido' });
 
   try {
-    const row = await runGet('SELECT * FROM produto WHERE id = ?', [id]);
+    const scope = requireScope(req);
+    const row = await runGet('SELECT * FROM produto WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
     if (!row) return res.status(404).json({ error: 'Produto não encontrado' });
     res.json(row);
   } catch (error) {
@@ -92,15 +95,19 @@ router.post('/', upload.single('imagem'), async (req, res) => {
   const imagem = req.file ? `/uploads/produtos/${req.file.filename}` : null;
 
   try {
-    const existente = await runGet('SELECT id FROM produto WHERE LOWER(nome) = LOWER(?) LIMIT 1', [payload.nome]);
+    const scope = requireScope(req);
+    const existente = await runGet(
+      'SELECT id FROM produto WHERE LOWER(nome) = LOWER(?) AND tenant_id = ? AND unit_id = ? LIMIT 1',
+      [payload.nome, scope.tenant_id, scope.unit_id]
+    );
     if (existente) return res.status(409).json({ error: 'Já existe um produto com esse nome' });
 
     const result = await runExecute(
-      'INSERT INTO produto (nome, descricao, preco, estoque, imagem) VALUES (?, ?, ?, ?, ?)',
-      [payload.nome, payload.descricao, payload.preco, payload.estoque, imagem]
+      'INSERT INTO produto (nome, descricao, preco, estoque, imagem, tenant_id, unit_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [payload.nome, payload.descricao, payload.preco, payload.estoque, imagem, scope.tenant_id, scope.unit_id]
     );
 
-    const criado = await runGet('SELECT * FROM produto WHERE id = ?', [result.lastID]);
+    const criado = await runGet('SELECT * FROM produto WHERE id = ? AND tenant_id = ? AND unit_id = ?', [result.lastID, scope.tenant_id, scope.unit_id]);
     res.status(201).json(criado);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -116,7 +123,8 @@ router.put('/:id', upload.single('imagem'), async (req, res) => {
   if (erro) return res.status(400).json({ error: erro });
 
   try {
-    const atual = await runGet('SELECT * FROM produto WHERE id = ?', [id]);
+    const scope = requireScope(req);
+    const atual = await runGet('SELECT * FROM produto WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
     if (!atual) return res.status(404).json({ error: 'Produto não encontrado' });
 
     let imagem = atual.imagem;
@@ -125,11 +133,11 @@ router.put('/:id', upload.single('imagem'), async (req, res) => {
     }
 
     await runExecute(
-      'UPDATE produto SET nome = ?, descricao = ?, preco = ?, estoque = ?, imagem = ? WHERE id = ?',
-      [payload.nome, payload.descricao, payload.preco, payload.estoque, imagem, id]
+      'UPDATE produto SET nome = ?, descricao = ?, preco = ?, estoque = ?, imagem = ? WHERE id = ? AND tenant_id = ? AND unit_id = ?',
+      [payload.nome, payload.descricao, payload.preco, payload.estoque, imagem, id, scope.tenant_id, scope.unit_id]
     );
 
-    const atualizado = await runGet('SELECT * FROM produto WHERE id = ?', [id]);
+    const atualizado = await runGet('SELECT * FROM produto WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
     res.json(atualizado);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -144,10 +152,14 @@ router.patch('/:id/estoque', async (req, res) => {
   if (!Number.isInteger(estoque) || estoque < 0) return res.status(400).json({ error: 'estoque inválido' });
 
   try {
-    const result = await runExecute('UPDATE produto SET estoque = ? WHERE id = ?', [estoque, id]);
+    const scope = requireScope(req);
+    const result = await runExecute(
+      'UPDATE produto SET estoque = ? WHERE id = ? AND tenant_id = ? AND unit_id = ?',
+      [estoque, id, scope.tenant_id, scope.unit_id]
+    );
     if (result.changes === 0) return res.status(404).json({ error: 'Produto não encontrado' });
 
-    const atualizado = await runGet('SELECT * FROM produto WHERE id = ?', [id]);
+    const atualizado = await runGet('SELECT * FROM produto WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
     res.json(atualizado);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -159,12 +171,19 @@ router.delete('/:id', async (req, res) => {
   if (!id) return res.status(400).json({ error: 'ID inválido' });
 
   try {
-    const venda = await runGet('SELECT id FROM venda_produto WHERE produto_id = ? LIMIT 1', [id]);
+    const scope = requireScope(req);
+    const venda = await runGet(
+      'SELECT id FROM venda_produto WHERE produto_id = ? AND tenant_id = ? AND unit_id = ? LIMIT 1',
+      [id, scope.tenant_id, scope.unit_id]
+    );
     if (venda) {
       return res.status(400).json({ error: 'Não é possível excluir produto com vendas registradas' });
     }
 
-    const result = await runExecute('DELETE FROM produto WHERE id = ?', [id]);
+    const result = await runExecute(
+      'DELETE FROM produto WHERE id = ? AND tenant_id = ? AND unit_id = ?',
+      [id, scope.tenant_id, scope.unit_id]
+    );
     if (result.changes === 0) return res.status(404).json({ error: 'Produto não encontrado para deletar' });
     res.json({ message: 'Produto deletado com sucesso' });
   } catch (error) {

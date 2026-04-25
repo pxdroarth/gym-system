@@ -7,6 +7,7 @@ const FechamentoMensalService = require('../services/FechamentoMensalService');
 const ReversaoControladaService = require('../services/ReversaoControladaService');
 const { PERMISSIONS } = require('../constants/userRoles');
 const { requirePermission } = require('../middlewares/requirePermission');
+const { actorWithScope, requireScope } = require('../helpers/scope');
 
 function validarCamposObrigatorios(body, campos) {
   for (const campo of campos) {
@@ -17,8 +18,9 @@ function validarCamposObrigatorios(body, campos) {
 
 router.get('/', async (req, res, next) => {
   const { tipo, status, data_inicial, data_final, descricao = '', page = 1, perPage = 10 } = req.query;
-  const params = [];
-  let where = "WHERE cf.origem = 'conta_financeira' AND cf.deleted_at IS NULL";
+  const scope = requireScope(req);
+  const params = [scope.tenant_id, scope.unit_id];
+  let where = "WHERE cf.origem = 'conta_financeira' AND cf.deleted_at IS NULL AND cf.tenant_id = ? AND cf.unit_id = ?";
 
   if (tipo && tipo !== 'todos') {
     where += ' AND cf.tipo = ?';
@@ -78,17 +80,18 @@ router.post('/', async (req, res, next) => {
   if (erro) return res.status(400).json({ error: erro });
 
   try {
-    const actor = AuditService.getActorFromRequest(req);
+    const scope = requireScope(req);
+    const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
     const criada = await runTransaction(async (tx) => {
-      await FechamentoMensalService.assertPeriodoEditavelPorData(data_lancamento, 'criacao de conta financeira', tx);
+      await FechamentoMensalService.assertPeriodoEditavelPorData(data_lancamento, 'criacao de conta financeira', tx, scope);
 
       const result = await tx.run(`
         INSERT INTO conta_financeira
-        (descricao, tipo, valor, data_lancamento, status, plano_contas_id, observacao, origem, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'conta_financeira', datetime('now'), datetime('now'))
-      `, [descricao, tipo, valor, data_lancamento, status, plano_contas_id || null, observacao || null]);
+        (descricao, tipo, valor, data_lancamento, status, plano_contas_id, observacao, origem, tenant_id, unit_id, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'conta_financeira', ?, ?, datetime('now'), datetime('now'))
+      `, [descricao, tipo, valor, data_lancamento, status, plano_contas_id || null, observacao || null, scope.tenant_id, scope.unit_id]);
 
-      const after = await tx.get('SELECT * FROM conta_financeira WHERE id = ?', [result.lastID]);
+      const after = await tx.get('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [result.lastID, scope.tenant_id, scope.unit_id]);
       await AuditService.logAction({
         actor,
         action: 'criar_conta_financeira',
@@ -97,6 +100,8 @@ router.post('/', async (req, res, next) => {
         recordId: result.lastID,
         before: null,
         after,
+        tenant_id: scope.tenant_id,
+        unit_id: scope.unit_id,
       }, tx);
 
       return after;
@@ -113,15 +118,17 @@ router.put('/:id', async (req, res, next) => {
   const { descricao, tipo, valor, data_lancamento, status, plano_contas_id, observacao } = req.body;
 
   try {
-    const actor = AuditService.getActorFromRequest(req);
+    const scope = requireScope(req);
+    const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
     const updated = await runTransaction(async (tx) => {
-      const before = await tx.get('SELECT * FROM conta_financeira WHERE id = ?', [id]);
+      const before = await tx.get('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
       if (!before || before.deleted_at) throw new AppError('Conta nao encontrada', 404, 'CONTA_NAO_ENCONTRADA');
 
       await FechamentoMensalService.assertPeriodoEditavelPorData(
         data_lancamento || before.data_lancamento,
         'edicao de conta financeira',
-        tx
+        tx,
+        scope
       );
 
       await tx.run(`
@@ -131,7 +138,7 @@ router.put('/:id', async (req, res, next) => {
         WHERE id = ?
       `, [descricao, tipo, valor, data_lancamento, status, plano_contas_id || null, observacao || null, id]);
 
-      const after = await tx.get('SELECT * FROM conta_financeira WHERE id = ?', [id]);
+      const after = await tx.get('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
       await AuditService.logAction({
         actor,
         action: 'editar_conta_financeira',
@@ -140,6 +147,8 @@ router.put('/:id', async (req, res, next) => {
         recordId: id,
         before,
         after,
+        tenant_id: scope.tenant_id,
+        unit_id: scope.unit_id,
       }, tx);
 
       return after;
@@ -157,19 +166,20 @@ router.patch('/:id/status', async (req, res, next) => {
   if (!status) return res.status(400).json({ error: 'Status e obrigatorio' });
 
   try {
-    const actor = AuditService.getActorFromRequest(req);
+    const scope = requireScope(req);
+    const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
     await runTransaction(async (tx) => {
-      const before = await tx.get('SELECT * FROM conta_financeira WHERE id = ?', [id]);
+      const before = await tx.get('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
       if (!before || before.deleted_at) throw new AppError('Conta nao encontrada', 404, 'CONTA_NAO_ENCONTRADA');
 
-      await FechamentoMensalService.assertPeriodoEditavelPorData(before.data_lancamento, 'alteracao de status de conta financeira', tx);
+      await FechamentoMensalService.assertPeriodoEditavelPorData(before.data_lancamento, 'alteracao de status de conta financeira', tx, scope);
 
       await tx.run(
         'UPDATE conta_financeira SET status = ?, updated_at = datetime(\'now\') WHERE id = ?',
         [status, id]
       );
 
-      const after = await tx.get('SELECT * FROM conta_financeira WHERE id = ?', [id]);
+      const after = await tx.get('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
       await AuditService.logAction({
         actor,
         action: 'alterar_status_conta_financeira',
@@ -178,6 +188,8 @@ router.patch('/:id/status', async (req, res, next) => {
         recordId: id,
         before,
         after,
+        tenant_id: scope.tenant_id,
+        unit_id: scope.unit_id,
       }, tx);
     });
 
@@ -189,10 +201,12 @@ router.patch('/:id/status', async (req, res, next) => {
 
 router.post('/:id/reverter', requirePermission(PERMISSIONS.REVERSAO_EXECUTAR), async (req, res, next) => {
   try {
+    const scope = requireScope(req);
     const data = await ReversaoControladaService.reverterContaFinanceira(
       req.params.id,
       req.body || {},
-      AuditService.getActorFromRequest(req)
+      actorWithScope(AuditService.getActorFromRequest(req), scope),
+      scope
     );
     res.json({ ok: true, data, message: 'Conta financeira revertida com controle' });
   } catch (error) {
@@ -204,23 +218,24 @@ router.delete('/:id', async (req, res, next) => {
   const id = parseInt(req.params.id);
 
   try {
-    const actor = AuditService.getActorFromRequest(req);
-    const before = await runGet('SELECT * FROM conta_financeira WHERE id = ?', [id]);
+    const scope = requireScope(req);
+    const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
+    const before = await runGet('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
     if (!before || before.deleted_at) throw new AppError('Conta nao encontrada para excluir', 404, 'CONTA_NAO_ENCONTRADA');
 
     if (before.status === 'pago') {
-      const data = await ReversaoControladaService.reverterContaFinanceira(id, req.body || {}, actor);
+      const data = await ReversaoControladaService.reverterContaFinanceira(id, req.body || {}, actor, scope);
       return res.json({ ok: true, data, message: 'Conta paga revertida com controle' });
     }
 
     await runTransaction(async (tx) => {
-      await FechamentoMensalService.assertPeriodoEditavelPorData(before.data_lancamento, 'remocao logica de conta financeira', tx);
+      await FechamentoMensalService.assertPeriodoEditavelPorData(before.data_lancamento, 'remocao logica de conta financeira', tx, scope);
       await tx.run(
         'UPDATE conta_financeira SET deleted_at = datetime(\'now\'), updated_at = datetime(\'now\') WHERE id = ?',
         [id]
       );
 
-      const after = await tx.get('SELECT * FROM conta_financeira WHERE id = ?', [id]);
+      const after = await tx.get('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
       await AuditService.logAction({
         actor,
         action: 'remover_conta_financeira_logicamente',
@@ -230,6 +245,8 @@ router.delete('/:id', async (req, res, next) => {
         before,
         after,
         metadata: { motivo: req.body?.motivo || 'Remocao logica de conta pendente' },
+        tenant_id: scope.tenant_id,
+        unit_id: scope.unit_id,
       }, tx);
     });
 

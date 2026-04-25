@@ -6,6 +6,7 @@ const FechamentoMensalService = require('../services/FechamentoMensalService');
 const VinculoService = require('../services/VinculoService');
 const { PERMISSIONS } = require('../constants/userRoles');
 const { assertPermission } = require('../middlewares/requirePermission');
+const { actorWithScope, requireScope } = require('../helpers/scope');
 
 function toISODate(d) {
   if (!d) return null;
@@ -23,6 +24,8 @@ const statusMensalidadeExpr = `
       SELECT 1
       FROM mensalidade m
       WHERE m.aluno_id = ${responsavelIdExpr}
+        AND m.tenant_id = a.tenant_id
+        AND m.unit_id = a.unit_id
         AND m.status = 'em_aberto'
         AND m.vencimento IS NOT NULL
         AND m.vencimento != '0000-00-00'
@@ -32,6 +35,8 @@ const statusMensalidadeExpr = `
       SELECT 1
       FROM mensalidade m
       WHERE m.aluno_id = ${responsavelIdExpr}
+        AND m.tenant_id = a.tenant_id
+        AND m.unit_id = a.unit_id
     ) THEN 'em_dia'
     ELSE 'sem_mensalidade'
   END
@@ -44,12 +49,16 @@ const statusOperacionalExpr = `
       SELECT 1
       FROM aluno ar
       WHERE ar.id = pa.responsavel_id
+        AND ar.tenant_id = a.tenant_id
+        AND ar.unit_id = a.unit_id
         AND COALESCE(ar.status, 'ativo') != 'ativo'
     ) THEN 'inativo'
     WHEN EXISTS (
       SELECT 1
       FROM mensalidade m
       WHERE m.aluno_id = ${responsavelIdExpr}
+        AND m.tenant_id = a.tenant_id
+        AND m.unit_id = a.unit_id
         AND m.status = 'em_aberto'
         AND m.vencimento IS NOT NULL
         AND m.vencimento != '0000-00-00'
@@ -66,22 +75,23 @@ const baseSelect = `
          ${statusOperacionalExpr} AS status_ativo,
          COALESCE(p.nome, 'Sem plano') AS plano_nome
   FROM aluno a
-  LEFT JOIN plano_associado pa ON pa.aluno_id = a.id AND COALESCE(pa.status, 'ativo') != 'encerrado'
-  LEFT JOIN plano p ON a.plano_id = p.id
+  LEFT JOIN plano_associado pa ON pa.aluno_id = a.id AND pa.tenant_id = a.tenant_id AND pa.unit_id = a.unit_id AND COALESCE(pa.status, 'ativo') != 'encerrado'
+  LEFT JOIN plano p ON a.plano_id = p.id AND p.tenant_id = a.tenant_id
 `;
 
 router.get('/pesquisa', async (req, res) => {
   try {
+    const scope = requireScope(req);
     const termo = String(req.query.termo || '').trim().toLowerCase();
     const pagina = Math.max(1, parseInt(req.query.pagina || '1'));
     const limite = Math.min(50, Math.max(1, parseInt(req.query.limite || '15')));
     const offset = (pagina - 1) * limite;
 
-    let where = '';
-    let params = [];
+    let where = 'WHERE a.tenant_id = ? AND a.unit_id = ?';
+    let params = [scope.tenant_id, scope.unit_id];
     if (termo) {
-      where = `WHERE LOWER(a.nome) LIKE ? OR CAST(a.matricula AS TEXT) LIKE ?`;
-      params = [`%${termo}%`, `%${termo}%`];
+      where += ` AND (LOWER(a.nome) LIKE ? OR CAST(a.matricula AS TEXT) LIKE ?)`;
+      params.push(`%${termo}%`, `%${termo}%`);
     }
 
     const totalRow = await runGet(`SELECT COUNT(*) AS total FROM aluno a ${where}`, params);
@@ -97,12 +107,14 @@ router.get('/pesquisa', async (req, res) => {
   }
 });
 
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   try {
+    const scope = requireScope(req);
     const rows = await runQuery(`
       ${baseSelect}
+      WHERE a.tenant_id = ? AND a.unit_id = ?
       ORDER BY a.id DESC
-    `);
+    `, [scope.tenant_id, scope.unit_id]);
     res.json(rows);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -111,6 +123,7 @@ router.get('/', async (_req, res) => {
 
 router.post('/', async (req, res) => {
   try {
+    const scope = requireScope(req);
     let { nome, status, dia_vencimento, plano_id, telefone, data_nascimento } = req.body || {};
 
     if (!nome || !data_nascimento || plano_id === undefined || plano_id === null || plano_id === '' || dia_vencimento === undefined || dia_vencimento === null || dia_vencimento === '') {
@@ -127,7 +140,7 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'plano_id inválido' });
     }
 
-    const plano = await runGet('SELECT id FROM plano WHERE id = ?', [planoIdFinal]);
+    const plano = await runGet('SELECT id FROM plano WHERE id = ? AND tenant_id = ?', [planoIdFinal, scope.tenant_id]);
     if (!plano) return res.status(400).json({ error: 'Plano não encontrado' });
 
     const dataNascISO = toISODate(data_nascimento);
@@ -136,16 +149,16 @@ router.post('/', async (req, res) => {
     }
 
     const statusFinal = (status || 'ativo') === 'inativo' ? 'inativo' : 'ativo';
-    const last = await runGet(`SELECT MAX(matricula) AS ultima FROM aluno`);
+    const last = await runGet(`SELECT MAX(matricula) AS ultima FROM aluno WHERE tenant_id = ? AND unit_id = ?`, [scope.tenant_id, scope.unit_id]);
     const novaMatricula = (Number(last?.ultima) || 1000) + 1;
 
     const result = await runExecute(
-      `INSERT INTO aluno (matricula, nome, status, dia_vencimento, plano_id, telefone, data_nascimento)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [novaMatricula, String(nome).trim(), statusFinal, dv, planoIdFinal, telefone || null, dataNascISO]
+      `INSERT INTO aluno (matricula, nome, status, dia_vencimento, plano_id, telefone, data_nascimento, tenant_id, unit_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [novaMatricula, String(nome).trim(), statusFinal, dv, planoIdFinal, telefone || null, dataNascISO, scope.tenant_id, scope.unit_id]
     );
 
-    const criado = await runGet(`SELECT * FROM aluno WHERE id = ?`, [result.lastID]);
+    const criado = await runGet(`SELECT * FROM aluno WHERE id = ? AND tenant_id = ? AND unit_id = ?`, [result.lastID, scope.tenant_id, scope.unit_id]);
     res.status(201).json(criado);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -155,15 +168,23 @@ router.post('/', async (req, res) => {
 router.get('/:id/debito', async (req, res) => {
   const id = parseInt(req.params.id);
   try {
+    const scope = requireScope(req);
     const row = await runGet(
       `SELECT COUNT(*) AS total
        FROM mensalidade
-       WHERE aluno_id = COALESCE((SELECT responsavel_id FROM plano_associado WHERE aluno_id = ? LIMIT 1), ?)
+       WHERE tenant_id = ?
+         AND unit_id = ?
+         AND aluno_id = COALESCE((
+           SELECT responsavel_id
+           FROM plano_associado
+           WHERE aluno_id = ? AND tenant_id = ? AND unit_id = ?
+           LIMIT 1
+         ), ?)
          AND status = 'em_aberto'
          AND vencimento IS NOT NULL
          AND vencimento != '0000-00-00'
          AND DATE(vencimento) <= DATE('now')`,
-      [id, id]
+      [scope.tenant_id, scope.unit_id, id, scope.tenant_id, scope.unit_id, id]
     );
     res.json({ em_debito: row.total > 0 });
   } catch (error) {
@@ -176,6 +197,7 @@ router.put('/:id', async (req, res, next) => {
   if (!id) return res.status(400).json({ error: 'ID inválido' });
 
   try {
+    const scope = requireScope(req);
     let { nome, status, dia_vencimento, plano_id, telefone, data_nascimento } = req.body || {};
 
     if (!nome || !data_nascimento || plano_id === undefined || plano_id === null || plano_id === '' || dia_vencimento === undefined || dia_vencimento === null || dia_vencimento === '') {
@@ -192,7 +214,7 @@ router.put('/:id', async (req, res, next) => {
       return res.status(400).json({ error: 'plano_id inválido' });
     }
 
-    const plano = await runGet('SELECT id FROM plano WHERE id = ?', [planoIdFinal]);
+    const plano = await runGet('SELECT id FROM plano WHERE id = ? AND tenant_id = ?', [planoIdFinal, scope.tenant_id]);
     if (!plano) return res.status(400).json({ error: 'Plano não encontrado' });
 
     const dataNascISO = toISODate(data_nascimento);
@@ -201,17 +223,19 @@ router.put('/:id', async (req, res, next) => {
     }
 
     const statusFinal = (status || 'ativo') === 'inativo' ? 'inativo' : 'ativo';
-    const actor = AuditService.getActorFromRequest(req);
+    const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
 
     const atualizado = await runTransaction(async (tx) => {
-      const antes = await tx.get('SELECT * FROM aluno WHERE id = ?', [id]);
+      const antes = await tx.get('SELECT * FROM aluno WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
       if (!antes) return null;
 
       const dependentes = await tx.all(
         `SELECT * FROM plano_associado
          WHERE responsavel_id = ?
+           AND tenant_id = ?
+           AND unit_id = ?
            AND COALESCE(status, 'ativo') = 'ativo'`,
-        [id]
+        [id, scope.tenant_id, scope.unit_id]
       );
       const mudouPlanoComDependentes = Number(antes.plano_id) !== planoIdFinal && dependentes.length > 0;
 
@@ -237,7 +261,7 @@ router.put('/:id', async (req, res, next) => {
         await VinculoService.marcarDependentesPendenteRegularizacao(id, actor, tx);
       }
 
-      const depois = await tx.get('SELECT * FROM aluno WHERE id = ?', [id]);
+      const depois = await tx.get('SELECT * FROM aluno WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
       await AuditService.logAction({
         actor,
         action: mudouPlanoComDependentes ? 'alterar_aluno_e_regularizar_dependentes' : 'alterar_aluno',
@@ -262,10 +286,11 @@ router.put('/:id', async (req, res, next) => {
 router.get('/:id', async (req, res) => {
   const id = parseInt(req.params.id);
   try {
+    const scope = requireScope(req);
     const row = await runGet(`
       ${baseSelect}
-      WHERE a.id = ?
-    `, [id]);
+      WHERE a.id = ? AND a.tenant_id = ? AND a.unit_id = ?
+    `, [id, scope.tenant_id, scope.unit_id]);
 
     if (!row) return res.status(404).json({ error: 'Aluno não encontrado' });
     res.json(row);

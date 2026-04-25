@@ -1,4 +1,6 @@
 const USER_ROLES = Object.freeze({
+  PLATFORM_ADMIN: 'platform_admin',
+  OWNER: 'owner',
   ADMIN: 'admin',
   GESTOR: 'gestor',
   FINANCEIRO: 'financeiro',
@@ -21,10 +23,24 @@ const PERMISSIONS = Object.freeze({
   ACESSO_LIBERACAO_MANUAL: 'acesso:liberacao_manual',
   ALUNOS_ALTERAR_PLANO_COM_DEPENDENTES: 'alunos:alterar_plano_com_dependentes',
   LOGS_VISUALIZAR_TOTAL: 'logs:visualizar_total',
+  TENANT_CONSOLIDADO_VISUALIZAR: 'tenant:consolidado_visualizar',
+  PLATFORM_ONBOARDING_EXECUTAR: 'platform:onboarding_executar',
+  PLATFORM_TENANT_CONFIGURAR: 'platform:tenant_configurar',
 });
 
+const PLATFORM_ONLY_PERMISSIONS = [
+  PERMISSIONS.PLATFORM_ONBOARDING_EXECUTAR,
+  PERMISSIONS.PLATFORM_TENANT_CONFIGURAR,
+];
+
+const ACADEMIA_ADMIN_PERMISSIONS = Object.values(PERMISSIONS).filter(
+  (permission) => !PLATFORM_ONLY_PERMISSIONS.includes(permission)
+);
+
 const ROLE_PERMISSIONS = Object.freeze({
-  [USER_ROLES.ADMIN]: Object.values(PERMISSIONS),
+  [USER_ROLES.PLATFORM_ADMIN]: Object.values(PERMISSIONS),
+  [USER_ROLES.OWNER]: ACADEMIA_ADMIN_PERMISSIONS,
+  [USER_ROLES.ADMIN]: ACADEMIA_ADMIN_PERMISSIONS,
   [USER_ROLES.GESTOR]: [
     PERMISSIONS.ALUNOS_ALTERAR_PLANO_COM_DEPENDENTES,
   ],

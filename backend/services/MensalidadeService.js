@@ -34,8 +34,10 @@ function buildDueDate(day, baseDateStr) {
   return new Date(year, month, safeDay).toISOString().slice(0, 10);
 }
 
-async function validarAlunoCobravel(alunoId) {
-  const vinculo = await runGet('SELECT responsavel_id FROM plano_associado WHERE aluno_id = ? LIMIT 1', [alunoId]);
+async function validarAlunoCobravel(alunoId, scope = null) {
+  const vinculo = scope?.tenant_id && scope?.unit_id
+    ? await runGet('SELECT responsavel_id FROM plano_associado WHERE aluno_id = ? AND tenant_id = ? AND unit_id = ? LIMIT 1', [alunoId, scope.tenant_id, scope.unit_id])
+    : await runGet('SELECT responsavel_id FROM plano_associado WHERE aluno_id = ? LIMIT 1', [alunoId]);
   if (vinculo) {
     throw new AppError(
       'Aluno vinculado nao pode possuir mensalidade propria. A cobranca deve ser feita no responsavel.',
@@ -57,7 +59,7 @@ function validarStatusMensalidade(status) {
   return statusNormalizado;
 }
 
-async function criarMensalidade(payload = {}) {
+async function criarMensalidade(payload = {}, scope = null) {
   const {
     aluno_id,
     plano_id,
@@ -71,15 +73,19 @@ async function criarMensalidade(payload = {}) {
 
   if (!aluno_id) throw new AppError('aluno_id e obrigatorio', 400, 'ALUNO_ID_OBRIGATORIO');
 
-  const aluno = await runGet('SELECT * FROM aluno WHERE id = ?', [aluno_id]);
+  const aluno = scope?.tenant_id && scope?.unit_id
+    ? await runGet('SELECT * FROM aluno WHERE id = ? AND tenant_id = ? AND unit_id = ?', [aluno_id, scope.tenant_id, scope.unit_id])
+    : await runGet('SELECT * FROM aluno WHERE id = ?', [aluno_id]);
   if (!aluno) throw new AppError('Aluno nao encontrado', 404, 'ALUNO_NAO_ENCONTRADO');
 
-  await validarAlunoCobravel(aluno_id);
+  await validarAlunoCobravel(aluno_id, scope);
 
   const planoIdFinal = Number(plano_id || aluno.plano_id);
   if (!planoIdFinal) throw new AppError('plano_id e obrigatorio', 400, 'PLANO_ID_OBRIGATORIO');
 
-  const plano = await runGet('SELECT * FROM plano WHERE id = ?', [planoIdFinal]);
+  const plano = scope?.tenant_id
+    ? await runGet('SELECT * FROM plano WHERE id = ? AND tenant_id = ?', [planoIdFinal, scope.tenant_id])
+    : await runGet('SELECT * FROM plano WHERE id = ?', [planoIdFinal]);
   if (!plano) throw new AppError('Plano nao encontrado', 400, 'PLANO_NAO_ENCONTRADO');
 
   const hoje = new Date().toISOString().slice(0, 10);
@@ -103,13 +109,16 @@ async function criarMensalidade(payload = {}) {
   }
 
   const statusNormalizado = validarStatusMensalidade(status);
-  await FechamentoMensalService.assertPeriodoEditavelPorData(venc, 'criacao de mensalidade');
+  await FechamentoMensalService.assertPeriodoEditavelPorData(venc, 'criacao de mensalidade', null, scope);
   const duplicada = await runGet(
     `SELECT id FROM mensalidade
      WHERE aluno_id = ?
+       ${scope?.tenant_id && scope?.unit_id ? 'AND tenant_id = ? AND unit_id = ?' : ''}
        AND strftime('%Y-%m', vencimento) = strftime('%Y-%m', ?)
        AND status != ?`,
-    [aluno_id, venc, MENSALIDADE_STATUS.CANCELADO]
+    scope?.tenant_id && scope?.unit_id
+      ? [aluno_id, scope.tenant_id, scope.unit_id, venc, MENSALIDADE_STATUS.CANCELADO]
+      : [aluno_id, venc, MENSALIDADE_STATUS.CANCELADO]
   );
   if (duplicada) {
     throw new AppError('Ja existe mensalidade para este aluno neste ciclo', 409, 'MENSALIDADE_DUPLICADA');
@@ -117,15 +126,15 @@ async function criarMensalidade(payload = {}) {
 
   const result = await runExecute(
     `INSERT INTO mensalidade
-      (aluno_id, plano_id, valor_cobrado, desconto_aplicado, status, data_inicio, data_fim, vencimento, observacoes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [aluno_id, planoIdFinal, valorBase, desconto, statusNormalizado, inicioCiclo, dataFim, venc, observacoes || '']
+      (aluno_id, plano_id, valor_cobrado, desconto_aplicado, status, data_inicio, data_fim, vencimento, observacoes, tenant_id, unit_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [aluno_id, planoIdFinal, valorBase, desconto, statusNormalizado, inicioCiclo, dataFim, venc, observacoes || '', scope?.tenant_id || aluno.tenant_id || null, scope?.unit_id || aluno.unit_id || null]
   );
 
   return runGet('SELECT * FROM mensalidade WHERE id = ?', [result.lastID]);
 }
 
-async function listarMensalidades(filtros = {}) {
+async function listarMensalidades(filtros = {}, scope = null) {
   let sql = `
     SELECT m.*, a.nome AS aluno_nome, p.nome AS plano_nome
     FROM mensalidade m
@@ -133,6 +142,11 @@ async function listarMensalidades(filtros = {}) {
     LEFT JOIN plano p ON p.id = m.plano_id
     WHERE m.deleted_at IS NULL`;
   const params = [];
+
+  if (scope?.tenant_id && scope?.unit_id) {
+    sql += ' AND m.tenant_id = ? AND m.unit_id = ?';
+    params.push(scope.tenant_id, scope.unit_id);
+  }
 
   if (filtros.aluno_id) {
     sql += ' AND m.aluno_id = ?';
@@ -159,7 +173,7 @@ async function listarMensalidades(filtros = {}) {
   return runQuery(sql, params);
 }
 
-async function listarMensalidadesPorAluno(alunoId, filtros = {}) {
+async function listarMensalidadesPorAluno(alunoId, filtros = {}, scope = null) {
   const id = Number(alunoId);
   if (!id) throw new AppError('ID de aluno invalido', 400, 'ALUNO_ID_INVALIDO');
 
@@ -168,6 +182,11 @@ async function listarMensalidadesPorAluno(alunoId, filtros = {}) {
   const offset = (pagina - 1) * limite;
   const params = [id];
   let where = 'WHERE m.aluno_id = ? AND m.deleted_at IS NULL';
+
+  if (scope?.tenant_id && scope?.unit_id) {
+    where += ' AND m.tenant_id = ? AND m.unit_id = ?';
+    params.push(scope.tenant_id, scope.unit_id);
+  }
 
   if (filtros.status) {
     where += ' AND m.status = ?';
@@ -193,22 +212,30 @@ async function listarMensalidadesPorAluno(alunoId, filtros = {}) {
   };
 }
 
-async function listarAlunosComMensalidades() {
-  const alunos = await runQuery('SELECT * FROM aluno ORDER BY nome ASC');
+async function listarAlunosComMensalidades(scope = null) {
+  const alunos = scope?.tenant_id && scope?.unit_id
+    ? await runQuery('SELECT * FROM aluno WHERE tenant_id = ? AND unit_id = ? ORDER BY nome ASC', [scope.tenant_id, scope.unit_id])
+    : await runQuery('SELECT * FROM aluno ORDER BY nome ASC');
   for (const aluno of alunos) {
-    aluno.mensalidades = await runQuery(
-      'SELECT * FROM mensalidade WHERE aluno_id = ? AND deleted_at IS NULL ORDER BY DATE(vencimento) DESC, id DESC',
-      [aluno.id]
-    );
+    const params = [aluno.id];
+    let sql = 'SELECT * FROM mensalidade WHERE aluno_id = ? AND deleted_at IS NULL';
+    if (scope?.tenant_id && scope?.unit_id) {
+      sql += ' AND tenant_id = ? AND unit_id = ?';
+      params.push(scope.tenant_id, scope.unit_id);
+    }
+    sql += ' ORDER BY DATE(vencimento) DESC, id DESC';
+    aluno.mensalidades = await runQuery(sql, params);
   }
   return alunos;
 }
 
-async function atualizarMensalidade(id, payload = {}) {
+async function atualizarMensalidade(id, payload = {}, scope = null) {
   const mensalidadeId = Number(id);
   if (!mensalidadeId) throw new AppError('ID invalido', 400, 'MENSALIDADE_ID_INVALIDO');
 
-  const atual = await runGet('SELECT * FROM mensalidade WHERE id = ?', [mensalidadeId]);
+  const atual = scope?.tenant_id && scope?.unit_id
+    ? await runGet('SELECT * FROM mensalidade WHERE id = ? AND tenant_id = ? AND unit_id = ?', [mensalidadeId, scope.tenant_id, scope.unit_id])
+    : await runGet('SELECT * FROM mensalidade WHERE id = ?', [mensalidadeId]);
   if (!atual || atual.deleted_at) throw new AppError('Mensalidade nao encontrada', 404, 'MENSALIDADE_NAO_ENCONTRADA');
 
   const valor = toMoney(payload.valor_cobrado ?? atual.valor_cobrado);
@@ -218,10 +245,12 @@ async function atualizarMensalidade(id, payload = {}) {
     : atual.vencimento;
   const statusNormalizado = payload.status ? validarStatusMensalidade(payload.status) : atual.status;
 
-  const plano = await runGet('SELECT * FROM plano WHERE id = ?', [atual.plano_id]);
+  const plano = scope?.tenant_id
+    ? await runGet('SELECT * FROM plano WHERE id = ? AND tenant_id = ?', [atual.plano_id, scope.tenant_id])
+    : await runGet('SELECT * FROM plano WHERE id = ?', [atual.plano_id]);
   const inicioCiclo = startOfCycle(venc);
   const dataFim = addDays(inicioCiclo, Math.max(0, Number(plano?.duracao_em_dias || 30) - 1));
-  await FechamentoMensalService.assertPeriodoEditavelPorData(venc, 'edicao de mensalidade');
+  await FechamentoMensalService.assertPeriodoEditavelPorData(venc, 'edicao de mensalidade', null, scope);
 
   await runExecute(
     `UPDATE mensalidade
@@ -233,17 +262,19 @@ async function atualizarMensalidade(id, payload = {}) {
   return runGet('SELECT * FROM mensalidade WHERE id = ?', [mensalidadeId]);
 }
 
-async function removerMensalidade(id, actor, motivo = null) {
+async function removerMensalidade(id, actor, motivo = null, scope = null) {
   const mensalidadeId = Number(id);
   if (!mensalidadeId) throw new AppError('ID invalido', 400, 'MENSALIDADE_ID_INVALIDO');
 
   return runTransaction(async (tx) => {
-    const before = await tx.get('SELECT * FROM mensalidade WHERE id = ?', [mensalidadeId]);
+    const before = scope?.tenant_id && scope?.unit_id
+      ? await tx.get('SELECT * FROM mensalidade WHERE id = ? AND tenant_id = ? AND unit_id = ?', [mensalidadeId, scope.tenant_id, scope.unit_id])
+      : await tx.get('SELECT * FROM mensalidade WHERE id = ?', [mensalidadeId]);
     if (!before || before.deleted_at) {
       throw new AppError('Mensalidade nao encontrada para deletar', 404, 'MENSALIDADE_NAO_ENCONTRADA');
     }
 
-    await FechamentoMensalService.assertPeriodoEditavelPorData(before.vencimento || before.updated_at, 'remocao logica de mensalidade', tx);
+    await FechamentoMensalService.assertPeriodoEditavelPorData(before.vencimento || before.updated_at, 'remocao logica de mensalidade', tx, scope);
     await tx.run(
       'UPDATE mensalidade SET deleted_at = datetime(\'now\'), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [mensalidadeId]
@@ -259,26 +290,35 @@ async function removerMensalidade(id, actor, motivo = null) {
       before,
       after,
       metadata: { motivo: motivo || 'Remocao logica solicitada pela API' },
+      tenant_id: scope?.tenant_id,
+      unit_id: scope?.unit_id,
     }, tx);
 
     return after;
   });
 }
 
-async function listarVigentes() {
+async function listarVigentes(scope = null) {
+  const params = [MENSALIDADE_STATUS.PAGO];
+  let scoped = '';
+  if (scope?.tenant_id && scope?.unit_id) {
+    scoped = 'AND tenant_id = ? AND unit_id = ?';
+    params.push(scope.tenant_id, scope.unit_id);
+  }
   return runQuery(`
     SELECT * FROM mensalidade
     WHERE status = ?
       AND deleted_at IS NULL
       AND vencimento IS NOT NULL
       AND vencimento != '0000-00-00'
+      ${scoped}
       AND DATE(data_inicio) <= DATE('now')
       AND DATE(data_fim) >= DATE('now')
     ORDER BY DATE(vencimento) DESC
-  `, [MENSALIDADE_STATUS.PAGO]);
+  `, params);
 }
 
-async function registrarPagamento(payload = {}, actor) {
+async function registrarPagamento(payload = {}, actor, scope = null) {
   const { mensalidade_id, data_pagamento, valor_pago } = payload;
   const dataPagamentoFinal = data_pagamento || new Date().toISOString().slice(0, 10);
 
@@ -287,9 +327,11 @@ async function registrarPagamento(payload = {}, actor) {
   }
 
   return runTransaction(async (tx) => {
-    await FechamentoMensalService.assertPeriodoEditavelPorData(dataPagamentoFinal, 'pagamento de mensalidade', tx);
+    await FechamentoMensalService.assertPeriodoEditavelPorData(dataPagamentoFinal, 'pagamento de mensalidade', tx, scope);
 
-    const mensalidade = await tx.get('SELECT * FROM mensalidade WHERE id = ?', [mensalidade_id]);
+    const mensalidade = scope?.tenant_id && scope?.unit_id
+      ? await tx.get('SELECT * FROM mensalidade WHERE id = ? AND tenant_id = ? AND unit_id = ?', [mensalidade_id, scope.tenant_id, scope.unit_id])
+      : await tx.get('SELECT * FROM mensalidade WHERE id = ?', [mensalidade_id]);
     if (!mensalidade || mensalidade.deleted_at) throw new AppError('Mensalidade nao encontrada', 404, 'MENSALIDADE_NAO_ENCONTRADA');
 
     if (mensalidade.status === MENSALIDADE_STATUS.CANCELADO) {
@@ -308,14 +350,14 @@ async function registrarPagamento(payload = {}, actor) {
 
     if (pagamentoAntes) {
       await tx.run(
-        'UPDATE pagamento SET data_pagamento = ?, valor_pago = ?, valor_previsto = ? WHERE id = ?',
-        [dataPagamentoFinal, valor, valorPrevisto, pagamentoAntes.id]
+        'UPDATE pagamento SET data_pagamento = ?, valor_pago = ?, valor_previsto = ?, tenant_id = COALESCE(tenant_id, ?), unit_id = COALESCE(unit_id, ?) WHERE id = ?',
+        [dataPagamentoFinal, valor, valorPrevisto, scope?.tenant_id || mensalidade.tenant_id || null, scope?.unit_id || mensalidade.unit_id || null, pagamentoAntes.id]
       );
       pagamentoId = pagamentoAntes.id;
     } else {
       const result = await tx.run(
-        'INSERT INTO pagamento (mensalidade_id, data_pagamento, valor_pago, valor_previsto) VALUES (?, ?, ?, ?)',
-        [mensalidade_id, dataPagamentoFinal, valor, valorPrevisto]
+        'INSERT INTO pagamento (mensalidade_id, data_pagamento, valor_pago, valor_previsto, tenant_id, unit_id) VALUES (?, ?, ?, ?, ?, ?)',
+        [mensalidade_id, dataPagamentoFinal, valor, valorPrevisto, scope?.tenant_id || mensalidade.tenant_id || null, scope?.unit_id || mensalidade.unit_id || null]
       );
       pagamentoId = result.lastID;
     }
@@ -334,6 +376,8 @@ async function registrarPagamento(payload = {}, actor) {
       plano_contas_id: 1,
       origem: 'mensalidade',
       origem_id: mensalidade_id,
+      tenant_id: scope?.tenant_id || mensalidade.tenant_id || null,
+      unit_id: scope?.unit_id || mensalidade.unit_id || null,
     }, tx);
 
     const pagamentoDepois = await tx.get('SELECT * FROM pagamento WHERE id = ?', [pagamentoId]);
@@ -347,6 +391,8 @@ async function registrarPagamento(payload = {}, actor) {
       recordId: mensalidade_id,
       before: { mensalidade, pagamento: pagamentoAntes || null },
       after: { mensalidade: mensalidadeDepois, pagamento: pagamentoDepois },
+      tenant_id: scope?.tenant_id || mensalidade.tenant_id || null,
+      unit_id: scope?.unit_id || mensalidade.unit_id || null,
     }, tx);
 
     return {

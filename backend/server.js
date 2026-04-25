@@ -4,6 +4,7 @@ const path = require('path');
 const errorHandler = require('./middlewares/errorHandler');
 const ensureSchema = require('./database/ensureSchema');
 const operatorContext = require('./middlewares/operatorContext');
+const scopeContext = require('./middlewares/scopeContext');
 
 const app = express();
 const port = 3001;
@@ -14,7 +15,7 @@ app.use(cors({
     'http://localhost:5173',
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Unit-Id'],
 }));
 
 const db = require('./database');
@@ -25,6 +26,7 @@ async function start() {
   app.use(express.json());
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
   app.use(operatorContext);
+  app.use(scopeContext);
 
   const seedPlanoContas = require('./seeds/seedPlanoContas');
   await seedPlanoContas();
@@ -43,9 +45,13 @@ async function start() {
 
   app.use('/financeiro', require('./routes/financeiro'));
   app.use('/dashboard/financeiro', require('./routes/dashboardFinanceiro'));
+  app.use('/tenant-dashboard', require('./routes/tenantDashboard'));
   app.use('/financeiro/ativos', require('./routes/ativos'));
   app.use('/financeiro/orcamento', require('./routes/orcamento'));
   app.use('/auth', require('./routes/auth'));
+  app.use('/onboarding', require('./routes/onboarding'));
+  app.use('/tenants', require('./routes/tenants'));
+  app.use('/units', require('./routes/units'));
   app.use('/planoContas', require('./routes/planoContas'));
   app.use('/plano-contas', require('./routes/planoContas'));
   app.use('/contasFinanceiras', require('./routes/contasFinanceiras'));

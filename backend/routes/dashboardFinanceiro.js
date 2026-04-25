@@ -3,11 +3,16 @@ const router = express.Router();
 const db = require('../dbHelper');
 const { sincronizarFinanceiro } = require('../services/FinanceService');
 const { calcularKpisFinanceiros } = require('../services/FinanceiroKpiService');
+const { requireScope } = require('../helpers/scope');
 
-router.get('/', async (_req, res) => {
+router.get('/', async (req, res) => {
   try {
+    const scope = requireScope(req);
     const contas = await db.runQuery(
-      `SELECT * FROM conta_financeira WHERE origem = 'conta_financeira' ORDER BY data_lancamento DESC`
+      `SELECT * FROM conta_financeira
+       WHERE origem = 'conta_financeira' AND tenant_id = ? AND unit_id = ?
+       ORDER BY data_lancamento DESC`,
+      [scope.tenant_id, scope.unit_id]
     );
     res.json(contas);
   } catch (error) {
@@ -17,7 +22,8 @@ router.get('/', async (_req, res) => {
 
 router.get('/kpis', async (req, res) => {
   try {
-    const data = await calcularKpisFinanceiros(req.query || {});
+    const scope = requireScope(req);
+    const data = await calcularKpisFinanceiros(req.query || {}, scope);
     res.json(data);
   } catch (error) {
     console.error('Erro em /dashboard/financeiro/kpis:', error);

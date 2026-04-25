@@ -6,15 +6,22 @@ function clientOrDefault(client) {
 
 async function upsertLancamentoFinanceiro(lancamento, client = null) {
   const db = clientOrDefault(client);
-  const existente = await db.get(
-    'SELECT id FROM conta_financeira WHERE origem = ? AND origem_id = ?',
-    [lancamento.origem, lancamento.origem_id]
-  );
+  const hasScope = Boolean(lancamento.tenant_id && lancamento.unit_id);
+  const existente = hasScope
+    ? await db.get(
+      'SELECT id FROM conta_financeira WHERE origem = ? AND origem_id = ? AND tenant_id = ? AND unit_id = ?',
+      [lancamento.origem, lancamento.origem_id, lancamento.tenant_id, lancamento.unit_id]
+    )
+    : await db.get(
+      'SELECT id FROM conta_financeira WHERE origem = ? AND origem_id = ?',
+      [lancamento.origem, lancamento.origem_id]
+    );
 
   if (existente) {
     await db.run(
       `UPDATE conta_financeira
-       SET descricao = ?, tipo = ?, valor = ?, data_lancamento = ?, status = ?, plano_contas_id = ?, updated_at = datetime('now')
+       SET descricao = ?, tipo = ?, valor = ?, data_lancamento = ?, status = ?, plano_contas_id = ?,
+           tenant_id = COALESCE(tenant_id, ?), unit_id = COALESCE(unit_id, ?), updated_at = datetime('now')
        WHERE id = ?`,
       [
         lancamento.descricao,
@@ -23,6 +30,8 @@ async function upsertLancamentoFinanceiro(lancamento, client = null) {
         lancamento.data_lancamento,
         lancamento.status,
         lancamento.plano_contas_id,
+        lancamento.tenant_id || null,
+        lancamento.unit_id || null,
         existente.id,
       ]
     );
@@ -31,8 +40,8 @@ async function upsertLancamentoFinanceiro(lancamento, client = null) {
 
   const result = await db.run(
     `INSERT INTO conta_financeira
-      (descricao, tipo, valor, data_lancamento, status, plano_contas_id, origem, origem_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      (descricao, tipo, valor, data_lancamento, status, plano_contas_id, origem, origem_id, tenant_id, unit_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
     [
       lancamento.descricao,
       lancamento.tipo,
@@ -42,6 +51,8 @@ async function upsertLancamentoFinanceiro(lancamento, client = null) {
       lancamento.plano_contas_id,
       lancamento.origem,
       lancamento.origem_id,
+      lancamento.tenant_id || null,
+      lancamento.unit_id || null,
     ]
   );
   return result.lastID;
@@ -83,6 +94,8 @@ async function sincronizarLancamentosMensalidades(client = null) {
       plano_contas_id: 1,
       origem: 'mensalidade',
       origem_id: m.id,
+      tenant_id: m.tenant_id,
+      unit_id: m.unit_id,
     }, db);
   }
 }
@@ -101,6 +114,8 @@ async function sincronizarLancamentosVendas(client = null) {
       plano_contas_id: 2,
       origem: 'venda_produto',
       origem_id: v.id,
+      tenant_id: v.tenant_id,
+      unit_id: v.unit_id,
     }, db);
   }
 }

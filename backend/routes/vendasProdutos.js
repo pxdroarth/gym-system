@@ -6,13 +6,15 @@ const AuditService = require('../services/AuditService');
 const ReversaoControladaService = require('../services/ReversaoControladaService');
 const { PERMISSIONS } = require('../constants/userRoles');
 const { requirePermission } = require('../middlewares/requirePermission');
+const { actorWithScope, requireScope } = require('../helpers/scope');
 
 router.get('/', async (req, res, next) => {
   const { data_inicial, data_final, pagina = 1, limite = 10 } = req.query;
   const offset = (parseInt(pagina) - 1) * parseInt(limite);
-  const params = [];
+  const scope = requireScope(req);
+  const params = [scope.tenant_id, scope.unit_id];
 
-  let filtros = 'WHERE vp.deleted_at IS NULL';
+  let filtros = 'WHERE vp.deleted_at IS NULL AND vp.tenant_id = ? AND vp.unit_id = ?';
   if (data_inicial) {
     filtros += ' AND DATE(vp.data_venda) >= DATE(?)';
     params.push(data_inicial);
@@ -43,7 +45,11 @@ router.get('/:id', async (req, res, next) => {
   if (!id) return res.status(400).json({ error: 'ID invalido' });
 
   try {
-    const venda = await runGet('SELECT * FROM venda_produto WHERE id = ? AND deleted_at IS NULL', [id]);
+    const scope = requireScope(req);
+    const venda = await runGet(
+      'SELECT * FROM venda_produto WHERE id = ? AND tenant_id = ? AND unit_id = ? AND deleted_at IS NULL',
+      [id, scope.tenant_id, scope.unit_id]
+    );
     if (!venda) return res.status(404).json({ error: 'Venda nao encontrada' });
     res.json(venda);
   } catch (error) {
@@ -53,9 +59,11 @@ router.get('/:id', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
+    const scope = requireScope(req);
     const venda = await VendaService.registrarVenda(
       req.body || {},
-      AuditService.getActorFromRequest(req)
+      actorWithScope(AuditService.getActorFromRequest(req), scope),
+      scope
     );
     res.status(201).json(venda);
   } catch (error) {
@@ -65,10 +73,12 @@ router.post('/', async (req, res, next) => {
 
 router.post('/:id/reverter', requirePermission(PERMISSIONS.REVERSAO_EXECUTAR), async (req, res, next) => {
   try {
+    const scope = requireScope(req);
     const resultado = await ReversaoControladaService.reverterVenda(
       req.params.id,
       req.body || {},
-      AuditService.getActorFromRequest(req)
+      actorWithScope(AuditService.getActorFromRequest(req), scope),
+      scope
     );
     res.json({ ok: true, data: resultado, message: 'Venda revertida com controle' });
   } catch (error) {

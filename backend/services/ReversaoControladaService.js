@@ -30,8 +30,8 @@ function tipoInverso(tipo) {
 async function criarRegistroReversao(tx, { modulo, tipo, registroId, motivo, actor, metadata }) {
   const result = await tx.run(
     `INSERT INTO reversao_controlada
-      (modulo, tipo, registro_origem_id, motivo, actor_id, actor_name, metadata_json, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+      (modulo, tipo, registro_origem_id, motivo, actor_id, actor_name, metadata_json, tenant_id, unit_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
     [
       modulo,
       tipo,
@@ -40,6 +40,8 @@ async function criarRegistroReversao(tx, { modulo, tipo, registroId, motivo, act
       actor.id,
       actor.name,
       metadata ? JSON.stringify(metadata) : null,
+      actor.tenant_id || null,
+      actor.unit_id || null,
     ]
   );
 
@@ -51,8 +53,8 @@ async function criarLancamentoInverso(tx, { reversao, lancamento, descricao }) {
 
   const result = await tx.run(
     `INSERT INTO conta_financeira
-      (descricao, tipo, valor, data_lancamento, status, plano_contas_id, observacao, origem, origem_id, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      (descricao, tipo, valor, data_lancamento, status, plano_contas_id, observacao, origem, origem_id, tenant_id, unit_id, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
     [
       descricao,
       tipoInverso(lancamento.tipo),
@@ -63,6 +65,8 @@ async function criarLancamentoInverso(tx, { reversao, lancamento, descricao }) {
       `Reversao controlada de ${lancamento.origem || 'conta'} ${lancamento.origem_id || lancamento.id}`,
       'reversao_controlada',
       reversao.id,
+      lancamento.tenant_id || reversao.tenant_id || null,
+      lancamento.unit_id || reversao.unit_id || null,
     ]
   );
 
@@ -74,14 +78,16 @@ async function criarLancamentoInverso(tx, { reversao, lancamento, descricao }) {
   return tx.get('SELECT * FROM conta_financeira WHERE id = ?', [result.lastID]);
 }
 
-async function reverterMensalidade(mensalidadeId, payload = {}, actor) {
+async function reverterMensalidade(mensalidadeId, payload = {}, actor, scope = null) {
   const motivo = exigirMotivo(payload.motivo);
   const responsavel = exigirAtor(actor);
   const id = Number(mensalidadeId);
   if (!id) throw new AppError('mensalidade_id invalido', 400, 'MENSALIDADE_ID_INVALIDO');
 
   return runTransaction(async (tx) => {
-    const mensalidade = await tx.get('SELECT * FROM mensalidade WHERE id = ?', [id]);
+    const mensalidade = scope?.tenant_id && scope?.unit_id
+      ? await tx.get('SELECT * FROM mensalidade WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id])
+      : await tx.get('SELECT * FROM mensalidade WHERE id = ?', [id]);
     if (!mensalidade || mensalidade.deleted_at) {
       throw new AppError('Mensalidade nao encontrada', 404, 'MENSALIDADE_NAO_ENCONTRADA');
     }
@@ -89,13 +95,17 @@ async function reverterMensalidade(mensalidadeId, payload = {}, actor) {
       throw new AppError('Mensalidade ja possui reversao controlada', 409, 'MENSALIDADE_JA_REVERTIDA');
     }
 
-    const pagamento = await tx.get('SELECT * FROM pagamento WHERE mensalidade_id = ?', [id]);
+    const pagamento = scope?.tenant_id && scope?.unit_id
+      ? await tx.get('SELECT * FROM pagamento WHERE mensalidade_id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id])
+      : await tx.get('SELECT * FROM pagamento WHERE mensalidade_id = ?', [id]);
     const lancamento = await tx.get(
-      "SELECT * FROM conta_financeira WHERE origem = 'mensalidade' AND origem_id = ? AND deleted_at IS NULL",
-      [id]
+      `SELECT * FROM conta_financeira
+       WHERE origem = 'mensalidade' AND origem_id = ? AND deleted_at IS NULL
+       ${scope?.tenant_id && scope?.unit_id ? 'AND tenant_id = ? AND unit_id = ?' : ''}`,
+      scope?.tenant_id && scope?.unit_id ? [id, scope.tenant_id, scope.unit_id] : [id]
     );
     const dataOperacao = pagamento?.data_pagamento || lancamento?.data_lancamento || mensalidade.updated_at || mensalidade.vencimento;
-    await FechamentoMensalService.assertPeriodoEditavelPorData(dataOperacao, 'reversao de mensalidade', tx);
+    await FechamentoMensalService.assertPeriodoEditavelPorData(dataOperacao, 'reversao de mensalidade', tx, scope);
 
     const reversao = await criarRegistroReversao(tx, {
       modulo: 'mensalidades',
@@ -131,31 +141,39 @@ async function reverterMensalidade(mensalidadeId, payload = {}, actor) {
       before: { mensalidade, pagamento, lancamento },
       after: { mensalidade: mensalidadeDepois, reversao: reversaoDepois, lancamento_inverso: lancamentoInverso },
       metadata: { motivo },
+      tenant_id: scope?.tenant_id,
+      unit_id: scope?.unit_id,
     }, tx);
 
     return { reversao: reversaoDepois, lancamento_inverso: lancamentoInverso, mensalidade: mensalidadeDepois };
   });
 }
 
-async function reverterVenda(vendaId, payload = {}, actor) {
+async function reverterVenda(vendaId, payload = {}, actor, scope = null) {
   const motivo = exigirMotivo(payload.motivo);
   const responsavel = exigirAtor(actor);
   const id = Number(vendaId);
   if (!id) throw new AppError('venda_id invalido', 400, 'VENDA_ID_INVALIDO');
 
   return runTransaction(async (tx) => {
-    const venda = await tx.get('SELECT * FROM venda_produto WHERE id = ?', [id]);
+    const venda = scope?.tenant_id && scope?.unit_id
+      ? await tx.get('SELECT * FROM venda_produto WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id])
+      : await tx.get('SELECT * FROM venda_produto WHERE id = ?', [id]);
     if (!venda || venda.deleted_at) throw new AppError('Venda nao encontrada', 404, 'VENDA_NAO_ENCONTRADA');
     if (venda.reversao_controlada_id) throw new AppError('Venda ja possui reversao controlada', 409, 'VENDA_JA_REVERTIDA');
 
-    await FechamentoMensalService.assertPeriodoEditavelPorData(venda.data_venda, 'reversao de venda', tx);
+    await FechamentoMensalService.assertPeriodoEditavelPorData(venda.data_venda, 'reversao de venda', tx, scope);
 
     const produtoAntes = venda.produto_id
-      ? await tx.get('SELECT * FROM produto WHERE id = ?', [venda.produto_id])
+      ? (scope?.tenant_id && scope?.unit_id
+        ? await tx.get('SELECT * FROM produto WHERE id = ? AND tenant_id = ? AND unit_id = ?', [venda.produto_id, scope.tenant_id, scope.unit_id])
+        : await tx.get('SELECT * FROM produto WHERE id = ?', [venda.produto_id]))
       : null;
     const lancamento = await tx.get(
-      "SELECT * FROM conta_financeira WHERE origem = 'venda_produto' AND origem_id = ? AND deleted_at IS NULL",
-      [id]
+      `SELECT * FROM conta_financeira
+       WHERE origem = 'venda_produto' AND origem_id = ? AND deleted_at IS NULL
+       ${scope?.tenant_id && scope?.unit_id ? 'AND tenant_id = ? AND unit_id = ?' : ''}`,
+      scope?.tenant_id && scope?.unit_id ? [id, scope.tenant_id, scope.unit_id] : [id]
     );
 
     const reversao = await criarRegistroReversao(tx, {
@@ -174,7 +192,11 @@ async function reverterVenda(vendaId, payload = {}, actor) {
     });
 
     if (produtoAntes) {
-      await tx.run('UPDATE produto SET estoque = estoque + ? WHERE id = ?', [Number(venda.quantidade || 0), venda.produto_id]);
+      if (scope?.tenant_id && scope?.unit_id) {
+        await tx.run('UPDATE produto SET estoque = estoque + ? WHERE id = ? AND tenant_id = ? AND unit_id = ?', [Number(venda.quantidade || 0), venda.produto_id, scope.tenant_id, scope.unit_id]);
+      } else {
+        await tx.run('UPDATE produto SET estoque = estoque + ? WHERE id = ?', [Number(venda.quantidade || 0), venda.produto_id]);
+      }
     }
 
     await tx.run(
@@ -184,7 +206,9 @@ async function reverterVenda(vendaId, payload = {}, actor) {
 
     const vendaDepois = await tx.get('SELECT * FROM venda_produto WHERE id = ?', [id]);
     const produtoDepois = venda.produto_id
-      ? await tx.get('SELECT * FROM produto WHERE id = ?', [venda.produto_id])
+      ? (scope?.tenant_id && scope?.unit_id
+        ? await tx.get('SELECT * FROM produto WHERE id = ? AND tenant_id = ? AND unit_id = ?', [venda.produto_id, scope.tenant_id, scope.unit_id])
+        : await tx.get('SELECT * FROM produto WHERE id = ?', [venda.produto_id]))
       : null;
     const reversaoDepois = await tx.get('SELECT * FROM reversao_controlada WHERE id = ?', [reversao.id]);
 
@@ -197,24 +221,28 @@ async function reverterVenda(vendaId, payload = {}, actor) {
       before: { venda, produto: produtoAntes, lancamento },
       after: { venda: vendaDepois, produto: produtoDepois, reversao: reversaoDepois, lancamento_inverso: lancamentoInverso },
       metadata: { motivo },
+      tenant_id: scope?.tenant_id,
+      unit_id: scope?.unit_id,
     }, tx);
 
     return { reversao: reversaoDepois, lancamento_inverso: lancamentoInverso, venda: vendaDepois, produto: produtoDepois };
   });
 }
 
-async function reverterContaFinanceira(contaId, payload = {}, actor) {
+async function reverterContaFinanceira(contaId, payload = {}, actor, scope = null) {
   const motivo = exigirMotivo(payload.motivo);
   const responsavel = exigirAtor(actor);
   const id = Number(contaId);
   if (!id) throw new AppError('conta_id invalido', 400, 'CONTA_ID_INVALIDO');
 
   return runTransaction(async (tx) => {
-    const conta = await tx.get('SELECT * FROM conta_financeira WHERE id = ?', [id]);
+    const conta = scope?.tenant_id && scope?.unit_id
+      ? await tx.get('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id])
+      : await tx.get('SELECT * FROM conta_financeira WHERE id = ?', [id]);
     if (!conta || conta.deleted_at) throw new AppError('Conta financeira nao encontrada', 404, 'CONTA_NAO_ENCONTRADA');
     if (conta.reversao_controlada_id) throw new AppError('Conta ja possui reversao controlada', 409, 'CONTA_JA_REVERTIDA');
 
-    await FechamentoMensalService.assertPeriodoEditavelPorData(conta.data_lancamento, 'reversao de conta financeira', tx);
+    await FechamentoMensalService.assertPeriodoEditavelPorData(conta.data_lancamento, 'reversao de conta financeira', tx, scope);
 
     const reversao = await criarRegistroReversao(tx, {
       modulo: 'contas_financeiras',
@@ -248,6 +276,8 @@ async function reverterContaFinanceira(contaId, payload = {}, actor) {
       before: conta,
       after: { conta: contaDepois, reversao: reversaoDepois, lancamento_inverso: lancamentoInverso },
       metadata: { motivo },
+      tenant_id: scope?.tenant_id,
+      unit_id: scope?.unit_id,
     }, tx);
 
     return { reversao: reversaoDepois, lancamento_inverso: lancamentoInverso, conta: contaDepois };

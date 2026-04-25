@@ -1,6 +1,7 @@
 const { runQuery, runGet, runTransaction } = require('../dbHelper');
 const AppError = require('../errors/AppError');
 const AuditService = require('./AuditService');
+const UnitService = require('./UnitService');
 const { USER_ROLES, USER_STATUS, isValidRole, isValidStatus } = require('../constants/userRoles');
 const { hashPassword } = require('../utils/passwordHash');
 
@@ -21,6 +22,16 @@ function sanitizeUser(user) {
   return safe;
 }
 
+function assertCanManageRole(actor, role) {
+  if (role === USER_ROLES.PLATFORM_ADMIN && actor?.papel !== USER_ROLES.PLATFORM_ADMIN) {
+    throw new AppError(
+      'Apenas platform_admin pode criar ou promover usuarios de plataforma',
+      403,
+      'PLATFORM_ADMIN_RESTRITO'
+    );
+  }
+}
+
 async function listarUsuarios() {
   const rows = await runQuery(`
     SELECT id, nome, email, login, papel, status, ultimo_acesso_em, created_at, updated_at, created_by, updated_by
@@ -37,6 +48,7 @@ async function criarUsuario(payload = {}, actor) {
   if (!isValidRole(data.papel)) throw new AppError('papel invalido', 400, 'USUARIO_PAPEL_INVALIDO');
   if (!isValidStatus(data.status)) throw new AppError('status invalido', 400, 'USUARIO_STATUS_INVALIDO');
   if (!data.senha) throw new AppError('senha inicial e obrigatoria', 400, 'USUARIO_SENHA_OBRIGATORIA');
+  assertCanManageRole(actor, data.papel);
 
   const senhaHash = await hashPassword(data.senha);
 
@@ -58,6 +70,7 @@ async function criarUsuario(payload = {}, actor) {
     );
 
     const user = await tx.get('SELECT * FROM usuario_interno WHERE id = ?', [result.lastID]);
+    const userScope = await UnitService.ensureUserDefaultScope(result.lastID, data.papel, tx);
     await AuditService.logAction({
       actor,
       action: 'criar_usuario_interno',
@@ -70,6 +83,8 @@ async function criarUsuario(payload = {}, actor) {
         criou_admin: data.papel === USER_ROLES.ADMIN,
         preparado_para_restringir_admin: true,
       },
+      tenant_id: actor?.tenant_id || userScope.tenant_id,
+      unit_id: actor?.unit_id || userScope.unit_id,
     }, tx);
 
     return sanitizeUser(user);
@@ -80,6 +95,7 @@ async function alterarPapel(id, papel, actor) {
   const userId = Number(id);
   if (!userId) throw new AppError('usuario_id invalido', 400, 'USUARIO_ID_INVALIDO');
   if (!isValidRole(papel)) throw new AppError('papel invalido', 400, 'USUARIO_PAPEL_INVALIDO');
+  assertCanManageRole(actor, papel);
 
   return runTransaction(async (tx) => {
     const before = await tx.get('SELECT * FROM usuario_interno WHERE id = ?', [userId]);
@@ -103,6 +119,8 @@ async function alterarPapel(id, papel, actor) {
         promoveu_admin: papel === USER_ROLES.ADMIN && before.papel !== USER_ROLES.ADMIN,
         preparado_para_restringir_admin: true,
       },
+      tenant_id: actor?.tenant_id,
+      unit_id: actor?.unit_id,
     }, tx);
 
     return sanitizeUser(after);
@@ -132,6 +150,8 @@ async function alterarStatus(id, status, actor) {
       recordId: userId,
       before: sanitizeUser(before),
       after: sanitizeUser(after),
+      tenant_id: actor?.tenant_id,
+      unit_id: actor?.unit_id,
     }, tx);
 
     return sanitizeUser(after);

@@ -31,14 +31,20 @@ function intervaloPeriodo(ano, mes) {
   return { inicio: ini, fim };
 }
 
-async function obterFechamento(ano, mes, client = null) {
+async function obterFechamento(ano, mes, client = null, scope = null) {
   const db = clientOrDefault(client);
+  if (scope?.tenant_id && scope?.unit_id) {
+    return db.get(
+      'SELECT * FROM fechamento_mensal WHERE ano = ? AND mes = ? AND tenant_id = ? AND unit_id = ?',
+      [ano, mes, scope.tenant_id, scope.unit_id]
+    );
+  }
   return db.get('SELECT * FROM fechamento_mensal WHERE ano = ? AND mes = ?', [ano, mes]);
 }
 
-async function assertPeriodoEditavelPorData(data, operacao, client = null) {
+async function assertPeriodoEditavelPorData(data, operacao, client = null, scope = null) {
   const { ano, mes } = periodoDeData(data);
-  const fechamento = await obterFechamento(ano, mes, client);
+  const fechamento = await obterFechamento(ano, mes, client, scope);
 
   if (
     fechamento &&
@@ -53,7 +59,7 @@ async function assertPeriodoEditavelPorData(data, operacao, client = null) {
   }
 }
 
-async function analisarPeriodo(ano, mes, client = null) {
+async function analisarPeriodo(ano, mes, client = null, scope = null) {
   const { ano: anoNum, mes: mesNum } = validarPeriodo(ano, mes);
   const db = clientOrDefault(client);
   const { inicio, fim } = intervaloPeriodo(anoNum, mesNum);
@@ -66,8 +72,9 @@ async function analisarPeriodo(ano, mes, client = null) {
      WHERE m.status IN ('pago', 'parcial')
        AND m.deleted_at IS NULL
        AND DATE(COALESCE(m.updated_at, m.vencimento)) BETWEEN DATE(?) AND DATE(?)
-       AND cf.id IS NULL`,
-    [inicio, fim]
+       AND cf.id IS NULL
+       ${scope?.tenant_id && scope?.unit_id ? 'AND m.tenant_id = ? AND m.unit_id = ?' : ''}`,
+    scope?.tenant_id && scope?.unit_id ? [inicio, fim, scope.tenant_id, scope.unit_id] : [inicio, fim]
   );
   for (const item of mensalidadesSemLancamento) {
     inconsistencias.push({
@@ -84,8 +91,9 @@ async function analisarPeriodo(ano, mes, client = null) {
      LEFT JOIN conta_financeira cf ON cf.origem = 'venda_produto' AND cf.origem_id = v.id
      WHERE DATE(v.data_venda) BETWEEN DATE(?) AND DATE(?)
        AND v.deleted_at IS NULL
-       AND cf.id IS NULL`,
-    [inicio, fim]
+       AND cf.id IS NULL
+       ${scope?.tenant_id && scope?.unit_id ? 'AND v.tenant_id = ? AND v.unit_id = ?' : ''}`,
+    scope?.tenant_id && scope?.unit_id ? [inicio, fim, scope.tenant_id, scope.unit_id] : [inicio, fim]
   );
   for (const item of vendasSemEntrada) {
     inconsistencias.push({
@@ -104,11 +112,12 @@ async function analisarPeriodo(ano, mes, client = null) {
      WHERE DATE(cf.data_lancamento) BETWEEN DATE(?) AND DATE(?)
        AND cf.deleted_at IS NULL
        AND cf.origem IN ('mensalidade', 'venda_produto')
+       ${scope?.tenant_id && scope?.unit_id ? 'AND cf.tenant_id = ? AND cf.unit_id = ?' : ''}
        AND (
          (cf.origem = 'mensalidade' AND m.id IS NULL)
          OR (cf.origem = 'venda_produto' AND v.id IS NULL)
        )`,
-    [inicio, fim]
+    scope?.tenant_id && scope?.unit_id ? [inicio, fim, scope.tenant_id, scope.unit_id] : [inicio, fim]
   );
   for (const item of lancamentosOrfaos) {
     inconsistencias.push({
@@ -126,8 +135,9 @@ async function analisarPeriodo(ano, mes, client = null) {
      WHERE DATE(v.data_venda) BETWEEN DATE(?) AND DATE(?)
        AND v.deleted_at IS NULL
        AND v.produto_id IS NOT NULL
-       AND p.id IS NULL`,
-    [inicio, fim]
+       AND p.id IS NULL
+       ${scope?.tenant_id && scope?.unit_id ? 'AND v.tenant_id = ? AND v.unit_id = ?' : ''}`,
+    scope?.tenant_id && scope?.unit_id ? [inicio, fim, scope.tenant_id, scope.unit_id] : [inicio, fim]
   );
   for (const item of vendasProdutoOrfao) {
     inconsistencias.push({
@@ -147,11 +157,11 @@ async function analisarPeriodo(ano, mes, client = null) {
   };
 }
 
-async function fecharPeriodo(ano, mes, actor) {
+async function fecharPeriodo(ano, mes, actor, scope = null) {
   return runTransaction(async (tx) => {
     const periodo = validarPeriodo(ano, mes);
-    const before = await obterFechamento(periodo.ano, periodo.mes, tx);
-    const analise = await analisarPeriodo(periodo.ano, periodo.mes, tx);
+    const before = await obterFechamento(periodo.ano, periodo.mes, tx, scope);
+    const analise = await analisarPeriodo(periodo.ano, periodo.mes, tx, scope);
     const status = analise.inconsistencias.length
       ? FECHAMENTO_STATUS.FECHADO_COM_INCONSISTENCIAS
       : FECHAMENTO_STATUS.FECHADO;
@@ -167,13 +177,13 @@ async function fecharPeriodo(ano, mes, actor) {
     } else {
       await tx.run(
         `INSERT INTO fechamento_mensal
-          (ano, mes, status, inconsistencias_json, fechado_em, created_at, updated_at)
-         VALUES (?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))`,
-        [periodo.ano, periodo.mes, status, inconsistenciasJson]
+          (ano, mes, status, inconsistencias_json, fechado_em, tenant_id, unit_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, datetime('now'), ?, ?, datetime('now'), datetime('now'))`,
+        [periodo.ano, periodo.mes, status, inconsistenciasJson, scope?.tenant_id || null, scope?.unit_id || null]
       );
     }
 
-    const after = await obterFechamento(periodo.ano, periodo.mes, tx);
+    const after = await obterFechamento(periodo.ano, periodo.mes, tx, scope);
     await AuditService.logAction({
       actor,
       action: 'fechar_periodo',
@@ -183,20 +193,22 @@ async function fecharPeriodo(ano, mes, actor) {
       before,
       after,
       metadata: { inconsistencias_total: analise.inconsistencias.length },
+      tenant_id: scope?.tenant_id,
+      unit_id: scope?.unit_id,
     }, tx);
 
     return { fechamento: after, analise };
   });
 }
 
-async function reabrirPeriodo(ano, mes, actor) {
+async function reabrirPeriodo(ano, mes, actor, scope = null) {
   if (!actor?.role || !roleHasPermission(actor.role, PERMISSIONS.FECHAMENTO_REABRIR)) {
     throw new AppError('Somente admin pode reabrir fechamento mensal', 403, 'PERMISSAO_NEGADA');
   }
 
   return runTransaction(async (tx) => {
     const periodo = validarPeriodo(ano, mes);
-    const before = await obterFechamento(periodo.ano, periodo.mes, tx);
+    const before = await obterFechamento(periodo.ano, periodo.mes, tx, scope);
     if (!before) throw new AppError('Fechamento nao encontrado', 404, 'FECHAMENTO_NAO_ENCONTRADO');
 
     await tx.run(
@@ -206,7 +218,7 @@ async function reabrirPeriodo(ano, mes, actor) {
       [FECHAMENTO_STATUS.REABERTO, before.id]
     );
 
-    const after = await obterFechamento(periodo.ano, periodo.mes, tx);
+    const after = await obterFechamento(periodo.ano, periodo.mes, tx, scope);
     await AuditService.logAction({
       actor,
       action: 'reabrir_periodo',
@@ -215,6 +227,8 @@ async function reabrirPeriodo(ano, mes, actor) {
       recordId: after.id,
       before,
       after,
+      tenant_id: scope?.tenant_id,
+      unit_id: scope?.unit_id,
     }, tx);
 
     return after;
