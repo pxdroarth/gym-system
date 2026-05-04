@@ -1,0 +1,1 @@
+Observação: A integração com a catraca Hikvision (exemplo do modelo DS-K1T342) é futura. Atualmente, o sistema deve funcionar com webcam do notebook, simulando a validação de acesso. O backend deve ser preparado com uma camada de provider desacoplada, que futuramente poderá ser adaptada para a API/SDK Hikvision, sem modificar as regras de negócio.
