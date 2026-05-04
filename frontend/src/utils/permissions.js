@@ -19,10 +19,12 @@ export const UI_PERMISSIONS = Object.freeze({
   NAV_USUARIOS_INTERNOS: "nav:usuarios-internos",
   NAV_TENANT_OVERVIEW: "nav:tenant-overview",
   NAV_PLATFORM_ONBOARDING: "nav:platform-onboarding",
+  NAV_HISTORICO_ATIVIDADES: "nav:historico-atividades",
   FINANCEIRO_VISUALIZAR: "financeiro:visualizar",
   TENANT_OVERVIEW_VISUALIZAR: "tenant-overview:visualizar",
   USUARIOS_INTERNOS_GERENCIAR: "usuarios-internos:gerenciar",
   PLATFORM_ONBOARDING_GERENCIAR: "platform-onboarding:gerenciar",
+  HISTORICO_ATIVIDADES_VISUALIZAR: "historico-atividades:visualizar",
 });
 
 const ROLE_UI_PERMISSIONS = Object.freeze({

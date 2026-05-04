@@ -8,6 +8,7 @@ import Dashboard from "./pages/Dashboard";
 import AlunosPage from "./pages/alunos/AlunosPage";
 import FormAlunoPage from "./pages/alunos/FormAlunoPage";
 import PerfilPage from "./pages/alunos/PerfilPage";
+import HistoricoAtividadesPage from "./pages/auditoria/HistoricoAtividadesPage";
 import LoginPage from "./pages/auth/LoginPage";
 import FinanceiroDashboard from "./pages/financeiro/FinanceiroDashboard";
 import ContasFinanceirasPage from "./pages/financeiro/ContasFinanceirasPage";
@@ -51,6 +52,7 @@ function App() {
               <Route path="/mensalidades/pagamento-antecipado/:alunoId" element={<PagamentoAntecipadoWrapper />} />
               <Route path="/planos/associacoes" element={<PlanoAssociadosPage />} />
               <Route path="/usuarios-internos" element={<UsuariosInternosPage />} />
+              <Route path="/historico-atividades" element={<HistoricoAtividadesPage />} />
               <Route path="/tenant/overview" element={<TenantOverviewPage />} />
               <Route path="/platform/onboarding" element={<OnboardingTenantPage />} />
 

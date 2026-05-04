@@ -23,12 +23,14 @@ const PERMISSIONS = Object.freeze({
   ACESSO_LIBERACAO_MANUAL: 'acesso:liberacao_manual',
   ALUNOS_ALTERAR_PLANO_COM_DEPENDENTES: 'alunos:alterar_plano_com_dependentes',
   LOGS_VISUALIZAR_TOTAL: 'logs:visualizar_total',
+  LOGS_VISUALIZAR_ESCOPO: 'logs:visualizar_escopo',
   TENANT_CONSOLIDADO_VISUALIZAR: 'tenant:consolidado_visualizar',
   PLATFORM_ONBOARDING_EXECUTAR: 'platform:onboarding_executar',
   PLATFORM_TENANT_CONFIGURAR: 'platform:tenant_configurar',
 });
 
 const PLATFORM_ONLY_PERMISSIONS = [
+  PERMISSIONS.LOGS_VISUALIZAR_TOTAL,
   PERMISSIONS.PLATFORM_ONBOARDING_EXECUTAR,
   PERMISSIONS.PLATFORM_TENANT_CONFIGURAR,
 ];

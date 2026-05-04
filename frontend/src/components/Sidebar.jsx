@@ -7,6 +7,7 @@ import {
   ChevronDown,
   ChevronRight,
   CircleDollarSign,
+  FileClock,
   Link2,
   Package,
   Settings2,
@@ -27,6 +28,7 @@ const menu = [
   { to: "/planos", label: "Planos", icon: CalendarDays, permission: UI_PERMISSIONS.NAV_PLANOS },
   { to: "/planos/associacoes", label: "Associações", icon: Link2, permission: UI_PERMISSIONS.NAV_ASSOCIACOES },
   { to: "/usuarios-internos", label: "Usuários", icon: UserCog, permission: UI_PERMISSIONS.NAV_USUARIOS_INTERNOS },
+  { to: "/historico-atividades", label: "Histórico", icon: FileClock, permission: UI_PERMISSIONS.NAV_HISTORICO_ATIVIDADES },
   {
     label: "Financeiro",
     icon: CircleDollarSign,
