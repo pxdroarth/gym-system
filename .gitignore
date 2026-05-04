@@ -79,3 +79,5 @@ Desktop.ini
 # =========================
 # uploads/
 # backend/uploads/
+*.sqbpro
+backend/*.sqbpro
