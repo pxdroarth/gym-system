@@ -1,68 +1,68 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Activity, CreditCard, Edit3, UserRound } from 'lucide-react';
-import ToastNotification from '../../components/ToastNotification';
-import { useNavigate, useParams } from 'react-router-dom';
-import ModalNovaMensalidade from './ModalNovaMensalidade';
+import React, { useEffect, useMemo, useState } from "react";
+import { Activity, CreditCard, Edit3, Phone, ShieldCheck, UserRound } from "lucide-react";
+import { useNavigate, useParams } from "react-router-dom";
+import ToastNotification from "../../components/ToastNotification";
+import ModalNovaMensalidade from "./ModalNovaMensalidade";
 import {
-  fetchAlunoById,
   fetchAcessos,
+  fetchAlunoById,
   fetchMensalidadesPorAluno,
   fetchPlanos,
   registrarPagamento,
   simularAcesso,
-} from '../../services/Api';
-import Badge from '../../components/ui/Badge';
-import Button from '../../components/ui/Button';
-import Card from '../../components/ui/Card';
-import EmptyState from '../../components/ui/EmptyState';
-import Pagination from '../../components/ui/Pagination';
-import Table from '../../components/ui/Table';
-import { TabButton, Tabs } from '../../components/ui/Tabs';
+} from "../../services/Api";
+import Badge from "../../components/ui/Badge";
+import Button from "../../components/ui/Button";
+import Card from "../../components/ui/Card";
+import EmptyState from "../../components/ui/EmptyState";
+import Pagination from "../../components/ui/Pagination";
+import Table from "../../components/ui/Table";
+import { TabButton, Tabs } from "../../components/ui/Tabs";
 
 function formatarData(data) {
-  if (!data) return '-';
-  return new Date(data).toLocaleDateString('pt-BR');
+  if (!data) return "-";
+  return new Date(data).toLocaleDateString("pt-BR");
 }
 
 function formatarMoeda(valor) {
-  return Number(valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
 function iniciais(nome) {
-  return String(nome || 'SA')
-    .split(' ')
+  return String(nome || "SA")
+    .split(" ")
     .filter(Boolean)
     .slice(0, 2)
     .map((parte) => parte[0])
-    .join('')
+    .join("")
     .toUpperCase();
 }
 
 function badgeStatusAluno(status) {
-  return String(status).toLowerCase() === 'ativo'
+  return String(status).toLowerCase() === "ativo"
     ? <Badge tone="green">Ativo</Badge>
     : <Badge tone="red">Inativo</Badge>;
 }
 
 function badgeMensalidade(status) {
-  const normalized = String(status || '').toLowerCase();
-  if (['pago', 'em_dia'].includes(normalized)) return <Badge tone="green">{status}</Badge>;
-  if (['em_aberto', 'parcial'].includes(normalized)) return <Badge tone="amber">{status}</Badge>;
-  if (['vencido', 'atrasado', 'cancelado'].includes(normalized)) return <Badge tone="red">{status}</Badge>;
-  return <Badge tone="gray">{status || '-'}</Badge>;
+  const normalized = String(status || "").toLowerCase();
+  if (["pago", "em_dia"].includes(normalized)) return <Badge tone="green">{status}</Badge>;
+  if (["em_aberto", "parcial"].includes(normalized)) return <Badge tone="amber">{status}</Badge>;
+  if (["vencido", "atrasado", "cancelado"].includes(normalized)) return <Badge tone="red">{status}</Badge>;
+  return <Badge tone="gray">{status || "-"}</Badge>;
 }
 
 function badgeAcesso(resultado) {
-  const normalized = String(resultado || '').toLowerCase();
-  const permitido = normalized === 'permitido' || normalized === 'liberado';
-  return <Badge tone={permitido ? 'green' : 'red'}>{permitido ? 'Permitido' : 'Negado'}</Badge>;
+  const normalized = String(resultado || "").toLowerCase();
+  const permitido = normalized === "permitido" || normalized === "liberado";
+  return <Badge tone={permitido ? "green" : "red"}>{permitido ? "Permitido" : "Negado"}</Badge>;
 }
 
 function InfoItem({ label, value }) {
   return (
     <div className="ui-info-item">
       <div className="ui-info-item__label">{label}</div>
-      <div className="ui-info-item__value">{value || '-'}</div>
+      <div className="ui-info-item__value">{value || "-"}</div>
     </div>
   );
 }
@@ -73,7 +73,7 @@ export default function PerfilPage() {
 
   const [aluno, setAluno] = useState(null);
   const [erro, setErro] = useState(null);
-  const [abaAtiva, setAbaAtiva] = useState('informacoes');
+  const [abaAtiva, setAbaAtiva] = useState("informacoes");
   const [mensalidades, setMensalidades] = useState([]);
   const [totalMensalidades, setTotalMensalidades] = useState(0);
   const [paginaMensalidade, setPaginaMensalidade] = useState(1);
@@ -92,7 +92,7 @@ export default function PerfilPage() {
       setAluno(data);
       setErro(null);
     } catch (err) {
-      setErro(err.message || 'Aluno não encontrado');
+      setErro(err.message || "Aluno não encontrado");
     }
   }
 
@@ -132,7 +132,9 @@ export default function PerfilPage() {
     fetchPlanos().then(setPlanos).catch(() => setPlanos([]));
   }, []);
 
-  const planoAtual = useMemo(() => planos.find((p) => p.id === aluno?.plano_id), [planos, aluno]);
+  const planoAtual = useMemo(() => planos.find((plano) => plano.id === aluno?.plano_id), [planos, aluno]);
+  const ultimoAcesso = acessos[0]?.data_hora ? new Date(acessos[0].data_hora).toLocaleString("pt-BR") : "Sem registros";
+  const mensalidadesPendentes = mensalidades.filter((mensalidade) => mensalidade.status === "em_aberto" || mensalidade.status === "parcial").length;
 
   async function pagarMensalidade(mensalidade) {
     try {
@@ -143,10 +145,10 @@ export default function PerfilPage() {
         data_pagamento: new Date().toISOString().slice(0, 10),
       });
 
-      setToastMsg('Pagamento registrado com sucesso.');
+      setToastMsg("Pagamento registrado com sucesso.");
       await Promise.all([carregarAluno(), carregarMensalidades()]);
     } catch (error) {
-      setToastMsg(error?.response?.data?.error || 'Erro ao registrar pagamento.');
+      setToastMsg(error?.response?.data?.error || "Erro ao registrar pagamento.");
     } finally {
       setCarregandoPagamentoId(null);
     }
@@ -156,10 +158,10 @@ export default function PerfilPage() {
     try {
       setSimulandoAcesso(true);
       const resposta = await simularAcesso(Number(id));
-      setToastMsg(resposta?.mensagem || 'Teste de acesso executado.');
+      setToastMsg(resposta?.mensagem || "Teste de acesso executado.");
       await carregarAcessos();
     } catch (error) {
-      setToastMsg(error?.response?.data?.error || 'Erro ao simular acesso.');
+      setToastMsg(error?.response?.data?.error || "Erro ao simular acesso.");
     } finally {
       setSimulandoAcesso(false);
     }
@@ -175,73 +177,130 @@ export default function PerfilPage() {
     <div className="space-y-6">
       <ToastNotification message={toastMsg} onClose={() => setToastMsg(null)} />
 
-      <Card>
-        <div className="ui-profile-hero">
-          <div className="ui-profile-hero__main">
-            <div className="ui-profile-hero__avatar">{iniciais(aluno.nome)}</div>
-            <div>
-              <h1 className="ui-profile-hero__title">{aluno.nome}</h1>
-              <div className="ui-profile-hero__meta">
-                <Badge tone="blue">Matrícula {aluno.matricula || '-'}</Badge>
-                {badgeStatusAluno(aluno.status_ativo)}
-                {badgeMensalidade(aluno.mensalidade_status)}
-                <Badge tone="gray">{planoAtual?.nome || 'Sem plano'}</Badge>
+      <Card className="profile-hero">
+        <div className="profile-hero__content">
+          <div className="profile-hero__panel">
+            <div className="ui-profile-hero__main">
+              <div className="ui-profile-hero__avatar">{iniciais(aluno.nome)}</div>
+              <div>
+                <h1 className="ui-profile-hero__title">{aluno.nome}</h1>
+                <div className="profile-hero__badges">
+                  <Badge tone="blue">Matrícula {aluno.matricula || "-"}</Badge>
+                  {badgeStatusAluno(aluno.status_ativo)}
+                  {badgeMensalidade(aluno.mensalidade_status)}
+                  <Badge tone="gray">{planoAtual?.nome || "Sem plano"}</Badge>
+                </div>
               </div>
+            </div>
+
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="secondary" onClick={() => navigate(`/alunos/editar/${aluno.id}`)}>
+                <Edit3 size={15} /> Editar
+              </Button>
+              <Button onClick={testarAcesso} disabled={simulandoAcesso}>
+                <Activity size={15} /> {simulandoAcesso ? "Testando..." : "Testar Acesso"}
+              </Button>
             </div>
           </div>
 
-          <div className="flex gap-2 flex-wrap justify-end">
-            <Button variant="secondary" onClick={() => navigate(`/alunos/editar/${aluno.id}`)}>
-              <Edit3 size={15} /> Editar
-            </Button>
-            <Button onClick={testarAcesso} disabled={simulandoAcesso}>
-              <Activity size={15} /> {simulandoAcesso ? 'Testando...' : 'Testar Acesso'}
-            </Button>
+          <div className="profile-hero__stats">
+            <div className="profile-hero__stat">
+              <div className="profile-hero__stat-label">Plano atual</div>
+              <div className="profile-hero__stat-value">{planoAtual?.nome || "Sem plano"}</div>
+            </div>
+            <div className="profile-hero__stat">
+              <div className="profile-hero__stat-label">Último acesso</div>
+              <div className="profile-hero__stat-value text-base leading-snug">{ultimoAcesso}</div>
+            </div>
+            <div className="profile-hero__stat">
+              <div className="profile-hero__stat-label">Pendências</div>
+              <div className="profile-hero__stat-value">{mensalidadesPendentes}</div>
+            </div>
+            <div className="profile-hero__stat">
+              <div className="profile-hero__stat-label">Contato</div>
+              <div className="profile-hero__stat-value text-base leading-snug">{aluno.telefone || "Não informado"}</div>
+            </div>
           </div>
         </div>
       </Card>
 
       <Tabs>
-        <TabButton active={abaAtiva === 'informacoes'} onClick={() => setAbaAtiva('informacoes')}>
+        <TabButton active={abaAtiva === "informacoes"} onClick={() => setAbaAtiva("informacoes")}>
           Informações
         </TabButton>
-        <TabButton active={abaAtiva === 'mensalidades'} onClick={() => setAbaAtiva('mensalidades')}>
+        <TabButton active={abaAtiva === "mensalidades"} onClick={() => setAbaAtiva("mensalidades")}>
           Mensalidades
         </TabButton>
-        <TabButton active={abaAtiva === 'acessos'} onClick={() => setAbaAtiva('acessos')}>
+        <TabButton active={abaAtiva === "acessos"} onClick={() => setAbaAtiva("acessos")}>
           Acessos
         </TabButton>
       </Tabs>
 
-      {abaAtiva === 'informacoes' && (
-        <Card className="p-5">
-          <div className="ui-section-header px-0 pt-0">
-            <div>
-              <h2 className="ui-section-title">Dados do Aluno</h2>
-              <p className="ui-section-subtitle">Informações cadastrais e operacionais principais.</p>
+      {abaAtiva === "informacoes" && (
+        <div className="profile-grid">
+          <Card className="p-5">
+            <div className="ui-section-header px-0 pt-0">
+              <div>
+                <h2 className="ui-section-title">Resumo operacional do aluno</h2>
+                <p className="ui-section-subtitle">Leitura principal do cadastro, situação e plano ativo.</p>
+              </div>
             </div>
-          </div>
-          <div className="ui-info-grid mt-5">
-            <InfoItem label="Matrícula" value={aluno.matricula} />
-            <InfoItem label="Nome" value={aluno.nome} />
-            <InfoItem label="Telefone" value={aluno.telefone} />
-            <InfoItem label="Data de Nascimento" value={aluno.data_nascimento?.slice(0, 10)} />
-            <InfoItem label="Status Cadastral" value={aluno.status} />
-            <InfoItem label="Status Operacional" value={aluno.status_ativo} />
-            <InfoItem label="Situação da Mensalidade" value={aluno.mensalidade_status} />
-            <InfoItem label="Plano Atual" value={planoAtual?.nome || 'Sem plano'} />
-          </div>
-        </Card>
+            <div className="ui-info-grid mt-5">
+              <InfoItem label="Matrícula" value={aluno.matricula} />
+              <InfoItem label="Nome" value={aluno.nome} />
+              <InfoItem label="Telefone" value={aluno.telefone} />
+              <InfoItem label="Data de Nascimento" value={aluno.data_nascimento?.slice(0, 10)} />
+              <InfoItem label="Status Cadastral" value={aluno.status} />
+              <InfoItem label="Status Operacional" value={aluno.status_ativo} />
+              <InfoItem label="Situação da Mensalidade" value={aluno.mensalidade_status} />
+              <InfoItem label="Plano Atual" value={planoAtual?.nome || "Sem plano"} />
+            </div>
+          </Card>
+
+          <Card className="profile-side-card">
+            <h3 className="profile-side-card__title">Visão rápida</h3>
+            <p className="profile-side-card__copy">Bloco de leitura rápida para operação da unidade, sem alterar regras do domínio.</p>
+
+            <div className="profile-side-list">
+              <div className="profile-side-list__item">
+                <div className="profile-side-list__label">
+                  <ShieldCheck size={12} className="inline mr-1" />
+                  Status operacional
+                </div>
+                <div className="profile-side-list__value">{aluno.status_ativo || "-"}</div>
+              </div>
+              <div className="profile-side-list__item">
+                <div className="profile-side-list__label">
+                  <Phone size={12} className="inline mr-1" />
+                  Contato
+                </div>
+                <div className="profile-side-list__value">{aluno.telefone || "Não informado"}</div>
+              </div>
+              <div className="profile-side-list__item">
+                <div className="profile-side-list__label">
+                  <UserRound size={12} className="inline mr-1" />
+                  Situação cadastral
+                </div>
+                <div className="profile-side-list__value">{aluno.status || "-"}</div>
+              </div>
+            </div>
+          </Card>
+        </div>
       )}
 
-      {abaAtiva === 'mensalidades' && (
+      {abaAtiva === "mensalidades" && (
         <Card>
-          <div className="ui-section-header">
-            <div>
-              <h2 className="ui-section-title">Mensalidades</h2>
-              <p className="ui-section-subtitle">{totalMensalidades} registro(s) financeiro(s) do aluno.</p>
+          <div className="entity-toolbar">
+            <div className="entity-toolbar__intro">
+              <span className="entity-toolbar__eyebrow">Mensalidades</span>
+              <div>
+                <h2 className="ui-section-title">Histórico financeiro do aluno</h2>
+                <p className="ui-section-subtitle">{totalMensalidades} registro(s) do aluno no fluxo atual.</p>
+              </div>
             </div>
-            <Button onClick={() => setShowModal(true)}>+ Registrar Mensalidade</Button>
+            <div className="entity-toolbar__actions">
+              <Button onClick={() => setShowModal(true)}>+ Registrar Mensalidade</Button>
+            </div>
           </div>
 
           {mensalidades.length === 0 ? (
@@ -259,22 +318,22 @@ export default function PerfilPage() {
                 </tr>
               </thead>
               <tbody>
-                {mensalidades.map((m) => (
-                  <tr key={m.id}>
-                    <td>{formatarData(m.vencimento)}</td>
-                    <td>{formatarMoeda(m.valor_cobrado)}</td>
-                    <td>{formatarMoeda(m.desconto_aplicado)}</td>
-                    <td>{badgeMensalidade(m.status)}</td>
-                    <td>{m.observacoes || '-'}</td>
+                {mensalidades.map((mensalidade) => (
+                  <tr key={mensalidade.id}>
+                    <td>{formatarData(mensalidade.vencimento)}</td>
+                    <td>{formatarMoeda(mensalidade.valor_cobrado)}</td>
+                    <td>{formatarMoeda(mensalidade.desconto_aplicado)}</td>
+                    <td>{badgeMensalidade(mensalidade.status)}</td>
+                    <td>{mensalidade.observacoes || "-"}</td>
                     <td>
-                      {m.status === 'em_aberto' ? (
+                      {mensalidade.status === "em_aberto" ? (
                         <Button
                           size="sm"
                           variant="success"
-                          onClick={() => pagarMensalidade(m)}
-                          disabled={carregandoPagamentoId === m.id}
+                          onClick={() => pagarMensalidade(mensalidade)}
+                          disabled={carregandoPagamentoId === mensalidade.id}
                         >
-                          <CreditCard size={14} /> {carregandoPagamentoId === m.id ? 'Pagando...' : 'Pagar'}
+                          <CreditCard size={14} /> {carregandoPagamentoId === mensalidade.id ? "Pagando..." : "Pagar"}
                         </Button>
                       ) : (
                         <Badge tone="green">Quitada</Badge>
@@ -301,7 +360,7 @@ export default function PerfilPage() {
               aluno={aluno}
               onClose={() => setShowModal(false)}
               onSuccess={async () => {
-                setToastMsg('Mensalidade registrada com sucesso');
+                setToastMsg("Mensalidade registrada com sucesso");
                 setPaginaMensalidade(1);
                 await Promise.all([carregarAluno(), carregarMensalidades()]);
               }}
@@ -310,16 +369,21 @@ export default function PerfilPage() {
         </Card>
       )}
 
-      {abaAtiva === 'acessos' && (
+      {abaAtiva === "acessos" && (
         <Card>
-          <div className="ui-section-header">
-            <div>
-              <h2 className="ui-section-title">Histórico de Acessos</h2>
-              <p className="ui-section-subtitle">{totalAcessos} tentativa(s) registrada(s).</p>
+          <div className="entity-toolbar">
+            <div className="entity-toolbar__intro">
+              <span className="entity-toolbar__eyebrow">Acessos</span>
+              <div>
+                <h2 className="ui-section-title">Histórico de acessos</h2>
+                <p className="ui-section-subtitle">{totalAcessos} tentativa(s) registrada(s) para este aluno.</p>
+              </div>
             </div>
-            <Button onClick={testarAcesso} disabled={simulandoAcesso}>
-              {simulandoAcesso ? 'Testando...' : 'Testar Acesso'}
-            </Button>
+            <div className="entity-toolbar__actions">
+              <Button onClick={testarAcesso} disabled={simulandoAcesso}>
+                {simulandoAcesso ? "Testando..." : "Testar Acesso"}
+              </Button>
+            </div>
           </div>
 
           {acessos.length === 0 ? (
@@ -335,7 +399,7 @@ export default function PerfilPage() {
               <tbody>
                 {acessos.map((acesso) => (
                   <tr key={acesso.id}>
-                    <td>{new Date(acesso.data_hora).toLocaleString('pt-BR')}</td>
+                    <td>{new Date(acesso.data_hora).toLocaleString("pt-BR")}</td>
                     <td>{badgeAcesso(acesso.resultado)}</td>
                   </tr>
                 ))}

@@ -2,24 +2,32 @@
   --font-sans: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
 
   --color-primary: #2563eb;
-  --color-primary-strong: #1e40af;
+  --color-primary-strong: #1d4ed8;
   --color-primary-soft: #dbeafe;
   --color-primary-muted: #60a5fa;
+  --color-primary-ghost: rgba(37, 99, 235, 0.08);
+  --color-primary-border: rgba(37, 99, 235, 0.14);
+  --gradient-shell: linear-gradient(135deg, rgba(219, 234, 254, 0.9) 0%, rgba(255, 255, 255, 0.98) 42%, rgba(239, 246, 255, 0.96) 100%);
+  --gradient-hero: linear-gradient(135deg, #eff6ff 0%, #ffffff 45%, #dbeafe 100%);
+  --gradient-brand: linear-gradient(135deg, #2563eb 0%, #60a5fa 52%, #93c5fd 100%);
 
-  --surface-page: #f0f4f8;
-  --surface-panel: #ffffff;
-  --surface-muted: #f8fafc;
-  --surface-subtle: #f1f5f9;
-  --surface-sidebar: #1e3a5f;
-  --surface-sidebar-strong: #162d4a;
+  --surface-page: #f7fbff;
+  --surface-page-alt: #eef5ff;
+  --surface-panel: rgba(255, 255, 255, 0.9);
+  --surface-muted: #f8fbff;
+  --surface-subtle: #edf4fb;
+  --surface-sidebar: rgba(255, 255, 255, 0.92);
+  --surface-sidebar-strong: rgba(239, 246, 255, 0.98);
+  --surface-topbar: rgba(255, 255, 255, 0.86);
 
   --text-primary: #0f172a;
   --text-secondary: #475569;
   --text-muted: #64748b;
   --text-subtle: #94a3b8;
   --text-inverse: #ffffff;
+  --text-brand: #1e3a8a;
 
-  --border-subtle: #e2e8f0;
+  --border-subtle: rgba(148, 163, 184, 0.22);
   --border-strong: #cbd5e1;
 
   --status-success: #16a34a;
@@ -39,10 +47,12 @@
   --radius-sm: 6px;
   --radius-md: 8px;
   --radius-lg: 12px;
+  --radius-xl: 18px;
 
-  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.06);
-  --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.08);
-  --shadow-sidebar: 2px 0 14px rgba(15, 23, 42, 0.16);
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.03), 0 10px 32px rgba(37, 99, 235, 0.04);
+  --shadow-md: 0 18px 48px rgba(37, 99, 235, 0.1);
+  --shadow-sidebar: 0 18px 45px rgba(148, 163, 184, 0.18);
+  --shadow-topbar: 0 14px 40px rgba(148, 163, 184, 0.16);
 
   --sidebar-expanded: 16rem;
   --sidebar-collapsed: 4.5rem;

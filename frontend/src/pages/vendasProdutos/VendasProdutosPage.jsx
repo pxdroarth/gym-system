@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { CalendarDays, ShoppingCart, Wallet } from "lucide-react";
+import React, { useEffect, useMemo, useState } from "react";
+import { CalendarDays, PackageCheck, ShoppingCart, Wallet } from "lucide-react";
 import { toast } from "react-toastify";
 import { createVendaProduto, fetchProdutos, fetchVendasProdutos } from "../../services/Api";
 import Button from "../../components/ui/Button";
@@ -56,7 +56,7 @@ export default function VendasProdutosPage() {
     try {
       const dados = await fetchProdutos();
       setProdutos(dados);
-    } catch (e) {
+    } catch (error) {
       toast.error("Erro ao carregar produtos");
     }
   }
@@ -71,7 +71,7 @@ export default function VendasProdutosPage() {
       });
       setVendas(vendasLista);
       setTotal(totalVendas);
-    } catch (e) {
+    } catch (error) {
       toast.error("Erro ao carregar vendas");
     }
   }
@@ -86,8 +86,8 @@ export default function VendasProdutosPage() {
     setModalVendaAberto(false);
   }
 
-  async function handleVenda(e) {
-    e.preventDefault();
+  async function handleVenda(event) {
+    event.preventDefault();
     if (!produtoSelecionado) return toast.error("Selecione um produto.");
     if (quantidade <= 0) return toast.error("Quantidade deve ser maior que zero.");
     if (quantidade > produtoSelecionado.estoque) return toast.error("Quantidade maior que o estoque disponível.");
@@ -103,7 +103,7 @@ export default function VendasProdutosPage() {
       fecharModalVenda();
       carregarProdutos();
       carregarVendas();
-    } catch (e) {
+    } catch (error) {
       toast.error("Erro ao registrar venda");
     } finally {
       setRegistrandoVenda(false);
@@ -123,131 +123,182 @@ export default function VendasProdutosPage() {
 
   const totalPaginas = Math.max(1, Math.ceil(total / limite));
   const totalPagina = vendas.reduce((soma, venda) => soma + Number(venda.preco_unitario || 0) * Number(venda.quantidade || 0), 0);
+  const ticketMedio = vendas.length > 0 ? totalPagina / vendas.length : 0;
+  const produtosDisponiveis = useMemo(
+    () => produtos.filter((produto) => Number(produto.estoque || 0) > 0).length,
+    [produtos]
+  );
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Vendas de Produtos"
-        subtitle="Registre vendas da recepção e acompanhe o histórico operacional."
+        subtitle="Registre vendas da recepção e acompanhe o histórico operacional da unidade."
         actions={<Button onClick={() => setModalVendaAberto(true)}>+ Registrar Venda</Button>}
       />
 
       <div className="ui-status-grid">
         <KpiCard label="Vendas Encontradas" value={total} icon={<ShoppingCart size={20} />} tone="blue" />
         <KpiCard label="Total da Página" value={formatarMoeda(totalPagina)} icon={<Wallet size={20} />} tone="green" />
-        <KpiCard label="Produtos Disponíveis" value={produtos.length} icon={<CalendarDays size={20} />} tone="gray" />
+        <KpiCard label="Ticket Médio" value={formatarMoeda(ticketMedio)} icon={<CalendarDays size={20} />} tone="amber" />
+        <KpiCard label="Produtos Disponíveis" value={produtosDisponiveis} icon={<PackageCheck size={20} />} tone="gray" />
       </div>
 
       <Card>
-        <div className="ui-section-header">
-          <div>
-            <h2 className="ui-section-title">Histórico de Vendas</h2>
-            <p className="ui-section-subtitle">{total} registro(s) encontrado(s).</p>
+        <div className="entity-toolbar">
+          <div className="entity-toolbar__intro">
+            <span className="entity-toolbar__eyebrow">Fluxo comercial</span>
+            <div>
+              <h2 className="ui-section-title">Histórico de vendas</h2>
+              <p className="ui-section-subtitle">Filtros mais claros e leitura operacional refinada sem mudar payload ou paginação.</p>
+            </div>
           </div>
         </div>
 
-        <div className="p-5 flex flex-wrap gap-3 items-end border-b">
-          <div className="flex gap-2 flex-wrap">
+        <div className="sales-filter-bar">
+          <div className="sales-filter-bar__group">
             {[
               { key: "diario", label: "Diário" },
               { key: "semanal", label: "Semanal" },
               { key: "mensal", label: "Mensal" },
               { key: "personalizado", label: "Personalizado" },
-            ].map((p) => (
-              <PillButton key={p.key} active={periodoRapido === p.key} onClick={() => aplicarPeriodoRapido(p.key)}>
-                {p.label}
+            ].map((periodo) => (
+              <PillButton key={periodo.key} active={periodoRapido === periodo.key} onClick={() => aplicarPeriodoRapido(periodo.key)}>
+                {periodo.label}
               </PillButton>
             ))}
           </div>
 
-          <Input
-            label="Data inicial"
-            type="date"
-            value={dataInicial}
-            onChange={(e) => {
-              setPeriodoRapido("personalizado");
-              setDataInicial(e.target.value);
-            }}
-            className="max-w-44"
-          />
-          <Input
-            label="Data final"
-            type="date"
-            value={dataFinal}
-            onChange={(e) => {
-              setPeriodoRapido("personalizado");
-              setDataFinal(e.target.value);
-            }}
-            className="max-w-44"
-          />
-          <Button onClick={() => { setPagina(1); carregarVendas(); }}>Filtrar</Button>
+          <div className="sales-filter-bar__group">
+            <Input
+              label="Data inicial"
+              type="date"
+              value={dataInicial}
+              onChange={(event) => {
+                setPeriodoRapido("personalizado");
+                setDataInicial(event.target.value);
+              }}
+              className="max-w-44"
+            />
+            <Input
+              label="Data final"
+              type="date"
+              value={dataFinal}
+              onChange={(event) => {
+                setPeriodoRapido("personalizado");
+                setDataFinal(event.target.value);
+              }}
+              className="max-w-44"
+            />
+            <Button onClick={() => { setPagina(1); carregarVendas(); }}>Filtrar</Button>
+          </div>
         </div>
 
-        {vendas.length === 0 ? (
-          <EmptyState title="Nenhuma venda encontrada." />
-        ) : (
-          <Table>
-            <thead>
-              <tr>
-                <th>Produto</th>
-                <th>Quantidade</th>
-                <th>Preço Unitário</th>
-                <th>Total</th>
-                <th>Data Venda</th>
-              </tr>
-            </thead>
-            <tbody>
-              {vendas.map((v) => (
-                <tr key={v.id}>
-                  <td className="font-semibold">{v.produto_nome}</td>
-                  <td>{v.quantidade}</td>
-                  <td>{formatarMoeda(v.preco_unitario)}</td>
-                  <td className="font-semibold">{formatarMoeda(Number(v.preco_unitario || 0) * Number(v.quantidade || 0))}</td>
-                  <td>{new Date(v.data_venda).toLocaleString("pt-BR")}</td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
+        <div className="p-5 space-y-5">
+          <div className="sales-kpi-grid">
+            <div className="sales-quick-card">
+              <div className="sales-quick-card__label">Período ativo</div>
+              <div className="sales-quick-card__value">{periodoRapido === "personalizado" ? "Customizado" : periodoRapido}</div>
+              <div className="sales-quick-card__copy">Recorte aplicado na busca atual de vendas.</div>
+            </div>
+            <div className="sales-quick-card">
+              <div className="sales-quick-card__label">Volume paginado</div>
+              <div className="sales-quick-card__value">{vendas.length}</div>
+              <div className="sales-quick-card__copy">Itens exibidos na página atual.</div>
+            </div>
+            <div className="sales-quick-card">
+              <div className="sales-quick-card__label">Produtos ativos</div>
+              <div className="sales-quick-card__value">{produtosDisponiveis}</div>
+              <div className="sales-quick-card__copy">Produtos com estoque acima de zero.</div>
+            </div>
+          </div>
 
-        <div className="px-5 pb-5">
+          {vendas.length === 0 ? (
+            <EmptyState title="Nenhuma venda encontrada." />
+          ) : (
+            <Table>
+              <thead>
+                <tr>
+                  <th>Produto</th>
+                  <th>Quantidade</th>
+                  <th>Preço Unitário</th>
+                  <th>Total</th>
+                  <th>Data Venda</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vendas.map((venda) => (
+                  <tr key={venda.id}>
+                    <td className="font-semibold">{venda.produto_nome}</td>
+                    <td>{venda.quantidade}</td>
+                    <td>{formatarMoeda(venda.preco_unitario)}</td>
+                    <td className="font-semibold">{formatarMoeda(Number(venda.preco_unitario || 0) * Number(venda.quantidade || 0))}</td>
+                    <td>{new Date(venda.data_venda).toLocaleString("pt-BR")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+
           <Pagination page={pagina} totalPages={totalPaginas} onPageChange={setPagina} />
         </div>
       </Card>
 
       {modalVendaAberto && (
-        <Modal title="Registrar Venda" onClose={fecharModalVenda}>
+        <Modal title="Registrar Venda" onClose={fecharModalVenda} className="max-w-4xl">
           <form onSubmit={handleVenda} className="space-y-4">
-            <Select
-              label="Produto"
-              value={produtoSelecionado?.id || ""}
-              onChange={(e) => setProdutoSelecionado(produtos.find((p) => p.id === Number(e.target.value)))}
-            >
-              <option value="">Selecione um produto</option>
-              {produtos.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.nome} - Estoque: {p.estoque}
-                </option>
-              ))}
-            </Select>
+            <div className="sales-modal-grid">
+              <div className="sales-modal-panel">
+                <h3 className="sales-modal-panel__title">Seleção do produto</h3>
+                <p className="sales-modal-panel__copy">O fluxo permanece igual: produto, quantidade, validação de estoque e envio com createVendaProduto.</p>
 
-            <Input
-              label="Quantidade"
-              type="number"
-              value={quantidade}
-              onChange={(e) => setQuantidade(Number(e.target.value))}
-              min="1"
-              max={produtoSelecionado?.estoque || 1}
-            />
+                <div className="space-y-4 mt-4">
+                  <Select
+                    label="Produto"
+                    value={produtoSelecionado?.id || ""}
+                    onChange={(event) => setProdutoSelecionado(produtos.find((produto) => produto.id === Number(event.target.value)))}
+                  >
+                    <option value="">Selecione um produto</option>
+                    {produtos.map((produto) => (
+                      <option key={produto.id} value={produto.id}>
+                        {produto.nome} - Estoque: {produto.estoque}
+                      </option>
+                    ))}
+                  </Select>
 
-            {produtoSelecionado && (
-              <div className="ui-info-item">
-                <div className="ui-info-item__label">Total estimado</div>
-                <div className="ui-info-item__value">
-                  {formatarMoeda(Number(produtoSelecionado.preco || 0) * Number(quantidade || 0))}
+                  <Input
+                    label="Quantidade"
+                    type="number"
+                    value={quantidade}
+                    onChange={(event) => setQuantidade(Number(event.target.value))}
+                    min="1"
+                    max={produtoSelecionado?.estoque || 1}
+                  />
                 </div>
               </div>
-            )}
+
+              <div className="sales-modal-panel">
+                <h3 className="sales-modal-panel__title">Resumo rápido</h3>
+                <p className="sales-modal-panel__copy">Apoio visual para registrar a venda com mais confiança na operação.</p>
+
+                <div className="sales-modal-summary mt-4">
+                  <div className="sales-modal-summary__item">
+                    <div className="sales-modal-summary__label">Produto</div>
+                    <div className="sales-modal-summary__value">{produtoSelecionado?.nome || "Aguardando seleção"}</div>
+                  </div>
+                  <div className="sales-modal-summary__item">
+                    <div className="sales-modal-summary__label">Estoque disponível</div>
+                    <div className="sales-modal-summary__value">{produtoSelecionado?.estoque ?? "-"}</div>
+                  </div>
+                  <div className="sales-modal-summary__item">
+                    <div className="sales-modal-summary__label">Total estimado</div>
+                    <div className="sales-modal-summary__value">
+                      {formatarMoeda(Number(produtoSelecionado?.preco || 0) * Number(quantidade || 0))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div className="flex justify-end gap-3 pt-2">
               <Button type="button" variant="ghost" onClick={fecharModalVenda}>

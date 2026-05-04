@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { ShieldCheck, UserCog, Users } from "lucide-react";
+import { Building2, ShieldCheck, UserCog, Users } from "lucide-react";
 import { toast } from "react-toastify";
 import RoleGate from "../../components/auth/RoleGate";
 import Badge from "../../components/ui/Badge";
@@ -8,6 +8,7 @@ import Card from "../../components/ui/Card";
 import EmptyState from "../../components/ui/EmptyState";
 import KpiCard from "../../components/ui/KpiCard";
 import PageHeader from "../../components/ui/PageHeader";
+import RestrictedAreaNotice from "../../components/ui/RestrictedAreaNotice";
 import Select from "../../components/ui/Select";
 import useAuth from "../../hooks/useAuth";
 import Table from "../../components/ui/Table";
@@ -28,6 +29,16 @@ function statusBadge(status) {
   return <Badge tone="amber">Inativo</Badge>;
 }
 
+function roleBadge(role) {
+  if (role === ROLES.PLATFORM_ADMIN) return <Badge tone="blue">Admin Plataforma</Badge>;
+  if (role === ROLES.OWNER) return <Badge tone="blue">Owner</Badge>;
+  if (role === ROLES.ADMIN) return <Badge tone="amber">Administrador</Badge>;
+  if (role === ROLES.FINANCEIRO) return <Badge tone="green">Financeiro</Badge>;
+  if (role === ROLES.GESTOR) return <Badge tone="gray">Gestor</Badge>;
+  if (role === ROLES.RECEPCAO) return <Badge tone="gray">Recepcao</Badge>;
+  return <Badge tone="gray">Operador de Acesso</Badge>;
+}
+
 export default function UsuariosInternosPage() {
   const { user } = useAuth();
   const [usuarios, setUsuarios] = useState([]);
@@ -41,7 +52,7 @@ export default function UsuariosInternosPage() {
       const resposta = await listarUsuariosInternos();
       setUsuarios(resposta.data || []);
     } catch (error) {
-      toast.error(error?.response?.data?.error || error.message || "Erro ao carregar usuários internos.");
+      toast.error(error?.response?.data?.error || error.message || "Erro ao carregar usuarios internos.");
     } finally {
       setLoading(false);
     }
@@ -55,11 +66,11 @@ export default function UsuariosInternosPage() {
     try {
       setSalvando(true);
       await criarUsuarioInterno(payload);
-      toast.success("Usuário interno criado com sucesso.");
+      toast.success("Usuario interno criado com sucesso.");
       setModalAberto(false);
       await carregarUsuarios();
     } catch (error) {
-      toast.error(error?.response?.data?.error || error.message || "Erro ao criar usuário.");
+      toast.error(error?.response?.data?.error || error.message || "Erro ao criar usuario.");
     } finally {
       setSalvando(false);
     }
@@ -89,8 +100,10 @@ export default function UsuariosInternosPage() {
 
   const admins = usuarios.filter((usuario) => usuario.papel === ROLES.ADMIN || usuario.papel === ROLES.OWNER).length;
   const ativos = usuarios.filter((usuario) => usuario.status === "ativo").length;
+  const platformAdmins = usuarios.filter((usuario) => usuario.papel === ROLES.PLATFORM_ADMIN).length;
+  const canManagePlatformUsers = user?.papel === ROLES.PLATFORM_ADMIN;
   const papeis = [
-    ...(user?.papel === ROLES.PLATFORM_ADMIN ? [ROLES.PLATFORM_ADMIN] : []),
+    ...(canManagePlatformUsers ? [ROLES.PLATFORM_ADMIN] : []),
     ROLES.OWNER,
     ROLES.ADMIN,
     ROLES.GESTOR,
@@ -102,84 +115,154 @@ export default function UsuariosInternosPage() {
   return (
     <RoleGate
       permission={UI_PERMISSIONS.USUARIOS_INTERNOS_GERENCIAR}
-      fallback={<EmptyState title="Área restrita a administradores." />}
+      fallback={
+        <EmptyState
+          title="Area restrita a administradores."
+          description="Perfis operacionais nao recebem atalhos nem controles desta governanca interna."
+        />
+      }
     >
-      <div className="space-y-6">
+      <div className="governance-shell">
         <PageHeader
-          title="Usuários Internos"
-          subtitle="Controle operacional de usuários, papéis e status de acesso."
-          actions={<Button onClick={() => setModalAberto(true)}>+ Novo Usuário</Button>}
+          title="Usuarios Internos"
+          subtitle="Controle operacional de usuarios, papeis e status de acesso."
+          actions={<Button onClick={() => setModalAberto(true)}>+ Novo Usuario</Button>}
         />
 
-        <div className="ui-status-grid">
-          <KpiCard label="Usuários" value={usuarios.length} icon={<Users size={20} />} tone="blue" />
-          <KpiCard label="Ativos" value={ativos} icon={<ShieldCheck size={20} />} tone="green" />
-          <KpiCard label="Admins" value={admins} icon={<UserCog size={20} />} tone="amber" />
-        </div>
+        <RestrictedAreaNotice
+          title="Governanca interna"
+          badgeLabel={canManagePlatformUsers ? "Plataforma" : "Administracao"}
+          tone="blue"
+          description="Esta tela continua submetida as permissoes reais do backend. Perfis operacionais nao recebem visibilidade de rotas, cards ou acoes sensiveis."
+        />
 
-        <Card>
-          <div className="ui-section-header">
+        <Card className="governance-hero">
+          <div className="governance-hero__content">
             <div>
-              <h2 className="ui-section-title">Equipe Interna</h2>
-              <p className="ui-section-subtitle">Alterações sensíveis são auditadas e validadas pelo backend.</p>
+              <div className="governance-hero__eyebrow">Administracao interna</div>
+              <h2 className="governance-hero__title">
+                Usuarios, papeis e status com leitura administrativa madura e isolamento claro por perfil.
+              </h2>
+              <p className="governance-hero__copy">
+                A interface deixa explicito quem atua no escopo da plataforma e quem pertence a governanca da academia,
+                sem criar permissoes falsas no frontend e sem abrir atalhos indevidos para perfis errados.
+              </p>
+            </div>
+
+            <div className="governance-hero__meta">
+              <div className="governance-hero__meta-card">
+                <div className="governance-hero__meta-label">Seu papel</div>
+                <div className="governance-hero__meta-value">{getRoleLabel(user?.papel)}</div>
+                <div className="governance-hero__meta-copy">
+                  Acoes visiveis seguem o papel autenticado e continuam validadas pelo backend.
+                </div>
+              </div>
+              <div className="governance-hero__meta-card">
+                <div className="governance-hero__meta-label">Isolamento</div>
+                <div className="governance-hero__meta-value">{canManagePlatformUsers ? "Plataforma" : "Tenant"}</div>
+                <div className="governance-hero__meta-copy">
+                  Contas da plataforma ficam destacadas e sem edicao visual por perfis inadequados.
+                </div>
+              </div>
             </div>
           </div>
+        </Card>
 
-          {loading ? (
-            <EmptyState title="Carregando usuários..." />
-          ) : usuarios.length === 0 ? (
-            <EmptyState title="Nenhum usuário interno cadastrado." />
-          ) : (
-            <Table>
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>Login</th>
-                  <th>Email</th>
-                  <th>Papel</th>
-                  <th>Status</th>
-                  <th>Último acesso</th>
-                </tr>
-              </thead>
-              <tbody>
-                {usuarios.map((usuario) => (
-                  <tr key={usuario.id}>
-                    <td className="font-semibold">{usuario.nome}</td>
-                    <td>{usuario.login || "-"}</td>
-                    <td>{usuario.email || "-"}</td>
-                    <td>
-                      <RoleGate permission={UI_PERMISSIONS.USUARIOS_INTERNOS_GERENCIAR}>
-                        <Select
-                          value={usuario.papel}
-                          onChange={(e) => handleAlterarPapel(usuario, e.target.value)}
-                        >
-                          {papeis.map((papel) => (
-                            <option key={papel} value={papel}>{getRoleLabel(papel)}</option>
-                          ))}
-                        </Select>
-                      </RoleGate>
-                    </td>
-                    <td>
-                      <RoleGate permission={UI_PERMISSIONS.USUARIOS_INTERNOS_GERENCIAR}>
-                        <div className="flex items-center gap-2">
-                          {statusBadge(usuario.status)}
-                          <Select
-                            value={usuario.status}
-                            onChange={(e) => handleAlterarStatus(usuario, e.target.value)}
-                          >
-                            {statusOptions.map((status) => (
-                              <option key={status} value={status}>{status}</option>
-                            ))}
-                          </Select>
-                        </div>
-                      </RoleGate>
-                    </td>
-                    <td>{usuario.ultimo_acesso_em || "-"}</td>
+        <div className="ui-status-grid">
+          <KpiCard label="Usuarios" value={usuarios.length} icon={<Users size={20} />} tone="blue" />
+          <KpiCard label="Ativos" value={ativos} icon={<ShieldCheck size={20} />} tone="green" />
+          <KpiCard label="Admins" value={admins} icon={<UserCog size={20} />} tone="amber" />
+          <KpiCard label="Plataforma" value={platformAdmins} icon={<Building2 size={20} />} tone="blue" />
+        </div>
+
+        <Card className="governance-table-card">
+          <div className="governance-panel__body">
+            <div className="ui-section-header">
+              <div>
+                <h2 className="ui-section-title">Equipe Interna</h2>
+                <p className="ui-section-subtitle">Alteracoes sensiveis sao auditadas e validadas pelo backend.</p>
+              </div>
+              <Badge tone="gray">{canManagePlatformUsers ? "Escopo plataforma" : "Escopo administrativo"}</Badge>
+            </div>
+
+            {loading ? (
+              <EmptyState title="Carregando usuarios..." />
+            ) : usuarios.length === 0 ? (
+              <EmptyState title="Nenhum usuario interno cadastrado." />
+            ) : (
+              <Table>
+                <thead>
+                  <tr>
+                    <th>Nome</th>
+                    <th>Login</th>
+                    <th>Email</th>
+                    <th>Papel</th>
+                    <th>Status</th>
+                    <th>Ultimo acesso</th>
                   </tr>
-                ))}
-              </tbody>
-            </Table>
-          )}
+                </thead>
+                <tbody>
+                  {usuarios.map((usuario) => {
+                    const isPlatformRow = usuario.papel === ROLES.PLATFORM_ADMIN;
+                    const platformRowLocked = isPlatformRow && !canManagePlatformUsers;
+
+                    return (
+                      <tr key={usuario.id}>
+                        <td className="font-semibold">{usuario.nome}</td>
+                        <td>{usuario.login || "-"}</td>
+                        <td>{usuario.email || "-"}</td>
+                        <td>
+                          {platformRowLocked ? (
+                            <div className="space-y-2">
+                              <div>{roleBadge(usuario.papel)}</div>
+                              <div className="text-xs text-slate-500">Gerido pela plataforma.</div>
+                            </div>
+                          ) : (
+                            <RoleGate permission={UI_PERMISSIONS.USUARIOS_INTERNOS_GERENCIAR}>
+                              <div className="space-y-2">
+                                <div className="governance-role-badge">{roleBadge(usuario.papel)}</div>
+                                <Select
+                                  value={usuario.papel}
+                                  onChange={(event) => handleAlterarPapel(usuario, event.target.value)}
+                                >
+                                  {papeis.map((papel) => (
+                                    <option key={papel} value={papel}>{getRoleLabel(papel)}</option>
+                                  ))}
+                                </Select>
+                              </div>
+                            </RoleGate>
+                          )}
+                        </td>
+                        <td>
+                          {platformRowLocked ? (
+                            <div className="space-y-2">
+                              <div>{statusBadge(usuario.status)}</div>
+                              <div className="text-xs text-slate-500">Sem controle visual neste perfil.</div>
+                            </div>
+                          ) : (
+                            <RoleGate permission={UI_PERMISSIONS.USUARIOS_INTERNOS_GERENCIAR}>
+                              <div className="flex items-center gap-2">
+                                {statusBadge(usuario.status)}
+                                <Select
+                                  value={usuario.status}
+                                  onChange={(event) => handleAlterarStatus(usuario, event.target.value)}
+                                >
+                                  {statusOptions.map((status) => (
+                                    <option key={status} value={status}>{status}</option>
+                                  ))}
+                                </Select>
+                              </div>
+                            </RoleGate>
+                          )}
+                        </td>
+                        <td>{usuario.ultimo_acesso_em || "-"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </Table>
+            )}
+          </div>
         </Card>
 
         <UsuarioInternoModal

@@ -16,14 +16,17 @@ export default function Header({ sidebarAberta, toggleSidebar }) {
           <Menu size={20} />
         </button>
 
-        <span className="app-topbar__title">SA - Gestão Academia</span>
+        <div className="app-topbar__brand">
+          <span className="app-topbar__eyebrow">Plataforma operacional</span>
+          <span className="app-topbar__title">Academia SA</span>
+        </div>
       </div>
 
       <div className="app-topbar__right">
-        <button className="app-topbar__button" title="Buscar" type="button">
+        <button className="app-topbar__button app-topbar__button--decorative" title="Busca global em evolução" type="button">
           <Search size={17} />
         </button>
-        <button className="app-topbar__button" title="Notificações" type="button">
+        <button className="app-topbar__button app-topbar__button--decorative" title="Notificações em evolução" type="button">
           <Bell size={17} />
         </button>
         <UnitScopeSelector />

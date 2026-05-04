@@ -17,7 +17,7 @@ export default function Layout() {
       <div className={`app-main ${sidebarAberta ? "app-main--expanded" : "app-main--collapsed"}`}>
         <Header sidebarAberta={sidebarAberta} toggleSidebar={toggleSidebar} />
 
-        <main className="app-content">
+        <main className="app-content" role="main">
           <Outlet />
         </main>
       </div>

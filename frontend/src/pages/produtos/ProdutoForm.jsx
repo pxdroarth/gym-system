@@ -1,16 +1,26 @@
 import React, { useEffect } from "react";
 import { useForm } from "react-hook-form";
-import { createProduto, updateProduto } from "../../services/Api";
 import { toast } from "react-toastify";
+import { createProduto, updateProduto } from "../../services/Api";
 import Button from "../../components/ui/Button";
 
 export default function ProdutoForm({ produto, onSuccess, onCancel }) {
-  const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm();
 
   useEffect(() => {
     if (produto) reset(produto);
     else reset();
   }, [produto, reset]);
+
+  const estoqueAtual = Number(watch("estoque") || produto?.estoque || 0);
+  const precoAtual = Number(watch("preco") || produto?.preco || 0);
+  const valorProjetado = estoqueAtual * precoAtual;
 
   const onSubmit = async (data) => {
     try {
@@ -32,31 +42,31 @@ export default function ProdutoForm({ produto, onSuccess, onCancel }) {
       }
 
       onSuccess();
-    } catch (err) {
-      toast.error("Erro: " + (err.message || "Erro desconhecido"));
+    } catch (error) {
+      toast.error(`Erro: ${error.message || "Erro desconhecido"}`);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <label className="ui-field md:col-span-3">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+      <div className="product-form-grid">
+        <label className="ui-field product-form-grid__full">
           <span className="ui-field__label">Nome *</span>
           <input
             {...register("nome", { required: "Nome é obrigatório" })}
             className="ui-input"
-            placeholder="Nome do Produto"
+            placeholder="Nome do produto"
           />
           {errors.nome && <p className="text-red-600 text-sm">{errors.nome.message}</p>}
         </label>
 
-        <label className="ui-field md:col-span-3">
+        <label className="ui-field product-form-grid__full">
           <span className="ui-field__label">Descrição</span>
           <textarea
             {...register("descricao")}
-            className="ui-input min-h-24"
-            placeholder="Descrição opcional"
-            rows={3}
+            className="ui-input min-h-28"
+            placeholder="Descrição opcional para apoio da operação"
+            rows={4}
           />
         </label>
 
@@ -88,9 +98,18 @@ export default function ProdutoForm({ produto, onSuccess, onCancel }) {
             type="file"
             {...register("imagem")}
             accept="image/*"
-            className="ui-input"
+            className="ui-input product-file-input"
           />
         </label>
+      </div>
+
+      <div className="product-form-note">
+        <h3 className="product-form-note__title">Resumo operacional</h3>
+        <p className="product-form-note__copy">
+          Estoque atual estimado: <strong>{estoqueAtual}</strong> unidade(s). Valor projetado do saldo:{" "}
+          <strong>{Number(valorProjetado || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong>.
+          O fluxo de upload e envio continua exatamente o mesmo via FormData.
+        </p>
       </div>
 
       <div className="flex gap-3 justify-end pt-2">

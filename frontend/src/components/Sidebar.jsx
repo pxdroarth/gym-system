@@ -9,8 +9,8 @@ import {
   CircleDollarSign,
   Link2,
   Package,
-  ShoppingCart,
   Settings2,
+  ShoppingCart,
   UserCog,
   Users,
 } from "lucide-react";
@@ -71,7 +71,7 @@ export default function Sidebar({ aberta = true }) {
         {expanded && (
           <div>
             <div className="app-sidebar__title">Academia SA</div>
-            <div className="app-sidebar__subtitle">Gestão Inteligente</div>
+            <div className="app-sidebar__subtitle">ERP SaaS | Operação por unidade</div>
           </div>
         )}
       </div>

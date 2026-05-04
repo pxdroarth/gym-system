@@ -1,41 +1,41 @@
-import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { CheckCircle2, CircleSlash, Users, WalletCards } from 'lucide-react';
-import { fetchAlunos } from '../../services/Api';
-import Badge from '../../components/ui/Badge';
-import Button from '../../components/ui/Button';
-import Card from '../../components/ui/Card';
-import EmptyState from '../../components/ui/EmptyState';
-import Input from '../../components/ui/Input';
-import KpiCard from '../../components/ui/KpiCard';
-import PageHeader from '../../components/ui/PageHeader';
-import Pagination from '../../components/ui/Pagination';
-import Table from '../../components/ui/Table';
+import React, { useEffect, useMemo, useState } from "react";
+import { CheckCircle2, CircleSlash, Search, Users, WalletCards } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { fetchAlunos } from "../../services/Api";
+import Badge from "../../components/ui/Badge";
+import Button from "../../components/ui/Button";
+import Card from "../../components/ui/Card";
+import EmptyState from "../../components/ui/EmptyState";
+import Input from "../../components/ui/Input";
+import KpiCard from "../../components/ui/KpiCard";
+import PageHeader from "../../components/ui/PageHeader";
+import Pagination from "../../components/ui/Pagination";
+import Table from "../../components/ui/Table";
 
-const ORDER = (import.meta.env?.VITE_ALUNOS_ORDER || 'asc').toLowerCase();
+const ORDER = (import.meta.env?.VITE_ALUNOS_ORDER || "asc").toLowerCase();
 
 function obterBadgeMensalidade(status) {
   switch (status) {
-    case 'em_dia':
+    case "em_dia":
       return <Badge tone="green">Em dia</Badge>;
-    case 'atrasado':
+    case "atrasado":
       return <Badge tone="red">Atrasado</Badge>;
-    case 'sem_mensalidade':
+    case "sem_mensalidade":
       return <Badge tone="gray">Sem mensalidade</Badge>;
     default:
-      return <Badge tone="gray">{status || '-'}</Badge>;
+      return <Badge tone="gray">{status || "-"}</Badge>;
   }
 }
 
 function obterBadgeStatus(status) {
-  return String(status).toLowerCase() === 'ativo'
+  return String(status).toLowerCase() === "ativo"
     ? <Badge tone="green">Ativo</Badge>
     : <Badge tone="red">Inativo</Badge>;
 }
 
 export default function AlunosPage() {
   const [alunos, setAlunos] = useState([]);
-  const [busca, setBusca] = useState('');
+  const [busca, setBusca] = useState("");
   const [paginaAtual, setPaginaAtual] = useState(1);
   const [itensPorPagina] = useState(10);
   const navigate = useNavigate();
@@ -47,33 +47,33 @@ export default function AlunosPage() {
   async function carregarAlunos() {
     try {
       const dados = await fetchAlunos();
-      const normalizados = (dados || []).map((a) => ({
-        ...a,
-        status_ativo: a.status_ativo || a.status || 'inativo',
-        mensalidade_status: a.mensalidade_status || 'sem_mensalidade',
+      const normalizados = (dados || []).map((aluno) => ({
+        ...aluno,
+        status_ativo: aluno.status_ativo || aluno.status || "inativo",
+        mensalidade_status: aluno.mensalidade_status || "sem_mensalidade",
       }));
 
       normalizados.sort((a, b) => {
         const va = Number(a.matricula || a.id || 0);
         const vb = Number(b.matricula || b.id || 0);
-        return ORDER === 'desc' ? vb - va : va - vb;
+        return ORDER === "desc" ? vb - va : va - vb;
       });
 
       setAlunos(normalizados);
       setPaginaAtual(1);
     } catch (error) {
-      console.error('Erro ao buscar alunos:', error);
+      console.error("Erro ao buscar alunos:", error);
     }
   }
 
   const totalAlunos = alunos.length;
-  const totalEmDia = alunos.filter((a) => a.mensalidade_status === 'em_dia').length;
-  const totalAtrasados = alunos.filter((a) => a.mensalidade_status === 'atrasado').length;
-  const totalSemMensalidade = alunos.filter((a) => a.mensalidade_status === 'sem_mensalidade').length;
+  const totalEmDia = alunos.filter((aluno) => aluno.mensalidade_status === "em_dia").length;
+  const totalAtrasados = alunos.filter((aluno) => aluno.mensalidade_status === "atrasado").length;
+  const totalSemMensalidade = alunos.filter((aluno) => aluno.mensalidade_status === "sem_mensalidade").length;
 
   const termo = busca.toLowerCase();
   const alunosFiltrados = alunos.filter(
-    (a) => (a.nome || '').toLowerCase().includes(termo) || String(a.matricula || '').includes(busca)
+    (aluno) => (aluno.nome || "").toLowerCase().includes(termo) || String(aluno.matricula || "").includes(busca)
   );
 
   const indexUltimoItem = paginaAtual * itensPorPagina;
@@ -81,11 +81,35 @@ export default function AlunosPage() {
   const alunosPaginados = alunosFiltrados.slice(indexPrimeiroItem, indexUltimoItem);
   const totalPaginas = Math.max(1, Math.ceil(alunosFiltrados.length / itensPorPagina));
 
+  const cardsResumo = useMemo(
+    () => [
+      {
+        id: "ativos",
+        label: "Cadastros localizados",
+        value: alunosFiltrados.length,
+        copy: "Resultados no recorte atual de busca.",
+      },
+      {
+        id: "emdia",
+        label: "Mensalidade em dia",
+        value: totalEmDia,
+        copy: "Base operacional regularizada.",
+      },
+      {
+        id: "atrasados",
+        label: "Atenção imediata",
+        value: totalAtrasados,
+        copy: "Alunos com atraso no recorte atual.",
+      },
+    ],
+    [alunosFiltrados.length, totalEmDia, totalAtrasados]
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Alunos"
-        subtitle="Cadastro, situação operacional e acompanhamento de mensalidades."
+        subtitle="Cadastro, situação operacional e acompanhamento de mensalidades por unidade."
         actions={
           <Button as={Link} to="/alunos/novo" variant="primary">
             + Novo Aluno
@@ -101,56 +125,79 @@ export default function AlunosPage() {
       </div>
 
       <Card>
-        <div className="ui-section-header">
-          <div>
-            <h2 className="ui-section-title">Lista de Alunos</h2>
-            <p className="ui-section-subtitle">{alunosFiltrados.length} registro(s) encontrado(s).</p>
+        <div className="entity-toolbar">
+          <div className="entity-toolbar__intro">
+            <span className="entity-toolbar__eyebrow">Leitura operacional</span>
+            <div>
+              <h2 className="ui-section-title">Listagem de alunos</h2>
+              <p className="ui-section-subtitle">Consulta rápida, visual mais denso e navegação direta para o perfil.</p>
+            </div>
           </div>
-          <div className="w-full max-w-sm">
-            <Input
-              type="text"
-              placeholder="Buscar por nome ou matrícula"
-              value={busca}
-              onChange={(e) => {
-                setBusca(e.target.value);
-                setPaginaAtual(1);
-              }}
-            />
+          <div className="entity-toolbar__actions">
+            <div className="entity-toolbar__search">
+              <Input
+                type="text"
+                placeholder="Buscar por nome ou matrícula"
+                value={busca}
+                onChange={(event) => {
+                  setBusca(event.target.value);
+                  setPaginaAtual(1);
+                }}
+              />
+            </div>
           </div>
         </div>
 
-        {alunosPaginados.length === 0 ? (
-          <EmptyState title="Nenhum aluno encontrado." description="Tente ajustar a busca ou cadastre um novo aluno." />
-        ) : (
-          <Table>
-            <thead>
-              <tr>
-                <th>Matrícula</th>
-                <th>Nome</th>
-                <th>Status</th>
-                <th>Mensalidade</th>
-                <th>Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {alunosPaginados.map((aluno) => (
-                <tr key={aluno.id}>
-                  <td className="font-mono text-sm">{aluno.matricula}</td>
-                  <td className="font-semibold">{aluno.nome}</td>
-                  <td>{obterBadgeStatus(aluno.status_ativo)}</td>
-                  <td>{obterBadgeMensalidade(aluno.mensalidade_status)}</td>
-                  <td>
-                    <Button size="sm" onClick={() => navigate(`/alunos/${aluno.id}`)}>
-                      Perfil
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        )}
+        <div className="p-5 space-y-5">
+          <div className="entity-summary-grid">
+            {cardsResumo.map((item) => (
+              <div key={item.id} className="entity-summary-card">
+                <div className="entity-summary-card__label">{item.label}</div>
+                <div className="entity-summary-card__value">{item.value}</div>
+                <div className="entity-summary-card__copy">{item.copy}</div>
+              </div>
+            ))}
+          </div>
 
-        <div className="px-5 pb-5">
+          {alunosPaginados.length === 0 ? (
+            <EmptyState title="Nenhum aluno encontrado." description="Tente ajustar a busca ou cadastre um novo aluno." />
+          ) : (
+            <Table>
+              <thead>
+                <tr>
+                  <th>Matrícula</th>
+                  <th>Aluno</th>
+                  <th>Status</th>
+                  <th>Mensalidade</th>
+                  <th>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {alunosPaginados.map((aluno) => (
+                  <tr key={aluno.id}>
+                    <td className="font-mono text-sm text-slate-600">{aluno.matricula}</td>
+                    <td>
+                      <div className="students-table__name">
+                        <span className="font-semibold">{aluno.nome}</span>
+                        <span className="students-table__meta">
+                          <Search size={12} className="inline mr-1" />
+                          Acesso rápido ao perfil operacional
+                        </span>
+                      </div>
+                    </td>
+                    <td>{obterBadgeStatus(aluno.status_ativo)}</td>
+                    <td>{obterBadgeMensalidade(aluno.mensalidade_status)}</td>
+                    <td>
+                      <Button size="sm" onClick={() => navigate(`/alunos/${aluno.id}`)}>
+                        Perfil
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+
           <Pagination page={paginaAtual} totalPages={totalPaginas} onPageChange={setPaginaAtual} />
         </div>
       </Card>

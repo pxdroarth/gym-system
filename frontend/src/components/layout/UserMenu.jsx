@@ -22,9 +22,9 @@ export default function UserMenu() {
       <div className="app-topbar__avatar">{initials(user?.nome || user?.login)}</div>
       <div className="hidden sm:block leading-tight">
         <div className="app-topbar__user-name">{user?.nome || user?.login || "Operador"}</div>
-        <div className="text-[0.65rem] text-white/60 font-semibold">{getRoleLabel(user?.papel)}</div>
+        <div className="text-[0.65rem] text-slate-500 font-semibold">{getRoleLabel(user?.papel)}</div>
       </div>
-      <Button variant="ghost" size="sm" onClick={logout} title="Sair">
+      <Button variant="ghost" size="sm" onClick={logout} title="Sair" className="border-transparent">
         <LogOut size={14} />
       </Button>
     </div>

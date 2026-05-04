@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link2, Users } from "lucide-react";
+import { Link2, Search, UserPlus, Users } from "lucide-react";
 import { toast } from "react-toastify";
 import Badge from "../../../components/ui/Badge";
 import Button from "../../../components/ui/Button";
@@ -7,6 +7,7 @@ import Card from "../../../components/ui/Card";
 import EmptyState from "../../../components/ui/EmptyState";
 import Input from "../../../components/ui/Input";
 import KpiCard from "../../../components/ui/KpiCard";
+import Modal from "../../../components/ui/Modal";
 import PageHeader from "../../../components/ui/PageHeader";
 import {
   createPlanoAssociado,
@@ -17,7 +18,7 @@ import {
 
 function AlunoLinha({ aluno, action, actionLabel, muted }) {
   return (
-    <div className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-gray-50">
+    <div className="association-row">
       <div className="min-w-0">
         <div className="font-semibold truncate">{aluno.nome}</div>
         <div className="text-xs text-gray-500 font-mono">{aluno.matricula}</div>
@@ -31,7 +32,16 @@ function AlunoLinha({ aluno, action, actionLabel, muted }) {
   );
 }
 
+function getOperationErrorMessage(error) {
+  return (
+    error?.response?.data?.error ||
+    error?.response?.data?.message ||
+    "Não foi possível concluir a operação."
+  );
+}
+
 export default function PlanoAssociadosPage() {
+  const [modalAberto, setModalAberto] = useState(false);
   const [responsavelBusca, setResponsavelBusca] = useState("");
   const [responsavelResultados, setResponsavelResultados] = useState([]);
   const [responsavelSel, setResponsavelSel] = useState(null);
@@ -47,7 +57,7 @@ export default function PlanoAssociadosPage() {
     let active = true;
     const timer = setTimeout(async () => {
       const termo = (responsavelBusca || "").trim();
-      if (!termo) {
+      if (!modalAberto || !termo) {
         if (active) setResponsavelResultados([]);
         return;
       }
@@ -63,7 +73,7 @@ export default function PlanoAssociadosPage() {
       active = false;
       clearTimeout(timer);
     };
-  }, [responsavelBusca]);
+  }, [responsavelBusca, modalAberto]);
 
   useEffect(() => {
     if (!responsavelSel?.id) {
@@ -82,7 +92,7 @@ export default function PlanoAssociadosPage() {
         }));
         setAssociados(arr);
       } catch (e) {
-        toast.error(e.message || "Erro ao carregar vínculos");
+        toast.error(e.message || "Erro ao carregar vinculos");
       } finally {
         setCarregandoAssociados(false);
       }
@@ -93,7 +103,7 @@ export default function PlanoAssociadosPage() {
     let active = true;
     const timer = setTimeout(async () => {
       const termo = (busca || "").trim();
-      if (!termo || !responsavelSel?.id) {
+      if (!modalAberto || !termo || !responsavelSel?.id) {
         if (active) setResultados([]);
         return;
       }
@@ -115,7 +125,7 @@ export default function PlanoAssociadosPage() {
       active = false;
       clearTimeout(timer);
     };
-  }, [busca, responsavelSel?.id, associados]);
+  }, [busca, responsavelSel?.id, associados, modalAberto]);
 
   async function adicionarAluno(aluno) {
     if (!responsavelSel?.id) return;
@@ -132,7 +142,7 @@ export default function PlanoAssociadosPage() {
       setResultados((prev) => prev.filter((x) => x.id !== aluno.id));
       setBusca("");
     } catch (e) {
-      toast.error(e.message || "Falha ao vincular");
+      toast.error(getOperationErrorMessage(e));
     }
   }
 
@@ -142,155 +152,199 @@ export default function PlanoAssociadosPage() {
       toast.info(`Removido: ${v.matricula} - ${v.nome}`);
       setAssociados((prev) => prev.filter((a) => a.id !== v.id));
     } catch (e) {
-      toast.error(e.message || "Falha ao remover vínculo");
+      toast.error(getOperationErrorMessage(e));
     }
   }
 
   async function removerTodos() {
     if (associados.length === 0) return;
-    const confirma = confirm(`Remover TODOS os ${associados.length} vínculos deste responsável?`);
+    const confirma = confirm(`Remover TODOS os ${associados.length} vinculos deste responsavel?`);
     if (!confirma) return;
 
-    await Promise.allSettled(associados.map((v) => deletePlanoAssociado(v.id)));
-    toast.info("Todos os vínculos foram removidos.");
+    try {
+      await Promise.all(associados.map((v) => deletePlanoAssociado(v.id)));
+      toast.info("Todos os vinculos foram removidos.");
+      setAssociados([]);
+    } catch (e) {
+      toast.error(getOperationErrorMessage(e));
+    }
+  }
+
+  function limparResponsavel() {
+    setResponsavelSel(null);
     setAssociados([]);
+    setResultados([]);
+    setResponsavelResultados([]);
+    setResponsavelBusca("");
+    setBusca("");
   }
 
   const bloqueado = !responsavelSel?.id;
 
   return (
-    <div className="space-y-6">
+    <div className="governance-shell">
       <PageHeader
-        title="Vínculos de Planos Compartilhados"
-        subtitle="Organize a relação dependente-responsável preservando a operação atual."
+        title="Associacoes"
+        subtitle="Gestao de vinculos entre responsaveis e dependentes."
+        actions={
+          <Button onClick={() => setModalAberto(true)}>
+            <UserPlus size={16} />
+            Gerenciar vinculos
+          </Button>
+        }
       />
 
       <div className="ui-status-grid">
-        <KpiCard label="Responsável" value={responsavelSel ? "Selecionado" : "Pendente"} icon={<Users size={20} />} tone={responsavelSel ? "green" : "amber"} />
-        <KpiCard label="Vinculados" value={associados.length} icon={<Link2 size={20} />} tone="blue" />
+        <KpiCard label="Responsavel" value={responsavelSel ? "Selecionado" : "Nenhum"} icon={<Users size={20} />} tone={responsavelSel ? "green" : "amber"} />
+        <KpiCard label="Dependentes vinculados" value={associados.length} icon={<Link2 size={20} />} tone="blue" />
       </div>
 
-      <Card className="p-5">
-        <div className="ui-section-header px-0 pt-0">
-          <div>
-            <h2 className="ui-section-title">Selecione o responsável</h2>
-            <p className="ui-section-subtitle">Busque por matrícula ou nome para carregar os dependentes vinculados.</p>
-          </div>
-        </div>
-
-        <div className="flex gap-3 items-start flex-col md:flex-row">
-          <div className="flex-1 relative w-full">
-            <Input
-              type="text"
-              placeholder="Buscar por matrícula ou nome..."
-              value={responsavelBusca}
-              onChange={(e) => setResponsavelBusca(e.target.value)}
-            />
-
-            {!!responsavelBusca && responsavelResultados.length > 0 && (
-              <div className="absolute z-10 mt-1 w-full max-h-60 overflow-auto border rounded-lg bg-white shadow">
-                {responsavelResultados.map((r) => (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => {
-                      setResponsavelSel({
-                        id: r.id,
-                        nome: r.nome,
-                        matricula: r.matricula,
-                      });
-                      setResponsavelResultados([]);
-                      setResponsavelBusca(`${r.matricula} - ${r.nome}`);
-                    }}
-                    className="w-full text-left px-3 py-2 hover:bg-gray-100"
-                  >
-                    <span className="font-mono text-xs mr-2">{r.matricula}</span>
-                    {r.nome}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {!!responsavelBusca && responsavelResultados.length === 0 && (
-              <div className="text-xs text-gray-500 mt-1">Nenhum resultado.</div>
-            )}
-          </div>
-
-          {responsavelSel?.id && (
-            <div className="flex items-center gap-3 bg-blue-50 rounded-lg px-3 py-2 border border-blue-100">
-              <div className="font-semibold text-blue-800">
-                <span className="font-mono text-xs">{responsavelSel.matricula}</span> - {responsavelSel.nome}
-              </div>
-              <Badge tone="blue">{associados.length} vinculados</Badge>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  setResponsavelSel(null);
-                  setAssociados([]);
-                  setResultados([]);
-                  setResponsavelBusca("");
-                }}
-              >
-                Trocar
-              </Button>
+      <Card className="governance-table-card">
+        <div className="governance-panel__body">
+          <div className="ui-section-header">
+            <div>
+              <h2 className="ui-section-title">Vinculos de planos compartilhados</h2>
+              <p className="ui-section-subtitle">A tela principal mostra o resumo. O fluxo de busca e manutencao abre em modal.</p>
             </div>
+            <Badge tone="gray">Responsavel e dependentes</Badge>
+          </div>
+
+          {responsavelSel ? (
+            <div className="governance-list">
+              <div className="governance-list__item">
+                <div>
+                  <div className="governance-list__title">{responsavelSel.nome}</div>
+                  <div className="governance-list__copy">Matricula {responsavelSel.matricula}</div>
+                </div>
+                <div className="governance-list__value">{associados.length} vinculados</div>
+              </div>
+            </div>
+          ) : (
+            <EmptyState
+              title="Nenhum responsavel selecionado."
+              description="Use Gerenciar vinculos para buscar um responsavel e administrar dependentes."
+              action={<Button onClick={() => setModalAberto(true)}>Gerenciar vinculos</Button>}
+            />
           )}
         </div>
       </Card>
 
-      <div className={`grid md:grid-cols-2 gap-6 ${bloqueado ? "opacity-50 pointer-events-none" : ""}`}>
-        <Card>
-          <div className="ui-section-header">
-            <div>
-              <h3 className="ui-section-title">Alunos disponíveis</h3>
-              <p className="ui-section-subtitle">Pesquise e adicione dependentes ao responsável.</p>
-            </div>
-            <Badge tone="gray">{resultados.length}</Badge>
+      {modalAberto && (
+        <Modal title="Gerenciar vinculos" onClose={() => setModalAberto(false)} className="ui-modal--full">
+          <div className="association-modal-grid">
+            <Card className="p-4">
+              <div className="ui-section-header px-0 pt-0">
+                <div>
+                  <h2 className="ui-section-title">Responsavel</h2>
+                  <p className="ui-section-subtitle">Busque por matricula ou nome.</p>
+                </div>
+                {responsavelSel && <Badge tone="blue">Selecionado</Badge>}
+              </div>
+
+              <div className="relative">
+                <Input
+                  type="text"
+                  placeholder="Buscar responsavel..."
+                  value={responsavelBusca}
+                  onChange={(e) => setResponsavelBusca(e.target.value)}
+                />
+
+                {!!responsavelBusca && responsavelResultados.length > 0 && (
+                  <div className="association-search-menu">
+                    {responsavelResultados.map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => {
+                          setResponsavelSel({ id: r.id, nome: r.nome, matricula: r.matricula });
+                          setResponsavelResultados([]);
+                          setResponsavelBusca(`${r.matricula} - ${r.nome}`);
+                          setBusca("");
+                          setResultados([]);
+                        }}
+                        className="association-search-menu__item"
+                      >
+                        <span className="font-mono text-xs mr-2">{r.matricula}</span>
+                        {r.nome}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {!!responsavelBusca && responsavelResultados.length === 0 && (
+                  <div className="text-xs text-gray-500 mt-1">Nenhum resultado.</div>
+                )}
+              </div>
+
+              {responsavelSel?.id && (
+                <div className="association-selected">
+                  <div>
+                    <div className="font-semibold text-blue-900">{responsavelSel.nome}</div>
+                    <div className="text-xs text-blue-700 font-mono">{responsavelSel.matricula}</div>
+                  </div>
+                  <Button size="sm" variant="ghost" onClick={limparResponsavel}>Trocar</Button>
+                </div>
+              )}
+            </Card>
+
+            <Card className={bloqueado ? "opacity-50 pointer-events-none" : ""}>
+              <div className="ui-section-header">
+                <div>
+                  <h3 className="ui-section-title">Alunos disponiveis</h3>
+                  <p className="ui-section-subtitle">Pesquise e adicione dependentes.</p>
+                </div>
+                <Badge tone="gray">{resultados.length}</Badge>
+              </div>
+
+              <div className="p-4 border-b">
+                <Input
+                  type="text"
+                  placeholder="Buscar por matricula ou nome..."
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  disabled={bloqueado}
+                />
+              </div>
+
+              <div className="association-list">
+                {buscando && <EmptyState title="Buscando..." />}
+                {!buscando && resultados.length === 0 && <EmptyState title="Nenhum resultado." />}
+                {resultados.map((a) => (
+                  <AlunoLinha key={a.id} aluno={a} action={() => adicionarAluno(a)} actionLabel="Adicionar" />
+                ))}
+              </div>
+            </Card>
+
+            <Card className={bloqueado ? "opacity-50 pointer-events-none" : ""}>
+              <div className="ui-section-header">
+                <div>
+                  <h3 className="ui-section-title">Dependentes vinculados</h3>
+                  <p className="ui-section-subtitle">Alunos que compartilham a condicao do responsavel.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge tone="blue">{associados.length}</Badge>
+                  <Button size="sm" variant="danger" onClick={removerTodos} disabled={associados.length === 0}>
+                    Remover todos
+                  </Button>
+                </div>
+              </div>
+
+              <div className="association-list">
+                {carregandoAssociados && <EmptyState title="Carregando..." />}
+                {!carregandoAssociados && associados.length === 0 && <EmptyState title="Nenhum aluno vinculado." />}
+                {associados.map((v) => (
+                  <AlunoLinha key={v.id} aluno={v} action={() => removerVinculo(v)} actionLabel="Remover" muted />
+                ))}
+              </div>
+            </Card>
           </div>
 
-          <div className="p-4 border-b">
-            <Input
-              type="text"
-              placeholder="Digite para buscar por matrícula ou nome..."
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              disabled={bloqueado}
-            />
+          <div className="wizard-footer">
+            <Button variant="ghost" onClick={() => setModalAberto(false)}>Fechar</Button>
+            <Button onClick={() => setModalAberto(false)}>Concluir</Button>
           </div>
-
-          <div className="max-h-80 overflow-auto divide-y">
-            {buscando && <EmptyState title="Buscando..." />}
-            {!buscando && resultados.length === 0 && <EmptyState title="Nenhum resultado." />}
-            {resultados.map((a) => (
-              <AlunoLinha key={a.id} aluno={a} action={() => adicionarAluno(a)} actionLabel="Adicionar" />
-            ))}
-          </div>
-        </Card>
-
-        <Card>
-          <div className="ui-section-header">
-            <div>
-              <h3 className="ui-section-title">Vinculados ao responsável</h3>
-              <p className="ui-section-subtitle">Dependentes que compartilham a condição do responsável.</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge tone="blue">{associados.length}</Badge>
-              <Button size="sm" variant="danger" onClick={removerTodos} disabled={associados.length === 0}>
-                Remover todos
-              </Button>
-            </div>
-          </div>
-
-          <div className="max-h-80 overflow-auto divide-y">
-            {carregandoAssociados && <EmptyState title="Carregando..." />}
-            {!carregandoAssociados && associados.length === 0 && <EmptyState title="Nenhum aluno vinculado." />}
-            {associados.map((v) => (
-              <AlunoLinha key={v.id} aluno={v} action={() => removerVinculo(v)} actionLabel="Remover" muted />
-            ))}
-          </div>
-        </Card>
-      </div>
+        </Modal>
+      )}
     </div>
   );
 }

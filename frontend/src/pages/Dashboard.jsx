@@ -1,20 +1,20 @@
-import React, { useEffect, useState } from 'react';
-import { Activity, UserCheck, Users, UserX } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { fetchAlunos, fetchTodosAcessos } from '../services/Api';
-import ModalAcessosHoje from '../components/ModalAcessosHoje';
-import Badge from '../components/ui/Badge';
-import Button from '../components/ui/Button';
-import Card from '../components/ui/Card';
-import EmptyState from '../components/ui/EmptyState';
-import KpiCard from '../components/ui/KpiCard';
-import PageHeader from '../components/ui/PageHeader';
-import Table from '../components/ui/Table';
+import React, { useEffect, useMemo, useState } from "react";
+import { Activity, ArrowRight, ShieldCheck, UserCheck, UserX, Users } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { fetchAlunos, fetchTodosAcessos } from "../services/Api";
+import ModalAcessosHoje from "../components/ModalAcessosHoje";
+import Badge from "../components/ui/Badge";
+import Button from "../components/ui/Button";
+import Card from "../components/ui/Card";
+import EmptyState from "../components/ui/EmptyState";
+import KpiCard from "../components/ui/KpiCard";
+import PageHeader from "../components/ui/PageHeader";
+import Table from "../components/ui/Table";
 
 function badgeAcesso(resultado) {
-  const status = resultado?.toLowerCase().trim();
-  const permitido = status === 'permitido' || status === 'liberado';
-  return <Badge tone={permitido ? 'green' : 'red'}>{permitido ? 'Permitido' : 'Negado'}</Badge>;
+  const status = String(resultado || "").toLowerCase().trim();
+  const permitido = status === "permitido" || status === "liberado";
+  return <Badge tone={permitido ? "green" : "red"}>{permitido ? "Permitido" : "Negado"}</Badge>;
 }
 
 export default function Dashboard() {
@@ -35,63 +35,122 @@ export default function Dashboard() {
 
       const todosAcessos = await fetchTodosAcessos();
       const acessosComNome = todosAcessos.map((acesso) => {
-        const aluno = listaAlunos.find((a) => a.id === acesso.aluno_id);
-        return { ...acesso, nome: aluno ? aluno.nome : 'Aluno desconhecido' };
+        const aluno = listaAlunos.find((item) => item.id === acesso.aluno_id);
+        return { ...acesso, nome: aluno ? aluno.nome : "Aluno desconhecido" };
       });
 
       setAcessos(acessosComNome.sort((a, b) => new Date(b.data_hora) - new Date(a.data_hora)));
       setErro(null);
     } catch (error) {
-      setErro('Erro ao carregar dados do dashboard.');
+      setErro("Erro ao carregar dados do dashboard.");
       console.error(error);
     }
   }
 
   const totalAlunos = alunos.length;
-  const alunosAtivos = alunos.filter((a) => a.status_ativo === 'ativo').length;
-  const alunosInativos = alunos.filter((a) => a.status_ativo !== 'ativo').length;
+  const alunosAtivos = alunos.filter((aluno) => aluno.status_ativo === "ativo").length;
+  const alunosInativos = alunos.filter((aluno) => aluno.status_ativo !== "ativo").length;
   const ultimosAcessos = acessos.slice(0, 20);
+  const acessosPermitidos = acessos.filter((acesso) => {
+    const status = String(acesso.resultado || "").toLowerCase();
+    return status === "permitido" || status === "liberado";
+  }).length;
+  const percentualAtivo = totalAlunos > 0 ? Math.round((alunosAtivos / totalAlunos) * 100) : 0;
+
+  const pontosAtencao = useMemo(
+    () => [
+      {
+        id: "alunos",
+        titulo: "Cadastro operacional",
+        texto: `${alunosInativos} aluno(s) exigem atenção cadastral ou regularização de status.`,
+      },
+      {
+        id: "acessos",
+        titulo: "Fluxo de entrada",
+        texto: `${ultimosAcessos.length} acesso(s) recentes monitorados sem expor dados monetários sensíveis.`,
+      },
+      {
+        id: "rotina",
+        titulo: "Rotina da unidade",
+        texto: "A operação permanece por unidade, com autenticação, permissões e escopo preservados.",
+      },
+    ],
+    [alunosInativos, ultimosAcessos.length]
+  );
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Dashboard Geral"
-        subtitle="Visão operacional da academia, alunos e acessos recentes."
-        actions={
-          <>
-            <Button variant="secondary" onClick={carregarDados}>Atualizar</Button>
-            <Button onClick={() => setModalAberto(true)}>Acessos do Dia</Button>
-          </>
-        }
+        subtitle="Visão operacional da academia com foco em alunos, acessos e rotina da unidade."
+        actions={<Button variant="secondary" onClick={carregarDados}>Atualizar</Button>}
       />
+
+      <Card className="dashboard-hero">
+        <div className="dashboard-hero__content">
+          <div>
+            <div className="dashboard-hero__eyebrow">
+              <ShieldCheck size={14} />
+              Operação diária
+            </div>
+            <h2 className="dashboard-hero__title">Acompanhamento claro da unidade sem misturar dados financeiros sensíveis.</h2>
+            <p className="dashboard-hero__description">
+              Esta visão permanece operacional: alunos, acessos e sinais de atenção da rotina. O módulo financeiro continua isolado e o consolidado da rede segue somente leitura.
+            </p>
+
+            <div className="dashboard-hero__actions">
+              <Button onClick={() => navigate("/alunos")}>
+                Ver alunos
+                <ArrowRight size={15} />
+              </Button>
+              <Button variant="secondary" onClick={() => setModalAberto(true)}>
+                Acessos do Dia
+              </Button>
+            </div>
+          </div>
+
+          <div className="dashboard-hero__meta">
+            <div className="dashboard-hero__meta-card">
+              <div className="dashboard-hero__meta-label">Presença operacional</div>
+              <div className="dashboard-hero__meta-value">{acessosPermitidos}</div>
+              <div className="dashboard-hero__meta-copy">Acessos liberados nos registros carregados.</div>
+            </div>
+            <div className="dashboard-hero__meta-card">
+              <div className="dashboard-hero__meta-label">Base ativa</div>
+              <div className="dashboard-hero__meta-value">{percentualAtivo}%</div>
+              <div className="dashboard-hero__meta-copy">Percentual operacional de alunos ativos na unidade atual.</div>
+            </div>
+          </div>
+        </div>
+      </Card>
 
       {erro && <Card className="p-4 text-red-700 font-semibold">{erro}</Card>}
 
       <div className="ui-status-grid">
         <KpiCard
-          label="Total de Alunos"
+          label="Total de alunos"
           value={totalAlunos}
           subtitle="Cadastrados no sistema"
           icon={<Users size={20} />}
           tone="blue"
-          onClick={() => navigate('/alunos')}
+          onClick={() => navigate("/alunos")}
         />
         <KpiCard
-          label="Operacionais Ativos"
+          label="Operacionais ativos"
           value={alunosAtivos}
-          subtitle="Liberados operacionalmente"
+          subtitle="Liberados para rotina"
           icon={<UserCheck size={20} />}
           tone="green"
         />
         <KpiCard
-          label="Operacionais Inativos"
+          label="Operacionais inativos"
           value={alunosInativos}
           subtitle="Exigem atenção cadastral"
           icon={<UserX size={20} />}
           tone="red"
         />
         <KpiCard
-          label="Acessos Recentes"
+          label="Acessos recentes"
           value={ultimosAcessos.length}
           subtitle="Últimos registros carregados"
           icon={<Activity size={20} />}
@@ -99,37 +158,67 @@ export default function Dashboard() {
         />
       </div>
 
-      <Card>
-        <div className="ui-section-header">
-          <div>
-            <h2 className="ui-section-title">Últimos 20 Acessos</h2>
-            <p className="ui-section-subtitle">Histórico operacional recente sem dados financeiros sensíveis.</p>
+      <div className="dashboard-grid">
+        <Card className="dashboard-panel">
+          <div className="ui-section-header">
+            <div>
+              <h2 className="ui-section-title">Últimos 20 acessos</h2>
+              <p className="ui-section-subtitle">Leitura operacional recente, sem indicadores monetários na dashboard comum.</p>
+            </div>
+            <Button size="sm" variant="secondary" onClick={() => setModalAberto(true)}>
+              Ver dia completo
+            </Button>
           </div>
-        </div>
 
-        {ultimosAcessos.length === 0 ? (
-          <EmptyState title="Nenhum acesso encontrado." />
-        ) : (
-          <Table>
-            <thead>
-              <tr>
-                <th>Aluno</th>
-                <th>Data/Hora</th>
-                <th>Resultado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ultimosAcessos.map(({ id, nome, data_hora, resultado }) => (
-                <tr key={`${id}-${data_hora}`}>
-                  <td>{nome}</td>
-                  <td>{new Date(data_hora).toLocaleString('pt-BR')}</td>
-                  <td>{badgeAcesso(resultado)}</td>
+          {ultimosAcessos.length === 0 ? (
+            <EmptyState title="Nenhum acesso encontrado." />
+          ) : (
+            <Table>
+              <thead>
+                <tr>
+                  <th>Aluno</th>
+                  <th>Data/Hora</th>
+                  <th>Resultado</th>
                 </tr>
+              </thead>
+              <tbody>
+                {ultimosAcessos.map(({ id, nome, data_hora, resultado }) => (
+                  <tr key={`${id}-${data_hora}`}>
+                    <td className="font-semibold">{nome}</td>
+                    <td>{new Date(data_hora).toLocaleString("pt-BR")}</td>
+                    <td>{badgeAcesso(resultado)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          )}
+        </Card>
+
+        <Card className="dashboard-panel">
+          <div className="ui-section-header">
+            <div>
+              <h2 className="ui-section-title">Pontos de atenção</h2>
+              <p className="ui-section-subtitle">Sinais rápidos para a rotina operacional da unidade.</p>
+            </div>
+          </div>
+
+          <div className="dashboard-panel__body">
+            <div className="dashboard-attention-list">
+              {pontosAtencao.map((item) => (
+                <div key={item.id} className="dashboard-attention-item">
+                  <div className="dashboard-attention-item__icon">
+                    <ShieldCheck size={16} />
+                  </div>
+                  <div>
+                    <h3 className="dashboard-attention-item__title">{item.titulo}</h3>
+                    <p className="dashboard-attention-item__text">{item.texto}</p>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </Table>
-        )}
-      </Card>
+            </div>
+          </div>
+        </Card>
+      </div>
 
       {modalAberto && <ModalAcessosHoje onClose={() => setModalAberto(false)} />}
     </div>
