@@ -21,6 +21,31 @@ router.post('/logout', async (req, res, next) => {
   }
 });
 
+router.post('/logout-all', async (req, res, next) => {
+  try {
+    if (req.authError) {
+      return res.status(401).json({
+        ok: false,
+        error: req.authError.message,
+        code: req.authError.code,
+      });
+    }
+
+    if (!req.operator || req.operator.blocked) {
+      return res.status(401).json({
+        ok: false,
+        error: 'Operador nao autenticado',
+        code: 'OPERADOR_NAO_AUTENTICADO',
+      });
+    }
+
+    const data = await AuthService.logoutAll(req.operator, req);
+    res.json({ ok: true, data, message: 'Todas as sessoes foram encerradas com sucesso' });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/me', (req, res) => {
   if (req.authError) {
     return res.status(401).json({

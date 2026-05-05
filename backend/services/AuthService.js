@@ -1,4 +1,4 @@
-const { runGet, runExecute, runTransaction } = require('../dbHelper');
+const { runQuery, runGet, runExecute, runTransaction } = require('../dbHelper');
 const AppError = require('../errors/AppError');
 const AuditService = require('./AuditService');
 const UnitService = require('./UnitService');
@@ -278,6 +278,75 @@ async function revokeCurrentSession(token, actor, req = null, tx = null) {
   return revokeSession(session?.id, actor, req, tx);
 }
 
+async function revokeActiveSessionsForUser(userId, actor, options = {}, tx = null) {
+  const usuarioId = Number(userId);
+  if (!usuarioId) throw new AppError('usuario_id invalido', 400, 'USUARIO_ID_INVALIDO');
+
+  const db = tx || { all: runQuery, run: runExecute };
+  const sessions = await db.all(
+    `SELECT id
+     FROM auth_session
+     WHERE usuario_id = ?
+       AND status = 'ativo'
+       AND revoked_at IS NULL`,
+    [usuarioId]
+  );
+  const sessionIds = sessions.map((session) => session.id);
+
+  if (sessionIds.length) {
+    const placeholders = sessionIds.map(() => '?').join(', ');
+    await db.run(
+      `UPDATE auth_session
+       SET status = 'revogado', revoked_at = datetime('now')
+       WHERE id IN (${placeholders})`,
+      sessionIds
+    );
+  }
+
+  const client = getClientInfo(options.req);
+  await AuditService.logAction({
+    actor,
+    action: options.action || 'auth_sessions_revoked',
+    module: 'auth',
+    recordType: 'usuario_interno',
+    recordId: usuarioId,
+    before: null,
+    after: { revoked_count: sessionIds.length },
+    metadata: {
+      affected_user_id: usuarioId,
+      revoked_session_ids: sessionIds,
+      revoked_count: sessionIds.length,
+      reason: options.reason || null,
+      ip: client.ip,
+      user_agent: client.user_agent,
+      ...options.metadata,
+    },
+    tenant_id: actor?.tenant_id,
+    unit_id: actor?.unit_id,
+  }, tx);
+
+  return {
+    ok: true,
+    revoked_count: sessionIds.length,
+    revoked_session_ids: sessionIds,
+  };
+}
+
+async function logoutAll(actor, req = null) {
+  if (!actor?.id) throw new AppError('Operador nao autenticado', 401, 'OPERADOR_NAO_AUTENTICADO');
+
+  return runTransaction(async (tx) => revokeActiveSessionsForUser(
+    actor.id,
+    actor,
+    {
+      action: 'auth_logout_all',
+      reason: 'usuario_solicitou_logout_all',
+      req,
+    },
+    tx
+  ));
+}
+
 async function logout(token, actor, req = null) {
   if (!token) throw new AppError('Token ausente', 401, 'TOKEN_AUSENTE');
 
@@ -301,6 +370,8 @@ module.exports = {
   auditTokenFailure,
   revokeSession,
   revokeCurrentSession,
+  revokeActiveSessionsForUser,
+  logoutAll,
   extractBearerToken,
   sanitizeUser,
 };

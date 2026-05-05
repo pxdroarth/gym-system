@@ -1,6 +1,7 @@
 const { runQuery, runGet, runTransaction } = require('../dbHelper');
 const AppError = require('../errors/AppError');
 const AuditService = require('./AuditService');
+const AuthService = require('./AuthService');
 const UnitService = require('./UnitService');
 const { USER_ROLES, USER_STATUS, isValidRole, isValidStatus } = require('../constants/userRoles');
 const { hashPassword } = require('../utils/passwordHash');
@@ -123,6 +124,18 @@ async function alterarPapel(id, papel, actor) {
       unit_id: actor?.unit_id,
     }, tx);
 
+    if (before.papel !== after.papel) {
+      await AuthService.revokeActiveSessionsForUser(userId, actor, {
+        action: 'auth_sessions_revoked_by_role_change',
+        reason: 'alteracao_de_papel',
+        metadata: {
+          affected_user_id: userId,
+          before_role: before.papel,
+          after_role: after.papel,
+        },
+      }, tx);
+    }
+
     return sanitizeUser(after);
   });
 }
@@ -153,6 +166,18 @@ async function alterarStatus(id, status, actor) {
       tenant_id: actor?.tenant_id,
       unit_id: actor?.unit_id,
     }, tx);
+
+    if (before.status !== after.status) {
+      await AuthService.revokeActiveSessionsForUser(userId, actor, {
+        action: 'auth_sessions_revoked_by_status_change',
+        reason: 'alteracao_de_status',
+        metadata: {
+          affected_user_id: userId,
+          before_status: before.status,
+          after_status: after.status,
+        },
+      }, tx);
+    }
 
     return sanitizeUser(after);
   });
