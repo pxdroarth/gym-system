@@ -509,7 +509,14 @@ async function ensureUsuarioInterno() {
 }
 
 async function ensureAuthSession() {
-  if (await tableExists('auth_session')) return;
+  if (await tableExists('auth_session')) {
+    await addColumnIfMissing('auth_session', 'expires_at TEXT');
+    await addColumnIfMissing('auth_session', 'revoked_at TEXT');
+    await addColumnIfMissing('auth_session', 'last_used_at TEXT');
+    await addColumnIfMissing('auth_session', 'ip TEXT');
+    await addColumnIfMissing('auth_session', 'user_agent TEXT');
+    return;
+  }
 
   await runExecute(`
     CREATE TABLE auth_session (

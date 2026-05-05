@@ -5,7 +5,22 @@ const UnitService = require('./UnitService');
 const { USER_STATUS } = require('../constants/userRoles');
 const { verifyPassword, hashToken, generateToken } = require('../utils/passwordHash');
 
-const DEFAULT_SESSION_HOURS = Number(process.env.AUTH_SESSION_HOURS || 12);
+const DEFAULT_DEV_SESSION_MINUTES = 12 * 60;
+const DEFAULT_PROD_SESSION_MINUTES = 30;
+
+function readPositiveNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function getSessionTtlMinutes() {
+  return (
+    readPositiveNumber(process.env.AUTH_ACCESS_TOKEN_TTL_MINUTES) ||
+    readPositiveNumber(process.env.AUTH_SESSION_MINUTES) ||
+    (readPositiveNumber(process.env.AUTH_SESSION_HOURS) ? readPositiveNumber(process.env.AUTH_SESSION_HOURS) * 60 : null) ||
+    (process.env.NODE_ENV === 'production' ? DEFAULT_PROD_SESSION_MINUTES : DEFAULT_DEV_SESSION_MINUTES)
+  );
+}
 
 function sanitizeUser(user) {
   if (!user) return user;
@@ -22,8 +37,12 @@ function getClientInfo(req) {
 
 function sessionExpiry() {
   const expires = new Date();
-  expires.setHours(expires.getHours() + DEFAULT_SESSION_HOURS);
+  expires.setMinutes(expires.getMinutes() + getSessionTtlMinutes());
   return expires.toISOString();
+}
+
+function tokenFingerprint(token) {
+  return hashToken(token).slice(0, 12);
 }
 
 async function login(payload = {}, req = null) {
@@ -152,35 +171,118 @@ async function resolveSessionToken(token) {
   };
 }
 
-async function logout(token, actor, req = null) {
-  if (!token) throw new AppError('Token ausente', 401, 'TOKEN_AUSENTE');
+async function getSessionTokenFailure(token) {
+  if (!token) {
+    return { code: 'TOKEN_AUSENTE', reason: 'ausente', session: null };
+  }
 
   const tokenHash = hashToken(token);
-  const session = await runGet('SELECT * FROM auth_session WHERE token_hash = ? LIMIT 1', [tokenHash]);
+  const session = await runGet(
+    `SELECT s.*, u.nome, u.email, u.login, u.papel, u.status AS usuario_status
+     FROM auth_session s
+     LEFT JOIN usuario_interno u ON u.id = s.usuario_id
+     WHERE s.token_hash = ?
+     LIMIT 1`,
+    [tokenHash]
+  );
+
+  if (!session) {
+    return { code: 'TOKEN_INVALIDO', reason: 'nao_encontrado', session: null };
+  }
+
+  if (session.status !== 'ativo' || session.revoked_at) {
+    return { code: 'TOKEN_REVOGADO', reason: 'revogado', session };
+  }
+
+  if (session.expires_at && new Date(session.expires_at).getTime() <= Date.now()) {
+    return { code: 'TOKEN_EXPIRADO', reason: 'expirado', session };
+  }
+
+  if (session.usuario_status !== USER_STATUS.ATIVO) {
+    return { code: 'USUARIO_INATIVO_OU_BLOQUEADO', reason: 'usuario_inativo', session };
+  }
+
+  return { code: 'TOKEN_INVALIDO', reason: 'nao_resolvido', session };
+}
+
+async function auditTokenFailure(token, req = null, failure = null) {
+  const resolvedFailure = failure || await getSessionTokenFailure(token);
+  const client = getClientInfo(req);
+  const session = resolvedFailure.session;
+  const actor = session?.usuario_id
+    ? {
+        id: String(session.usuario_id),
+        name: session.nome || session.login || `usuario_${session.usuario_id}`,
+        role: session.papel,
+      }
+    : { id: 'sistema', name: 'sistema' };
+
+  await AuditService.logAction({
+    actor,
+    action: 'auth_token_rejected',
+    module: 'auth',
+    recordType: session ? 'auth_session' : 'auth_token',
+    recordId: session?.id || null,
+    before: null,
+    after: null,
+    metadata: {
+      code: resolvedFailure.code,
+      reason: resolvedFailure.reason,
+      token_fingerprint: token ? tokenFingerprint(token) : null,
+      ip: client.ip,
+      user_agent: client.user_agent,
+    },
+    tenant_id: actor.tenant_id,
+    unit_id: actor.unit_id,
+  });
+}
+
+async function revokeSession(sessionId, actor, req = null, tx = null) {
+  if (!sessionId) throw new AppError('Sessao ausente', 401, 'SESSAO_AUSENTE');
+
+  const db = tx || { get: runGet, run: runExecute };
+  const session = await db.get('SELECT * FROM auth_session WHERE id = ? LIMIT 1', [sessionId]);
   if (!session || session.status !== 'ativo') {
     throw new AppError('Sessao nao encontrada ou ja encerrada', 401, 'SESSAO_INVALIDA');
   }
 
+  await db.run(
+    "UPDATE auth_session SET status = 'revogado', revoked_at = datetime('now') WHERE id = ?",
+    [session.id]
+  );
+
+  await AuditService.logAction({
+    actor,
+    action: 'auth_logout',
+    module: 'auth',
+    recordType: 'auth_session',
+    recordId: session.id,
+    before: session,
+    after: { ...session, status: 'revogado' },
+    metadata: getClientInfo(req),
+    tenant_id: actor?.tenant_id,
+    unit_id: actor?.unit_id,
+  }, tx);
+
+  return { ok: true };
+}
+
+async function revokeCurrentSession(token, actor, req = null, tx = null) {
+  if (!token) throw new AppError('Token ausente', 401, 'TOKEN_AUSENTE');
+
+  const tokenHash = hashToken(token);
+  const session = tx
+    ? await tx.get('SELECT * FROM auth_session WHERE token_hash = ? LIMIT 1', [tokenHash])
+    : await runGet('SELECT * FROM auth_session WHERE token_hash = ? LIMIT 1', [tokenHash]);
+
+  return revokeSession(session?.id, actor, req, tx);
+}
+
+async function logout(token, actor, req = null) {
+  if (!token) throw new AppError('Token ausente', 401, 'TOKEN_AUSENTE');
+
   return runTransaction(async (tx) => {
-    await tx.run(
-      "UPDATE auth_session SET status = 'revogado', revoked_at = datetime('now') WHERE id = ?",
-      [session.id]
-    );
-
-    await AuditService.logAction({
-      actor,
-      action: 'auth_logout',
-      module: 'auth',
-      recordType: 'auth_session',
-      recordId: session.id,
-      before: session,
-      after: { ...session, status: 'revogado' },
-      metadata: getClientInfo(req),
-      tenant_id: actor?.tenant_id,
-      unit_id: actor?.unit_id,
-    }, tx);
-
-    return { ok: true };
+    return revokeCurrentSession(token, actor, req, tx);
   });
 }
 
@@ -194,6 +296,11 @@ module.exports = {
   login,
   logout,
   resolveSessionToken,
+  getSessionTtlMinutes,
+  getSessionTokenFailure,
+  auditTokenFailure,
+  revokeSession,
+  revokeCurrentSession,
   extractBearerToken,
   sanitizeUser,
 };

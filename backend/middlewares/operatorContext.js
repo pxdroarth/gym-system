@@ -31,13 +31,20 @@ async function operatorContext(req, _res, next) {
     if (authHeader) {
       const token = AuthService.extractBearerToken(req);
       if (!token) {
+        await AuthService.auditTokenFailure(null, req, {
+          code: 'TOKEN_FORMATO_INVALIDO',
+          reason: 'bearer_malformado',
+          session: null,
+        });
         req.authError = { message: 'Authorization Bearer invalido', code: 'TOKEN_FORMATO_INVALIDO' };
         return next();
       }
 
       const resolved = await AuthService.resolveSessionToken(token);
       if (!resolved) {
-        req.authError = { message: 'Token invalido ou expirado', code: 'TOKEN_INVALIDO' };
+        const failure = await AuthService.getSessionTokenFailure(token);
+        await AuthService.auditTokenFailure(token, req, failure);
+        req.authError = { message: 'Token invalido ou expirado', code: failure.code };
         return next();
       }
 
