@@ -1,0 +1,41 @@
+@startuml
+title Verificação e Liberação de Acesso
+autonumber
+skinparam shadowing false
+
+actor "operador_acesso" as Operador
+actor "Integração futura\ncatraca/câmera" as Catraca
+participant "Frontend/Dispositivo" as Client
+participant "API Express\n/acessos" as API
+participant "AccessService" as Access
+database "Alunos / Mensalidades /\nVínculos / Status" as Dados
+participant "Auditoria técnica" as Audit
+database "Banco SQLite atual\n(PostgreSQL futuro)" as DB
+
+Operador -> Client : consulta ou libera acesso
+Catraca -> Client : evento futuro de identificação
+Client -> API : POST/GET acesso\nBearer ou integração futura
+API -> API : valida autenticação,\npermissão e escopo
+API -> Access : avaliar acesso(aluno, contexto)
+Access -> Dados : consulta aluno e status
+Access -> Dados : consulta mensalidades
+Access -> Dados : consulta vínculos responsável/dependente
+Access -> Access : aplica regras de acesso
+
+alt acesso permitido
+  Access -> DB : registra acesso liberado
+  Access -> Audit : registra evento de acesso
+  API --> Client : permitido/liberado
+else acesso bloqueado
+  Access -> DB : registra tentativa/bloqueio quando aplicável
+  Access -> Audit : registra motivo do bloqueio
+  API --> Client : bloqueado + motivo
+end
+
+note right of Access
+Regras documentadas:
+- mensalidade vencida bloqueia acesso
+- dia do vencimento ainda permite acesso
+- status/vínculos afetam decisão
+end note
+@enduml

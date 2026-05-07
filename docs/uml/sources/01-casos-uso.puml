@@ -1,0 +1,156 @@
+@startuml
+title Sistema Academia SA — Casos de Uso Gerais
+left to right direction
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+actor "platform_admin" as PlatformAdmin
+actor "owner" as Owner
+actor "admin" as Admin
+actor "gerente" as Gerente
+actor "recepção" as Recepcao
+actor "operador_acesso" as OperadorAcesso
+actor "Sistema de Auditoria" as SistemaAuditoria
+actor "Sistema de Sessão" as SistemaSessao
+actor "Integração futura\nde catraca/câmera" as Catraca
+actor "Integração futura\nde backup/storage" as BackupStorage
+
+rectangle "Sistema Academia SA" {
+  package "Autenticação e sessão" {
+    usecase "Entrar no sistema" as UCLogin
+    usecase "Renovar sessão\n(token opaco)" as UCRefresh
+    usecase "Encerrar sessão" as UCLogout
+    usecase "Encerrar todas as sessões" as UCLogoutAll
+  }
+
+  package "Governança de Rede/Unidade" {
+    usecase "Gerenciar Rede" as UCRede
+    usecase "Gerenciar Unidade,\nMatriz e Filial" as UCUnidade
+    usecase "Selecionar Unidade\noperacional" as UCSelecionarUnidade
+  }
+
+  package "Usuários internos" {
+    usecase "Criar usuário interno" as UCCriarUsuario
+    usecase "Alterar papel/status" as UCAlterarUsuario
+  }
+
+  package "Alunos" {
+    usecase "Cadastrar aluno" as UCCadastrarAluno
+    usecase "Consultar perfil do aluno" as UCPerfilAluno
+    usecase "Editar aluno" as UCEditarAluno
+  }
+
+  package "Planos e vínculos" {
+    usecase "Gerenciar planos" as UCPlanos
+    usecase "Gerenciar vínculos\nresponsável/dependente" as UCVinculos
+  }
+
+  package "Mensalidades e pagamentos" {
+    usecase "Gerenciar mensalidades" as UCMensalidades
+    usecase "Registrar pagamento" as UCPagamento
+    usecase "Cancelar/reverter\nlançamento sensível" as UCReversao
+  }
+
+  package "Produtos e vendas" {
+    usecase "Gerenciar produtos" as UCProdutos
+    usecase "Registrar venda" as UCVenda
+    usecase "Cancelar/reverter venda" as UCReverterVenda
+  }
+
+  package "Financeiro" {
+    usecase "Acessar financeiro restrito" as UCFinanceiro
+    usecase "Gerenciar plano de contas" as UCPlanoContas
+    usecase "Gerenciar contas financeiras" as UCContas
+    usecase "Fechar/reabrir período" as UCFechamento
+  }
+
+  package "Acessos" {
+    usecase "Verificar status de acesso" as UCVerificarAcesso
+    usecase "Registrar/liberar acesso" as UCLiberarAcesso
+  }
+
+  package "Auditoria e Histórico" {
+    usecase "Registrar Auditoria técnica" as UCAuditoria
+    usecase "Ver Histórico de Atividades\n(somente leitura)" as UCHistorico
+  }
+
+  package "Consolidado da Rede" {
+    usecase "Ver Consolidado da Rede\n(somente leitura)" as UCConsolidado
+  }
+
+  package "Onboarding da Rede" {
+    usecase "Executar onboarding\nda Rede" as UCOnboarding
+  }
+}
+
+PlatformAdmin --> UCLogin
+PlatformAdmin --> UCRefresh
+PlatformAdmin --> UCLogout
+PlatformAdmin --> UCLogoutAll
+PlatformAdmin --> UCRede
+PlatformAdmin --> UCUnidade
+PlatformAdmin --> UCCriarUsuario
+PlatformAdmin --> UCAlterarUsuario
+PlatformAdmin --> UCFinanceiro
+PlatformAdmin --> UCHistorico
+PlatformAdmin --> UCConsolidado
+PlatformAdmin --> UCOnboarding
+
+Owner --> UCLogin
+Owner --> UCSelecionarUnidade
+Owner --> UCCriarUsuario
+Owner --> UCCadastrarAluno
+Owner --> UCPerfilAluno
+Owner --> UCPlanos
+Owner --> UCVinculos
+Owner --> UCMensalidades
+Owner --> UCPagamento
+Owner --> UCProdutos
+Owner --> UCVenda
+Owner --> UCFinanceiro
+Owner --> UCVerificarAcesso
+Owner --> UCLiberarAcesso
+Owner --> UCHistorico
+Owner --> UCConsolidado
+
+Admin --> UCCadastrarAluno
+Admin --> UCPerfilAluno
+Admin --> UCEditarAluno
+Admin --> UCPlanos
+Admin --> UCMensalidades
+Admin --> UCPagamento
+Admin --> UCProdutos
+Admin --> UCVenda
+Admin --> UCFinanceiro
+Admin --> UCVerificarAcesso
+Admin --> UCLiberarAcesso
+Admin --> UCHistorico
+
+Gerente --> UCPerfilAluno
+Gerente --> UCMensalidades
+Gerente --> UCProdutos
+Gerente --> UCVenda
+Gerente --> UCVerificarAcesso
+
+Recepcao --> UCCadastrarAluno
+Recepcao --> UCPerfilAluno
+Recepcao --> UCVenda
+Recepcao --> UCVerificarAcesso
+
+OperadorAcesso --> UCVerificarAcesso
+OperadorAcesso --> UCLiberarAcesso
+
+Catraca --> UCVerificarAcesso
+Catraca --> UCLiberarAcesso
+BackupStorage --> UCProdutos
+SistemaSessao --> UCRefresh
+SistemaSessao --> UCLogoutAll
+SistemaAuditoria --> UCAuditoria
+
+UCLogin ..> UCAuditoria : registra
+UCRefresh ..> UCAuditoria : registra
+UCAlterarUsuario ..> UCLogoutAll : revoga sessões
+UCPagamento ..> UCAuditoria : registra
+UCReversao ..> UCAuditoria : registra
+UCLiberarAcesso ..> UCAuditoria : registra
+@enduml
