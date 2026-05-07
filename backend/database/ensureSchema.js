@@ -535,6 +535,47 @@ async function ensureAuthSession() {
   `);
 }
 
+async function ensureAuthRefreshToken() {
+  if (await tableExists('auth_refresh_token')) {
+    await addColumnIfMissing('auth_refresh_token', 'session_id INTEGER');
+    await addColumnIfMissing('auth_refresh_token', 'usuario_id INTEGER');
+    await addColumnIfMissing('auth_refresh_token', 'family_id TEXT');
+    await addColumnIfMissing('auth_refresh_token', 'token_hash TEXT');
+    await addColumnIfMissing('auth_refresh_token', "status TEXT NOT NULL DEFAULT 'ativo'");
+    await addColumnIfMissing('auth_refresh_token', "created_at TEXT DEFAULT (datetime('now'))");
+    await addColumnIfMissing('auth_refresh_token', 'expires_at TEXT');
+    await addColumnIfMissing('auth_refresh_token', 'used_at TEXT');
+    await addColumnIfMissing('auth_refresh_token', 'rotated_at TEXT');
+    await addColumnIfMissing('auth_refresh_token', 'revoked_at TEXT');
+    await addColumnIfMissing('auth_refresh_token', 'replaced_by_id INTEGER');
+    await addColumnIfMissing('auth_refresh_token', 'ip TEXT');
+    await addColumnIfMissing('auth_refresh_token', 'user_agent TEXT');
+    return;
+  }
+
+  await runExecute(`
+    CREATE TABLE auth_refresh_token (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id INTEGER NOT NULL,
+      usuario_id INTEGER NOT NULL,
+      family_id TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      status TEXT NOT NULL DEFAULT 'ativo',
+      created_at TEXT DEFAULT (datetime('now')),
+      expires_at TEXT,
+      used_at TEXT,
+      rotated_at TEXT,
+      revoked_at TEXT,
+      replaced_by_id INTEGER,
+      ip TEXT,
+      user_agent TEXT,
+      FOREIGN KEY (session_id) REFERENCES auth_session(id),
+      FOREIGN KEY (usuario_id) REFERENCES usuario_interno(id),
+      FOREIGN KEY (replaced_by_id) REFERENCES auth_refresh_token(id)
+    )
+  `);
+}
+
 async function ensureSchema() {
   await ensureAuditLog();
   const defaultScope = await ensureTenantUnitBase();
@@ -549,6 +590,7 @@ async function ensureSchema() {
   await ensureExistingUserScopes(defaultScope.tenantId, defaultScope.unitId);
   await backfillDefaultScope(defaultScope.tenantId, defaultScope.unitId);
   await ensureAuthSession();
+  await ensureAuthRefreshToken();
 }
 
 module.exports = ensureSchema;

@@ -4,8 +4,19 @@ const AuthService = require('../services/AuthService');
 
 router.post('/login', async (req, res, next) => {
   try {
-    const data = await AuthService.login(req.body || {}, req);
-    res.json({ ok: true, data, message: 'Login realizado com sucesso' });
+    const result = await AuthService.login(req.body || {}, req);
+    AuthService.setRefreshCookie(res, result.refreshCookie);
+    res.json({ ok: true, data: result.data, message: 'Login realizado com sucesso' });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/refresh', async (req, res, next) => {
+  try {
+    const result = await AuthService.refresh(req);
+    AuthService.setRefreshCookie(res, result.refreshCookie);
+    res.json({ ok: true, data: result.data, message: 'Sessao renovada com sucesso' });
   } catch (error) {
     next(error);
   }
@@ -15,6 +26,7 @@ router.post('/logout', async (req, res, next) => {
   try {
     const token = AuthService.extractBearerToken(req);
     const data = await AuthService.logout(token, req.operator, req);
+    AuthService.clearRefreshCookie(res);
     res.json({ ok: true, data, message: 'Logout realizado com sucesso' });
   } catch (error) {
     next(error);
@@ -40,6 +52,7 @@ router.post('/logout-all', async (req, res, next) => {
     }
 
     const data = await AuthService.logoutAll(req.operator, req);
+    AuthService.clearRefreshCookie(res);
     res.json({ ok: true, data, message: 'Todas as sessoes foram encerradas com sucesso' });
   } catch (error) {
     next(error);
