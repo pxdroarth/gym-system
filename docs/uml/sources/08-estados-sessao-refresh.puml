@@ -1,0 +1,31 @@
+@startuml
+title Estados de Sessão e Refresh Token
+skinparam shadowing false
+
+[*] --> "sessão ativa" : login
+"sessão ativa" --> "access expirado" : TTL do access
+"sessão ativa" --> logout : logout
+"sessão ativa" --> "logout-all" : logout-all
+"sessão ativa" --> "usuário bloqueado/inativo" : alteração administrativa
+
+"access expirado" --> "refresh ativo" : cookie HttpOnly válido
+"refresh ativo" --> "sessão ativa" : /auth/refresh\nnovo access token
+"refresh ativo" --> "refresh rotacionado" : uso bem-sucedido
+"refresh rotacionado" --> "refresh reutilizado" : token antigo reutilizado
+"refresh reutilizado" --> "família revogada" : detectar reuso
+
+logout --> "família revogada" : revoga refresh relacionado
+"logout-all" --> "família revogada" : revoga todos do usuário
+"usuário bloqueado/inativo" --> "família revogada" : revogação administrativa
+
+"família revogada" --> [*]
+logout --> [*]
+"logout-all" --> [*]
+
+note bottom
+Tokens são opacos e server-side.
+Não usar JWT.
+Token cru não deve ser salvo em banco,
+log ou Auditoria.
+end note
+@enduml

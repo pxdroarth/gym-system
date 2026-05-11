@@ -1,43 +1,30 @@
-# Referências Visuais de Arquitetura
+# Diagramas Visuais Históricos
 
-Esta pasta reúne diagramas visuais já existentes no projeto. Eles representam decisões, entendimentos e leituras anteriores sobre o Sistema Academia SA e continuam úteis como referência histórica e arquitetural.
+Esta pasta reúne diagramas visuais antigos do Sistema Academia SA. Eles continuam úteis como referência histórica e arquitetural, mas não são a fonte oficial única da documentação atual.
 
-## Status dos arquivos
+O ponto recomendado para entender o uso dessas referências é:
 
-Estes arquivos são **referências visuais**, não a fonte oficial única da documentação atual. Eles não devem substituir:
+- [Referências visuais de arquitetura](../architecture/referencias-visuais/README.md)
 
-- `docs/governance/requisitos-base.md`
-- `docs/governance/matriz-permissoes.md`
-- fontes PlantUML em `docs/uml/sources`
-- schema-freeze antes da migração para PostgreSQL
-- validação real de permissões no backend
+## Arquivos
 
-## Relação com a documentação UML
+- `Diagrama de contexto do backend.png`
+- `Diagrama de evolução de persistência.png`
+- `Diagrama de módulos do backend.png`
+- `Fluxo de decisão de acesso.png`
+- `Máquina de estados de acesso.png`
+- `Máquina de estados de mensalidade.png`
+- `notasextras.txt`
 
-Os arquivos PlantUML em `docs/uml/sources` passam a ser a documentação UML versionável daqui para frente. Sempre que um diagrama oficial precisar evoluir, a fonte principal deve ser o `.puml`, não uma imagem editada manualmente.
+## Como usar
 
-Os diagramas desta pasta podem e devem ser usados como insumo para refinar os diagramas oficiais, especialmente quando trazem decisões visuais mais claras do que a primeira versão em PlantUML.
+- Use como apoio visual para arquitetura, acesso, mensalidades e evolução de persistência.
+- Use os PlantUML em `../uml/sources/` como fonte versionável oficial para UML.
+- Use `../governance/requisitos-base.md` e `../governance/matriz-permissoes.md` como referência principal de requisitos e permissões.
 
-## Uso recomendado por arquivo
+## Avisos
 
-| Arquivo | Status | Uso recomendado |
-|---|---|---|
-| `Diagrama de contexto do backend.png` | Referência visual arquitetural | Apoia a visão da arquitetura atual do backend e deve ser comparado com `docs/uml/sources/09-componentes-arquitetura.puml`. |
-| `Diagrama de evolução de persistência.png` | Referência visual de evolução técnica | Apoia a futura migração SQLite -> PostgreSQL e deve ser considerado durante schema-freeze e planejamento de migrations. |
-| `Diagrama de módulos do backend.png` | Referência visual modular | Apoia a leitura dos módulos e services atuais do backend. Deve orientar, mas não substituir, análise de código. |
-| `Fluxo de decisão de acesso.png` | Referência visual de regra operacional | Deve ser usado como base para refinar diagramas oficiais de atividade e sequência de acesso. |
-| `Máquina de estados de acesso.png` | Referência visual de estados | Deve apoiar a evolução dos diagramas oficiais de estados/atividades de acesso. |
-| `Máquina de estados de mensalidade.png` | Referência visual de estados | Deve apoiar a evolução do diagrama oficial `docs/uml/sources/07-estados-mensalidade.puml`. |
-| `notasextras.txt` | Notas históricas | Deve ser tratado como material auxiliar, sujeito a revisão antes de virar requisito oficial. |
-
-## Integração de acesso
-
-A integração Hikvision deve ser tratada como futura. A fase atual usa webcam local/simulação e deve manter o provider de acesso desacoplado, para permitir evolução posterior sem prender o domínio a um fornecedor específico.
-
-## Regras de governança
-
-- Não considerar estes diagramas como documentação descartada.
-- Não tratá-los como substituto da matriz de permissões.
-- Não tratá-los como substituto do schema-freeze.
-- Não promover uma decisão visual antiga para requisito concluído sem validação.
-- Usar estes arquivos como referência para backlog, revisão arquitetural e refinamento dos diagramas PlantUML oficiais.
+- Estes diagramas não substituem schema-freeze, requisitos-base, matriz de permissões ou validação real no backend.
+- SQLite é o banco atual; PostgreSQL é evolução futura.
+- Hikvision/catraca é integração futura; a fase atual considera webcam local/simulação.
+- Decisões visuais antigas devem ser revisadas antes de virar requisito oficial.

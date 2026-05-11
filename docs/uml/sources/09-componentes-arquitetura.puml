@@ -1,0 +1,62 @@
+@startuml
+title Componentes de Arquitetura — Sistema Academia SA
+skinparam componentStyle rectangle
+skinparam shadowing false
+
+package "Frontend" {
+  [React/Vite] as Frontend
+  [AuthContext] as AuthContext
+  [Api.js / Axios] as Axios
+}
+
+package "Backend Node.js + Express" {
+  [API Express] as API
+  [Middlewares\nAuth / Escopo / Permissão] as Middlewares
+  [Services] as Services
+  [Auth] as Auth
+  [Auditoria] as Auditoria
+  [Financeiro] as Financeiro
+  [Acessos] as Acessos
+  [Uploads] as Uploads
+}
+
+database "SQLite atual" as SQLite
+database "PostgreSQL futuro" as PostgreSQL
+cloud "Uploads/Storage futuro" as Storage
+cloud "Backup futuro" as Backup
+node "Integração futura\ncatraca/câmera" as Catraca
+
+Frontend --> AuthContext
+AuthContext --> Axios
+Axios --> API : HTTP/JSON\nBearer atual\nCookie refresh futuro no frontend
+API --> Middlewares
+Middlewares --> Services
+Services --> Auth
+Services --> Auditoria
+Services --> Financeiro
+Services --> Acessos
+Services --> Uploads
+
+Auth --> SQLite
+Auditoria --> SQLite
+Financeiro --> SQLite
+Acessos --> SQLite
+Uploads --> SQLite
+
+SQLite ..> PostgreSQL : migração futura
+Uploads ..> Storage : futuro
+SQLite ..> Backup : futuro
+Catraca ..> API : integração futura
+
+note right of Auth
+Sessão opaca server-side.
+Refresh token em cookie HttpOnly no backend.
+Sem JWT.
+end note
+
+note bottom of Auditoria
+Auditoria é mecanismo técnico.
+Histórico de Atividades é o módulo visual
+somente leitura.
+end note
+@enduml
