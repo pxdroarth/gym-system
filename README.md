@@ -147,7 +147,12 @@ Existem arquivos locais:
 - `backend/.env`
 - `frontend/.env`
 
-Não foi encontrado `.env.example` no momento desta auditoria. Para ambiente limpo, recomenda-se criar exemplos versionáveis sem segredos reais antes do deploy.
+Exemplos seguros foram adicionados para ambiente limpo:
+
+- `backend/.env.example`
+- `frontend/.env.example`
+
+Observação importante: o backend atual não carrega `.env` automaticamente por código, pois não há `dotenv` configurado. Para usar variáveis no backend hoje, defina-as no shell/processo antes de rodar `npm start`. O frontend Vite carrega variáveis `VITE_*` quando o `.env` está na pasta `frontend`.
 
 Variáveis relevantes observadas:
 
@@ -185,6 +190,7 @@ Não existe `backend/package.json`; o backend usa o `package.json` da raiz.
 - [Governança](docs/governance/README.md)
 - [Requisitos base](docs/governance/requisitos-base.md)
 - [Matriz de permissões](docs/governance/matriz-permissoes.md)
+- [Smoke tests manuais](docs/governance/smoke-tests.md)
 - [UML PlantUML/SVG](docs/uml/README.md)
 - [Referências visuais de arquitetura](docs/architecture/referencias-visuais/README.md)
 - [Auditoria dos READMEs](docs/governance/readme-audit.md)

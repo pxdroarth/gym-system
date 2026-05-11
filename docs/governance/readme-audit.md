@@ -37,7 +37,7 @@ O comando encontrou também READMEs de dependências dentro de `node_modules`. P
 - Endpoint `/test-db` conferido em `backend/server.js`.
 - Scripts documentados conferidos contra os `package.json`.
 - Variáveis de ambiente locais verificadas em `backend/.env` e `frontend/.env`.
-- Ausência de `.env.example` registrada como pendência.
+- Ausência de `.env.example` registrada como pendência naquele momento; exemplos foram criados posteriormente em `backend/.env.example` e `frontend/.env.example`.
 - ZIP de UML tratado como artefato opcional, não fonte oficial.
 - Links internos ajustados com caminhos relativos.
 
@@ -52,9 +52,8 @@ O comando encontrou também READMEs de dependências dentro de `node_modules`. P
 
 ## Pendências restantes
 
-- Criar `.env.example` para backend e frontend sem segredos reais.
 - Decidir se `docs/diagramas/` deve permanecer como pasta histórica ou ser migrada fisicamente para `docs/architecture/referencias-visuais/`.
-- Documentar smoke tests manuais completos.
+- Executar e registrar smoke tests manuais a partir de `docs/governance/smoke-tests.md`.
 - Congelar matriz de permissões antes do PostgreSQL.
 - Finalizar hardening de sessão no frontend e produção.
 - Revisar se o pacote `paletas-telas/frontend_rework_codex_package` continuará no repositório final ou será arquivado como referência histórica.
