@@ -23,6 +23,7 @@ async function columnExists(tableName, columnName) {
 }
 
 async function addColumnIfMissing(tableName, columnDefinition) {
+  if (!(await tableExists(tableName))) return;
   const columnName = columnDefinition.split(/\s+/)[0];
   if (!(await columnExists(tableName, columnName))) {
     await runExecute(`ALTER TABLE ${tableName} ADD COLUMN ${columnDefinition}`);
@@ -403,6 +404,42 @@ async function ensurePlanoAssociadoColumns() {
   await addColumnIfMissing('plano_associado', 'encerrado_em TEXT');
 }
 
+async function ensurePlanoAssociadoTable() {
+  if (await tableExists('plano_associado')) return;
+
+  await runExecute(`
+    CREATE TABLE plano_associado (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      aluno_id INTEGER NOT NULL,
+      responsavel_id INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'ativo',
+      tenant_id INTEGER,
+      unit_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      encerrado_em TEXT
+    )
+  `);
+}
+
+async function ensurePlanoContasTable() {
+  if (await tableExists('plano_contas')) return;
+
+  await runExecute(`
+    CREATE TABLE plano_contas (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome TEXT NOT NULL,
+      tipo TEXT NOT NULL,
+      descricao TEXT,
+      quantidade_sugerida INTEGER,
+      dia_sugerido INTEGER,
+      tenant_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )
+  `);
+}
+
 async function ensureReversaoSoftDeleteColumns() {
   await addColumnIfMissing('mensalidade', 'deleted_at TEXT');
   await addColumnIfMissing('mensalidade', 'reversao_controlada_id INTEGER');
@@ -583,6 +620,8 @@ async function ensureSchema() {
   await ensureFechamentoMensalUnitUnique(defaultScope);
   await ensureReversaoControlada();
   await ensureLegacyAdministrativeTables();
+  await ensurePlanoAssociadoTable();
+  await ensurePlanoContasTable();
   await ensurePlanoAssociadoColumns();
   await ensureReversaoSoftDeleteColumns();
   await ensureScopeColumns();
