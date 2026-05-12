@@ -192,6 +192,7 @@ Não existe `backend/package.json`; o backend usa o `package.json` da raiz.
 - [Matriz de permissões](docs/governance/matriz-permissoes.md)
 - [Smoke tests manuais](docs/governance/smoke-tests.md)
 - [Testes e validações](tests/README.md)
+- [Ambiente local](docs/setup/ambiente-local.md)
 - [UML PlantUML/SVG](docs/uml/README.md)
 - [Referências visuais de arquitetura](docs/architecture/referencias-visuais/README.md)
 - [Auditoria dos READMEs](docs/governance/readme-audit.md)

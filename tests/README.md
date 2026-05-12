@@ -35,6 +35,12 @@ Esta pasta concentra scripts, coleções e referências para validação manual 
 
 ## 5. Comandos principais
 
+Validação de ambiente local:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tests\scripts\check-env.ps1
+```
+
 Smoke de autenticação já disponível:
 
 ```powershell
