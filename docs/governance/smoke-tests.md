@@ -141,3 +141,17 @@ Use `curl.exe` no PowerShell se `curl` estiver apontando para alias local.
 - Produção comercial real está fora de escopo.
 - Permissões finais ainda dependem de congelamento da matriz.
 - Alguns testes por perfil dependem de massa de usuários/perfis preparada.
+
+## 12. Automação disponível
+
+O smoke de autenticação backend já possui automação inicial em PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tests\scripts\smoke-auth.ps1 -Login admin
+```
+
+- Auth backend está automatizado parcialmente.
+- API geral, frontend, carga e permissões completas ainda serão expandidos.
+- Insomnia será usado para API manual/semiautomatizada.
+- Playwright será usado futuramente para E2E.
+- k6 e JMeter serão usados futuramente para carga/performance.

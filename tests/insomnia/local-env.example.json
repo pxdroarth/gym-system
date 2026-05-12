@@ -1,0 +1,8 @@
+{
+  "base_url": "http://localhost:3001",
+  "unit_id": "1",
+  "login_admin": "admin",
+  "senha_admin": "PREENCHER_LOCALMENTE",
+  "token_admin": "",
+  "token_operador": ""
+}
