@@ -78,3 +78,8 @@ Esse formato é útil em validação local controlada, mas não é recomendado s
 | Carga completa | JMeter | pendente | Plano `.jmx` e relatório ficam para etapa futura. |
 | Auditoria | Manual + API | parcial | Eventos de auth já são cobertos indiretamente; escopo e leitura ainda pedem expansão. |
 | Domínios críticos | Manual + API | parcial | Alunos, mensalidades, pagamentos, vendas, acessos e vínculos ainda serão consolidados. |
+
+## 8. Insomnia
+
+- Documentação: [tests/insomnia/README.md](insomnia/README.md)
+- Mapa de requests: [tests/insomnia/requests-map.md](insomnia/requests-map.md)
