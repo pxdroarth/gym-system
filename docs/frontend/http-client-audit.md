@@ -23,9 +23,9 @@ Esta auditoria nao altera codigo funcional. O backend usa token opaco server-sid
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | `frontend/src/services/Api.js` | `api` | `VITE_API_URL` ou `http://localhost:3001` | instancia | Sim | Central via interceptor | Sim | Interceptors request/response | Alto | Cliente oficial atual da API interna. |
 | `frontend/src/services/Api.js` | `refreshAccessToken` | `/auth/refresh` | POST | Sim | Nao, usa `_skipAuthHeader` | Sim | Single-flight; limpa sessao em falha | Alto | Usa cookie HttpOnly; nao le cookie via JS. |
-| `frontend/src/services/authService.js` | `loginRequest` | `/auth/login` | POST | Sim | Central se token local existir | Sim | Rejeicao axios para caller | Alto | Fluxo sensivel; futuro ajuste pode explicitar skip de bearer no login. |
-| `frontend/src/services/authService.js` | `logoutRequest` | `/auth/logout` | POST | Sim | Central via interceptor | Sim | AuthContext limpa local mesmo em erro | Alto | Envia bearer e cookie automaticamente. |
-| `frontend/src/services/authService.js` | `logoutAllRequest` | `/auth/logout-all` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Funcao existe; uso de UI deve ser confirmado antes de padronizar. |
+| `frontend/src/services/authService.js` | `loginRequest` | `/auth/login` | POST | Sim | Nao, usa `_skipAuthHeader` | Sim | Rejeicao axios sanitizada no AuthContext | Alto | Fluxo sensivel; nao envia bearer antigo. |
+| `frontend/src/services/authService.js` | `logoutRequest` | `/auth/logout` | POST | Sim | Central via interceptor | Sim | AuthContext limpa local mesmo em erro; sem refresh automatico | Alto | Envia bearer e cookie automaticamente, mas nao tenta renovar em 401. |
+| `frontend/src/services/authService.js` | `logoutAllRequest` | `/auth/logout-all` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller; sem refresh automatico | Alto | Funcao existe; uso de UI deve ser confirmado antes de padronizar. |
 | `frontend/src/services/authService.js` | `meRequest` | `/auth/me` | GET | Sim | Central via interceptor | Sim | Bootstrap controla erro | Alto | Usada para validar sessao. |
 | `frontend/src/services/Api.js` | `fetchAlunos` | `/alunos` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | GET autenticado comum. |
 | `frontend/src/services/Api.js` | `fetchAlunoById` | `/alunos/{id}` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | Usa path param. |
@@ -148,6 +148,14 @@ Confinar uso de `localStorage` ao minimo necessario, preparar access token em me
 - Validar contra backend real os endpoints legados de mensalidades antes de migrar ou remover chamadas.
 - Definir helper oficial de erro para mensagens de usuario.
 - Decidir estrategia para URL de midia/imagens sem duplicar `localhost:3001`.
-- Revisar `loginRequest` para evitar envio acidental de bearer antigo no login, sem alterar o fluxo funcional sem teste dedicado.
 - Confirmar uso real de `logoutAllRequest` na UI antes de padronizar fluxo visual.
 - Manter testes manuais de login, refresh, logout, reload e token invalido antes de remover `localStorage`.
+
+## Atualização 3C-B
+
+- Flags internas padronizadas no cliente central: `_skipAuthHeader`, `_skipAuthRefresh` e `_retry`.
+- `loginRequest` chama `/auth/login` com `_skipAuthHeader: true` e `_skipAuthRefresh: true`, evitando envio de bearer antigo.
+- `refreshSession` continua usando o fluxo central de `refreshAccessToken`, que chama `/auth/refresh` sem bearer e sem refresh automatico.
+- `logoutRequest` e `logoutAllRequest` continuam podendo enviar o bearer atual, mas nao tentam refresh automatico se receberem 401.
+- Criado `frontend/src/utils/getApiErrorMessage.js` para mensagem humana sem expor token, cookie, stack trace ou objeto bruto.
+- A migracao de mensagens de erro dos dominios ficou para fase seguinte; nesta etapa o helper foi usado apenas no fluxo central de login/AuthContext.

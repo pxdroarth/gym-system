@@ -42,7 +42,7 @@ function getRequestPath(config = {}) {
 }
 
 function shouldSkipRefreshRetry(config = {}) {
-  if (config._skipAuthRefresh || config.skipAuthRefresh) return true;
+  if (config._skipAuthRefresh === true || config.skipAuthRefresh === true) return true;
   const path = getRequestPath(config);
   return AUTH_ROUTES_WITHOUT_REFRESH_RETRY.includes(path);
 }
@@ -116,7 +116,14 @@ export async function refreshAccessToken() {
 
 api.interceptors.request.use((config) => {
   config.headers = config.headers || {};
-  const token = config._skipAuthHeader || config.skipAuthHeader ? null : getAuthToken();
+  const shouldSkipAuthHeader = config._skipAuthHeader === true || config.skipAuthHeader === true;
+
+  if (shouldSkipAuthHeader) {
+    delete config.headers.Authorization;
+    delete config.headers.authorization;
+  }
+
+  const token = shouldSkipAuthHeader ? null : getAuthToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }

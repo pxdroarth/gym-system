@@ -98,7 +98,9 @@ Use `curl.exe` no PowerShell se `curl` estiver apontando para alias local.
 | Usuário bloqueado/inativo | autenticar/operar com usuário não ativo. | Login/operação bloqueados. | Depende de massa de usuários. | feito |
 | Token cru em logs/auditoria | revisar registros de `audit_log` e logs de console. | Token cru não deve aparecer; fingerprint pode aparecer. | Verificação manual. | parcial |
 
-### Frontend Bloco 3B/4
+### Frontend Bloco 3B/3C-B/4
+
+Nota 3C-B: o cliente central usa flags internas `_skipAuthHeader`, `_skipAuthRefresh` e `_retry`; login/refresh nao enviam bearer antigo e logout/logout-all nao tentam refresh automatico em 401.
 
 | Teste | Comando ou ação | Resultado esperado | Observação | Status |
 |---|---|---|---|---|

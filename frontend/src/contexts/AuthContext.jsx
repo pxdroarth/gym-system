@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useEffect, useMemo, useState } from "react";
 import { isDevAutoLoginEnabled, getDevLoginCredentials } from "../utils/devAutoLogin";
+import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 import { setAuthFailureHandler } from "../services/Api";
 import { loginRequest, logoutRequest, meRequest, refreshSession } from "../services/authService";
 import {
@@ -205,12 +206,16 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(
     async ({ login, senha }) => {
-      const raw = await loginRequest({ login, senha });
-      const data = unwrapData(raw);
+      try {
+        const raw = await loginRequest({ login, senha });
+        const data = unwrapData(raw);
 
-      applyAuthData(data);
+        applyAuthData(data);
 
-      return data;
+        return data;
+      } catch (error) {
+        throw new Error(getApiErrorMessage(error));
+      }
     },
     [applyAuthData]
   );
