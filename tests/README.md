@@ -15,12 +15,15 @@ Esta pasta concentra scripts, coleções e referências para validação manual 
 
 ## 3. Ordem recomendada de execução
 
-1. Backend rodando.
-2. Smoke auth via PowerShell.
-3. Smoke API via Insomnia.
-4. Smoke frontend/manual.
-5. E2E com Playwright futuramente.
-6. Carga com k6/JMeter futuramente.
+1. Check de versoes.
+2. Instalacao de dependencias com `npm ci` ou `npm install`.
+3. Check de ambiente.
+4. Backend rodando.
+5. Smoke auth.
+6. Smoke API via Insomnia.
+7. Smoke frontend/manual.
+8. E2E com Playwright futuramente.
+9. Carga com k6/JMeter futuramente.
 
 ## 4. Pré-requisitos gerais
 
@@ -35,16 +38,34 @@ Esta pasta concentra scripts, coleções e referências para validação manual 
 
 ## 5. Comandos principais
 
+Validacao de versoes:
+
+```cmd
+tests\scripts\check-versions.cmd
+```
+
 Validação de ambiente local:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tests\scripts\check-env.ps1
 ```
 
+Pelo CMD:
+
+```cmd
+tests\scripts\check-env.cmd
+```
+
 Smoke de autenticação já disponível:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tests\scripts\smoke-auth.ps1 -Login admin
+```
+
+Pelo CMD:
+
+```cmd
+tests\scripts\smoke-auth.cmd -Login admin
 ```
 
 A senha será solicitada interativamente se não for passada por parâmetro.

@@ -14,6 +14,12 @@ Este guia mostra como preparar um PC novo para rodar o Sistema Academia SA local
 
 ## 3. Instalação do projeto
 
+Antes de instalar dependencias, valide as versoes globais de Node/npm/Git conforme [Versoes de Ambiente](versoes-ambiente.md):
+
+```cmd
+tests\scripts\check-versions.cmd
+```
+
 Na raiz:
 
 ```bash

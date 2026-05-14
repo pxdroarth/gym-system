@@ -9,6 +9,10 @@
     "preview": "vite preview",
     "start": "vite"
   },
+  "engines": {
+    "node": ">=20 <23",
+    "npm": ">=9"
+  },
   "dependencies": {
     "@nivo/bar": "^0.99.0",
     "@nivo/core": "^0.99.0",

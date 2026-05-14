@@ -15,19 +15,23 @@ Esta pasta guarda collections e ambientes de exemplo para validar a API localmen
 
 ## 3. Arquivos da pasta
 
+- `sistema-academia-openapi.json`: mapa inicial de API em OpenAPI 3.0.3, importavel no Insomnia.
 - `local-env.example.json`: exemplo seguro de variáveis.
 - `sistema-academia-smoke.insomnia.json`: collection exportada do Insomnia, quando existir.
 - `requests-map.md`: mapa documental dos requests recomendados.
 
 Não commite environment com senha real, token real, cookie real ou qualquer segredo.
 
-## 4. Como importar no Insomnia
+## 4. Importacao via OpenAPI JSON
 
 1. Abrir Insomnia.
-2. Importar a collection, quando o arquivo exportado existir.
-3. Criar ou ajustar um environment local.
-4. Preencher a senha apenas localmente.
-5. Executar os requests na ordem recomendada.
+2. Importar o arquivo `tests/insomnia/sistema-academia-openapi.json`.
+3. Criar environment local com base em `local-env.example.json`.
+4. Preencher senha localmente.
+5. Executar requests de Health/Auth primeiro.
+6. Nao commitar environment com senha/token/cookie real.
+
+O OpenAPI JSON funciona como mapa inicial de API para importacao e validacao manual. A collection real exportada do Insomnia ainda pode ser criada depois, e requests importados podem precisar de ajuste fino de body e environment.
 
 ## 5. Variáveis recomendadas
 

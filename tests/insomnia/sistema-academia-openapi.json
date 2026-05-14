@@ -1,0 +1,361 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Sistema Academia SA API",
+    "version": "0.1.0",
+    "description": "API local/documental do Sistema Academia SA para smoke tests, validacao manual e importacao no Insomnia. Este arquivo e um mapa inicial de rotas reais, nao um contrato completo de producao. Rotas com payload menos explicito estao marcadas como contrato basico inferido."
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3001",
+      "description": "Backend local"
+    }
+  ],
+  "tags": [
+    { "name": "Health" },
+    { "name": "Auth" },
+    { "name": "Auditoria" },
+    { "name": "Alunos" },
+    { "name": "Planos" },
+    { "name": "Associacoes" },
+    { "name": "Mensalidades" },
+    { "name": "Pagamentos" },
+    { "name": "Produtos" },
+    { "name": "Vendas" },
+    { "name": "Financeiro" },
+    { "name": "Acessos" },
+    { "name": "Usuarios" },
+    { "name": "Onboarding" },
+    { "name": "Consolidado" },
+    { "name": "Sistema" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "opaque",
+        "description": "Opaque bearer token retornado pelo login e validado server-side."
+      },
+      "refreshCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "academia_sa_refresh",
+        "description": "Cookie HttpOnly de refresh token. O cliente/Insomnia deve envia-lo automaticamente apos o login."
+      },
+      "unitHeader": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Unit-Id"
+      }
+    },
+    "schemas": {
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean", "example": true },
+          "message": { "type": "string", "example": "Operacao concluida com sucesso" },
+          "data": { "type": "object", "additionalProperties": true }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean", "example": false },
+          "error": { "type": "string", "example": "Mensagem de erro" },
+          "code": { "type": "string", "example": "CODIGO_DE_ERRO" }
+        }
+      },
+      "AuthLoginResponse": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean", "example": true },
+          "message": { "type": "string", "example": "Login realizado com sucesso" },
+          "data": {
+            "type": "object",
+            "properties": {
+              "token": { "type": "string", "description": "Opaque bearer token." },
+              "expires_at": { "type": "string", "format": "date-time" },
+              "usuario": { "type": "object", "additionalProperties": true }
+            }
+          }
+        }
+      },
+      "AuthMeResponse": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean", "example": true },
+          "data": { "type": "object", "additionalProperties": true }
+        }
+      },
+      "PaginatedResponse": {
+        "type": "object",
+        "properties": {
+          "data": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+          "total": { "type": "integer", "example": 1 },
+          "pagina": { "type": "integer", "example": 1 },
+          "limite": { "type": "integer", "example": 10 },
+          "page": { "type": "integer", "example": 1 },
+          "perPage": { "type": "integer", "example": 10 }
+        }
+      },
+      "AuditLogResponse": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean", "example": true },
+          "data": { "type": "object", "additionalProperties": true }
+        }
+      },
+      "GenericObject": {
+        "type": "object",
+        "description": "Payload conforme regra atual da rota; revisar antes de uso produtivo.",
+        "additionalProperties": true
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "login": { "type": "string", "example": "admin" },
+          "email": { "type": "string", "format": "email" },
+          "senha": { "type": "string", "example": "PREENCHER_LOCALMENTE" },
+          "password": { "type": "string", "example": "PREENCHER_LOCALMENTE" }
+        }
+      },
+      "AlunoRequest": {
+        "type": "object",
+        "properties": {
+          "nome": { "type": "string", "example": "Exemplo" },
+          "status": { "type": "string", "example": "ativo" },
+          "dia_vencimento": { "type": "integer", "example": 10 },
+          "plano_id": { "type": "integer", "example": 1 },
+          "telefone": { "type": "string", "example": "000000000" },
+          "data_nascimento": { "type": "string", "format": "date", "example": "2000-01-01" }
+        }
+      },
+      "PlanoRequest": {
+        "type": "object",
+        "properties": {
+          "nome": { "type": "string", "example": "Exemplo" },
+          "valor_base": { "type": "number", "example": 100 },
+          "descricao": { "type": "string", "example": "Plano exemplo" },
+          "duracao_em_dias": { "type": "integer", "example": 30 },
+          "compartilhado": { "type": "boolean", "example": false },
+          "quantidade_max_pessoas": { "type": "integer", "example": 1 }
+        }
+      },
+      "MensalidadeRequest": {
+        "type": "object",
+        "properties": {
+          "aluno_id": { "type": "integer", "example": 1 },
+          "plano_id": { "type": "integer", "example": 1 },
+          "valor_cobrado": { "type": "number", "example": 100 },
+          "desconto_aplicado": { "type": "number", "example": 0 },
+          "data_inicio": { "type": "string", "format": "date" },
+          "vencimento": { "type": "string", "format": "date" },
+          "observacoes": { "type": "string", "example": "Exemplo" },
+          "status": { "type": "string", "example": "em_aberto" }
+        }
+      },
+      "PagamentoRequest": {
+        "type": "object",
+        "properties": {
+          "mensalidade_id": { "type": "integer", "example": 1 },
+          "data_pagamento": { "type": "string", "format": "date" },
+          "valor_pago": { "type": "number", "example": 100 }
+        }
+      },
+      "ProdutoMultipartRequest": {
+        "type": "object",
+        "properties": {
+          "nome": { "type": "string", "example": "Exemplo" },
+          "descricao": { "type": "string", "example": "Produto exemplo" },
+          "preco": { "type": "number", "example": 100 },
+          "estoque": { "type": "integer", "example": 10 },
+          "imagem": { "type": "string", "format": "binary" }
+        }
+      },
+      "VendaRequest": {
+        "type": "object",
+        "properties": {
+          "produto_id": { "type": "integer", "example": 1 },
+          "quantidade": { "type": "integer", "example": 1 },
+          "preco_unitario": { "type": "number", "example": 100 }
+        }
+      },
+      "VinculoRequest": {
+        "type": "object",
+        "properties": {
+          "aluno_id": { "type": "integer", "example": 1 },
+          "responsavel_id": { "type": "integer", "example": 2 }
+        }
+      },
+      "AcessoRequest": {
+        "type": "object",
+        "properties": {
+          "aluno_id": { "type": "integer", "example": 1 },
+          "data_hora": { "type": "string", "format": "date-time" },
+          "resultado": { "type": "string", "example": "liberado" },
+          "motivo_bloqueio": { "type": "string", "example": "Exemplo" },
+          "liberacao_manual": { "type": "boolean", "example": false },
+          "motivo": { "type": "string", "example": "Exemplo" }
+        }
+      },
+      "ContaFinanceiraRequest": {
+        "type": "object",
+        "properties": {
+          "descricao": { "type": "string", "example": "Exemplo" },
+          "tipo": { "type": "string", "example": "receita" },
+          "valor": { "type": "number", "example": 100 },
+          "data_lancamento": { "type": "string", "format": "date" },
+          "status": { "type": "string", "example": "pago" },
+          "plano_contas_id": { "type": "integer", "example": 1 },
+          "observacao": { "type": "string", "example": "Exemplo" }
+        }
+      },
+      "PlanoContasRequest": {
+        "type": "object",
+        "properties": {
+          "nome": { "type": "string", "example": "Exemplo" },
+          "tipo": { "type": "string", "example": "receita" },
+          "descricao": { "type": "string", "example": "Exemplo" },
+          "quantidade_sugerida": { "type": "integer", "example": 1 },
+          "dia_sugerido": { "type": "integer", "example": 10 }
+        }
+      },
+      "OrcamentoRequest": {
+        "type": "object",
+        "properties": {
+          "ano": { "type": "integer", "example": 2026 },
+          "mes": { "type": "integer", "example": 5 },
+          "tipo": { "type": "string", "example": "receita" },
+          "valor_previsto": { "type": "number", "example": 100 },
+          "descricao": { "type": "string", "example": "Exemplo" }
+        }
+      },
+      "AtivoRequest": {
+        "type": "object",
+        "properties": {
+          "nome": { "type": "string", "example": "Exemplo" },
+          "tipo": { "type": "string", "example": "equipamento" },
+          "valor_aquisicao": { "type": "number", "example": 100 },
+          "data_aquisicao": { "type": "string", "format": "date" },
+          "status": { "type": "string", "example": "ativo" },
+          "observacao": { "type": "string", "example": "Exemplo" }
+        }
+      },
+      "OnboardingTenantRequest": {
+        "type": "object",
+        "properties": {
+          "tenant_nome": { "type": "string", "example": "Exemplo" },
+          "tenant_documento": { "type": "string", "example": "DOC-LOCAL" },
+          "tenant_status": { "type": "string", "example": "ativo" },
+          "plano_comercial": { "type": "string", "example": "interno" },
+          "onboarding_status": { "type": "string", "example": "preparado" },
+          "unit_nome": { "type": "string", "example": "Unidade Matriz" },
+          "unit_codigo": { "type": "string", "example": "matriz" },
+          "unit_status": { "type": "string", "example": "ativa" },
+          "admin_nome": { "type": "string", "example": "Exemplo" },
+          "admin_email": { "type": "string", "format": "email" },
+          "admin_login": { "type": "string", "example": "admin_local" },
+          "admin_senha": { "type": "string", "example": "PREENCHER_LOCALMENTE" }
+        }
+      },
+      "UsuarioRequest": {
+        "type": "object",
+        "properties": {
+          "nome": { "type": "string", "example": "Exemplo" },
+          "email": { "type": "string", "format": "email" },
+          "login": { "type": "string", "example": "usuario_local" },
+          "papel": { "type": "string", "example": "recepcao" },
+          "status": { "type": "string", "example": "ativo" },
+          "senha": { "type": "string", "example": "PREENCHER_LOCALMENTE" }
+        }
+      }
+    },
+    "responses": {
+      "Unauthorized": { "description": "Nao autenticado." },
+      "Forbidden": { "description": "Permissao negada." },
+      "BadRequest": { "description": "Requisicao invalida." },
+      "NotFound": { "description": "Recurso nao encontrado." },
+      "ServerError": { "description": "Erro interno generico." }
+    },
+    "parameters": {
+      "IdPath": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "integer" }
+      }
+    }
+  },
+  "paths": {
+    "/test-db": { "get": { "tags": ["Health"], "summary": "Testar conexao local com o SQLite", "responses": { "200": { "description": "Banco acessivel." }, "500": { "$ref": "#/components/responses/ServerError" } } } },
+    "/auth/login": { "post": { "tags": ["Auth"], "summary": "Autenticar operador interno", "description": "Retorna opaque bearer token e define o cookie HttpOnly academia_sa_refresh.", "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } } } }, "responses": { "200": { "description": "Login realizado." }, "400": { "$ref": "#/components/responses/BadRequest" }, "401": { "$ref": "#/components/responses/Unauthorized" }, "403": { "$ref": "#/components/responses/Forbidden" }, "500": { "$ref": "#/components/responses/ServerError" } } } },
+    "/auth/refresh": { "post": { "tags": ["Auth"], "summary": "Renovar sessao por refresh cookie", "description": "Usa o cookie HttpOnly academia_sa_refresh salvo pelo cliente/Insomnia apos login.", "security": [{ "refreshCookie": [] }], "responses": { "200": { "description": "Sessao renovada." }, "401": { "$ref": "#/components/responses/Unauthorized" }, "403": { "$ref": "#/components/responses/Forbidden" }, "500": { "$ref": "#/components/responses/ServerError" } } } },
+    "/auth/logout": { "post": { "tags": ["Auth"], "summary": "Encerrar sessao atual", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Logout concluido." }, "401": { "$ref": "#/components/responses/Unauthorized" }, "403": { "$ref": "#/components/responses/Forbidden" }, "500": { "$ref": "#/components/responses/ServerError" } } } },
+    "/auth/logout-all": { "post": { "tags": ["Auth"], "summary": "Encerrar todas as sessoes do operador autenticado", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Sessoes encerradas." }, "401": { "$ref": "#/components/responses/Unauthorized" }, "403": { "$ref": "#/components/responses/Forbidden" }, "500": { "$ref": "#/components/responses/ServerError" } } } },
+    "/auth/me": { "get": { "tags": ["Auth"], "summary": "Consultar operador autenticado", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Operador autenticado." }, "401": { "$ref": "#/components/responses/Unauthorized" }, "500": { "$ref": "#/components/responses/ServerError" } } } },
+    "/audit-logs": { "get": { "tags": ["Auditoria"], "summary": "Listar logs de auditoria", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "description": "Contrato basico inferido das rotas reais; revisar filtros antes de automacao completa.", "responses": { "200": { "description": "Logs retornados." }, "401": { "$ref": "#/components/responses/Unauthorized" }, "403": { "$ref": "#/components/responses/Forbidden" }, "500": { "$ref": "#/components/responses/ServerError" } } } },
+    "/audit-logs/{id}": { "get": { "tags": ["Auditoria"], "summary": "Consultar log de auditoria por ID", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Log encontrado." }, "400": { "$ref": "#/components/responses/BadRequest" }, "401": { "$ref": "#/components/responses/Unauthorized" }, "403": { "$ref": "#/components/responses/Forbidden" }, "404": { "$ref": "#/components/responses/NotFound" }, "500": { "$ref": "#/components/responses/ServerError" } } } },
+    "/alunos": { "get": { "tags": ["Alunos"], "summary": "Listar alunos", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Alunos retornados." } } }, "post": { "tags": ["Alunos"], "summary": "Criar aluno", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AlunoRequest" } } } }, "responses": { "201": { "description": "Aluno criado." }, "400": { "$ref": "#/components/responses/BadRequest" } } } },
+    "/alunos/pesquisa": { "get": { "tags": ["Alunos"], "summary": "Pesquisar alunos", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Pesquisa retornada." } } } },
+    "/alunos/{id}": { "get": { "tags": ["Alunos"], "summary": "Consultar aluno por ID", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Aluno encontrado." }, "404": { "$ref": "#/components/responses/NotFound" } } }, "put": { "tags": ["Alunos"], "summary": "Atualizar aluno", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AlunoRequest" } } } }, "responses": { "200": { "description": "Aluno atualizado." }, "400": { "$ref": "#/components/responses/BadRequest" }, "404": { "$ref": "#/components/responses/NotFound" } } } },
+    "/alunos/{id}/debito": { "get": { "tags": ["Alunos"], "summary": "Consultar debito de aluno", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Situacao retornada." } } } },
+    "/planos": { "get": { "tags": ["Planos"], "summary": "Listar planos", "responses": { "200": { "description": "Planos retornados." } } }, "post": { "tags": ["Planos"], "summary": "Criar plano", "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PlanoRequest" } } } }, "responses": { "201": { "description": "Plano criado." }, "400": { "$ref": "#/components/responses/BadRequest" } } } },
+    "/planos/{id}": { "get": { "tags": ["Planos"], "summary": "Consultar plano por ID", "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Plano encontrado." }, "404": { "$ref": "#/components/responses/NotFound" } } }, "put": { "tags": ["Planos"], "summary": "Atualizar plano", "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PlanoRequest" } } } }, "responses": { "200": { "description": "Plano atualizado." }, "404": { "$ref": "#/components/responses/NotFound" } } }, "delete": { "tags": ["Planos"], "summary": "Excluir plano", "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Plano excluido." }, "404": { "$ref": "#/components/responses/NotFound" } } } },
+    "/planoAssociado": { "get": { "tags": ["Associacoes"], "summary": "Listar vinculos pela rota legada", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Vinculos retornados." } } }, "post": { "tags": ["Associacoes"], "summary": "Criar vinculo pela rota legada", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/VinculoRequest" } } } }, "responses": { "201": { "description": "Vinculo criado." } } } },
+    "/plano-associado": { "get": { "tags": ["Associacoes"], "summary": "Listar vinculos", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Vinculos retornados." } } }, "post": { "tags": ["Associacoes"], "summary": "Criar vinculo", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/VinculoRequest" } } } }, "responses": { "201": { "description": "Vinculo criado." } } } },
+    "/mensalidades": { "get": { "tags": ["Mensalidades"], "summary": "Listar mensalidades", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Mensalidades retornadas." } } }, "post": { "tags": ["Mensalidades"], "summary": "Criar mensalidade", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MensalidadeRequest" } } } }, "responses": { "201": { "description": "Mensalidade criada." } } } },
+    "/mensalidades/vigentes": { "get": { "tags": ["Mensalidades"], "summary": "Listar mensalidades vigentes", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Mensalidades vigentes retornadas." } } } },
+    "/mensalidades/alunos": { "get": { "tags": ["Mensalidades"], "summary": "Listar alunos com mensalidades", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Dados retornados." } } } },
+    "/mensalidades/{id}": { "put": { "tags": ["Mensalidades"], "summary": "Atualizar mensalidade", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MensalidadeRequest" } } } }, "responses": { "200": { "description": "Mensalidade atualizada." } } }, "delete": { "tags": ["Mensalidades"], "summary": "Remover mensalidade logicamente", "description": "Contrato basico inferido das rotas reais; revisar payload antes de automacao completa.", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Mensalidade removida." } } } },
+    "/pagamentos": { "get": { "tags": ["Pagamentos"], "summary": "Listar pagamentos", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Pagamentos retornados." } } }, "post": { "tags": ["Pagamentos"], "summary": "Registrar pagamento", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PagamentoRequest" } } } }, "responses": { "201": { "description": "Pagamento registrado." } } } },
+    "/produtos": { "get": { "tags": ["Produtos"], "summary": "Listar produtos", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Produtos retornados." } } }, "post": { "tags": ["Produtos"], "summary": "Criar produto", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "requestBody": { "required": true, "content": { "multipart/form-data": { "schema": { "$ref": "#/components/schemas/ProdutoMultipartRequest" } } } }, "responses": { "201": { "description": "Produto criado." } } } },
+    "/vendas-produtos": { "get": { "tags": ["Vendas"], "summary": "Listar vendas de produtos", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Vendas retornadas." } } }, "post": { "tags": ["Vendas"], "summary": "Registrar venda de produto", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/VendaRequest" } } } }, "responses": { "201": { "description": "Venda registrada." } } } },
+    "/financeiro/kpis": { "get": { "tags": ["Financeiro"], "summary": "Consultar KPIs financeiros", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "KPIs retornados." } } } },
+    "/acessos": { "get": { "tags": ["Acessos"], "summary": "Listar acessos", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Acessos retornados." } } }, "post": { "tags": ["Acessos"], "summary": "Registrar acesso", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AcessoRequest" } } } }, "responses": { "201": { "description": "Acesso registrado." } } } },
+    "/onboarding/tenants": { "post": { "tags": ["Onboarding"], "summary": "Preparar tenant inicial", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OnboardingTenantRequest" } } } }, "responses": { "201": { "description": "Onboarding preparado." } } } },
+    "/usuarios-internos/me": { "get": { "tags": ["Usuarios"], "summary": "Consultar usuario interno autenticado", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Usuario retornado." } } } },
+    "/usuarios-internos": { "get": { "tags": ["Usuarios"], "summary": "Listar usuarios internos", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Usuarios retornados." } } }, "post": { "tags": ["Usuarios"], "summary": "Criar usuario interno", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UsuarioRequest" } } } }, "responses": { "201": { "description": "Usuario criado." } } } },
+    "/tenant-dashboard/resumo": { "get": { "tags": ["Consolidado"], "summary": "Consultar resumo consolidado da rede", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Resumo retornado." } } } },
+    "/mensalidades/aluno/{aluno_id}": { "get": { "tags": ["Mensalidades"], "summary": "Listar mensalidades por aluno", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "name": "aluno_id", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "Mensalidades retornadas." } } } },
+    "/mensalidades/{id}/status": { "patch": { "tags": ["Mensalidades"], "summary": "Atualizar status de mensalidade", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Status atualizado." } } } },
+    "/mensalidades/{id}/reverter": { "post": { "tags": ["Mensalidades"], "summary": "Reverter mensalidade", "description": "Contrato basico inferido das rotas reais; revisar payload antes de automacao completa.", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Reversao executada." } } } },
+    "/pagamentos/aluno/{aluno_id}": { "get": { "tags": ["Pagamentos"], "summary": "Listar pagamentos por aluno", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "name": "aluno_id", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "Pagamentos retornados." } } } },
+    "/produtos/{id}": { "get": { "tags": ["Produtos"], "summary": "Consultar produto por ID", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Produto retornado." } } }, "put": { "tags": ["Produtos"], "summary": "Atualizar produto", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "requestBody": { "required": true, "content": { "multipart/form-data": { "schema": { "$ref": "#/components/schemas/ProdutoMultipartRequest" } } } }, "responses": { "200": { "description": "Produto atualizado." } } }, "delete": { "tags": ["Produtos"], "summary": "Excluir produto", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Produto excluido." } } } },
+    "/produtos/{id}/estoque": { "patch": { "tags": ["Produtos"], "summary": "Atualizar estoque do produto", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Estoque atualizado." } } } },
+    "/vendasProdutos": { "get": { "tags": ["Vendas"], "summary": "Listar vendas pela rota legada", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Vendas retornadas." } } }, "post": { "tags": ["Vendas"], "summary": "Registrar venda pela rota legada", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/VendaRequest" } } } }, "responses": { "201": { "description": "Venda registrada." } } } },
+    "/vendas-produtos/{id}": { "get": { "tags": ["Vendas"], "summary": "Consultar venda por ID", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Venda retornada." } } } },
+    "/vendas-produtos/{id}/reverter": { "post": { "tags": ["Vendas"], "summary": "Reverter venda", "description": "Contrato basico inferido das rotas reais; revisar payload antes de automacao completa.", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Venda revertida." } } } },
+    "/financeiro/fluxo": { "get": { "tags": ["Financeiro"], "summary": "Consultar fluxo financeiro", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Fluxo retornado." } } } },
+    "/financeiro/mensalidades": { "get": { "tags": ["Financeiro"], "summary": "Consultar agregacao financeira de mensalidades", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Dados retornados." } } } },
+    "/financeiro/vendas-produtos": { "get": { "tags": ["Financeiro"], "summary": "Consultar agregacao financeira de vendas", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Dados retornados." } } } },
+    "/dashboard/financeiro": { "get": { "tags": ["Financeiro"], "summary": "Listar contas da dashboard financeira", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Dados retornados." } } } },
+    "/dashboard/financeiro/kpis": { "get": { "tags": ["Financeiro"], "summary": "Consultar KPIs da dashboard financeira", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "KPIs retornados." } } } },
+    "/dashboard/financeiro/sincronizar": { "post": { "tags": ["Financeiro"], "summary": "Sincronizar financeiro", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Sincronizacao executada." } } } },
+    "/financeiro/ativos": { "get": { "tags": ["Financeiro"], "summary": "Listar ativos", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Ativos retornados." } } }, "post": { "tags": ["Financeiro"], "summary": "Criar ativo", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AtivoRequest" } } } }, "responses": { "201": { "description": "Ativo criado." } } } },
+    "/financeiro/ativos/{id}": { "put": { "tags": ["Financeiro"], "summary": "Atualizar ativo", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AtivoRequest" } } } }, "responses": { "200": { "description": "Ativo atualizado." } } }, "delete": { "tags": ["Financeiro"], "summary": "Excluir ativo", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Ativo excluido." } } } },
+    "/financeiro/orcamento": { "get": { "tags": ["Financeiro"], "summary": "Listar orcamentos", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Orcamentos retornados." } } }, "post": { "tags": ["Financeiro"], "summary": "Criar orcamento", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrcamentoRequest" } } } }, "responses": { "201": { "description": "Orcamento criado." } } } },
+    "/financeiro/orcamento/{id}": { "put": { "tags": ["Financeiro"], "summary": "Atualizar orcamento", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Orcamento atualizado." } } }, "delete": { "tags": ["Financeiro"], "summary": "Excluir orcamento", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Orcamento excluido." } } } },
+    "/plano-contas": { "get": { "tags": ["Financeiro"], "summary": "Listar plano de contas", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Plano de contas retornado." } } }, "post": { "tags": ["Financeiro"], "summary": "Criar plano de contas", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PlanoContasRequest" } } } }, "responses": { "201": { "description": "Plano de contas criado." } } } },
+    "/planoContas": { "get": { "tags": ["Financeiro"], "summary": "Listar plano de contas pela rota legada", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Plano de contas retornado." } } } },
+    "/contas-financeiras": { "get": { "tags": ["Financeiro"], "summary": "Listar contas financeiras", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Contas retornadas." } } }, "post": { "tags": ["Financeiro"], "summary": "Criar conta financeira", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ContaFinanceiraRequest" } } } }, "responses": { "201": { "description": "Conta criada." } } } },
+    "/contasFinanceiras": { "get": { "tags": ["Financeiro"], "summary": "Listar contas financeiras pela rota legada", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Contas retornadas." } } } },
+    "/fechamento-mensal/{ano}/{mes}/analisar": { "get": { "tags": ["Financeiro"], "summary": "Analisar periodo de fechamento mensal", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "name": "ano", "in": "path", "required": true, "schema": { "type": "integer" } }, { "name": "mes", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "Analise retornada." } } } },
+    "/fechamento-mensal/{ano}/{mes}/fechar": { "post": { "tags": ["Financeiro"], "summary": "Fechar periodo mensal", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "name": "ano", "in": "path", "required": true, "schema": { "type": "integer" } }, { "name": "mes", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "Periodo fechado." } } } },
+    "/fechamento-mensal/{ano}/{mes}/reabrir": { "post": { "tags": ["Financeiro"], "summary": "Reabrir periodo mensal", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "name": "ano", "in": "path", "required": true, "schema": { "type": "integer" } }, { "name": "mes", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "Periodo reaberto." } } } },
+    "/reversoes/mensalidades/{id}": { "post": { "tags": ["Financeiro"], "summary": "Reverter mensalidade por rota dedicada", "description": "Contrato basico inferido das rotas reais; revisar payload antes de automacao completa.", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Reversao executada." } } } },
+    "/reversoes/vendas/{id}": { "post": { "tags": ["Financeiro"], "summary": "Reverter venda por rota dedicada", "description": "Contrato basico inferido das rotas reais; revisar payload antes de automacao completa.", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Reversao executada." } } } },
+    "/reversoes/contas-financeiras/{id}": { "post": { "tags": ["Financeiro"], "summary": "Reverter conta financeira por rota dedicada", "description": "Contrato basico inferido das rotas reais; revisar payload antes de automacao completa.", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Reversao executada." } } } },
+    "/acessos/aluno/{alunoId}": { "get": { "tags": ["Acessos"], "summary": "Listar acessos por aluno", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "name": "alunoId", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "Acessos retornados." } } } },
+    "/acessos/{id}": { "get": { "tags": ["Acessos"], "summary": "Consultar acesso por ID", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Acesso retornado." } } }, "put": { "tags": ["Acessos"], "summary": "Atualizar acesso", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AcessoRequest" } } } }, "responses": { "200": { "description": "Acesso atualizado." } } }, "delete": { "tags": ["Acessos"], "summary": "Excluir acesso", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Acesso excluido." } } } },
+    "/acessos/mock-hikvision": { "post": { "tags": ["Acessos"], "summary": "Registrar tentativa simulada de acesso", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AcessoRequest" } } } }, "responses": { "201": { "description": "Tentativa registrada." } } } },
+    "/tenants": { "get": { "tags": ["Sistema"], "summary": "Listar tenants", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Tenants retornados." } } } },
+    "/tenants/{id}": { "get": { "tags": ["Sistema"], "summary": "Consultar tenant por ID", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Tenant retornado." } } }, "patch": { "tags": ["Sistema"], "summary": "Atualizar tenant", "description": "Contrato basico inferido das rotas reais; revisar payload antes de automacao completa.", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Tenant atualizado." } } } },
+    "/units/me": { "get": { "tags": ["Sistema"], "summary": "Consultar unidades disponiveis ao operador", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "responses": { "200": { "description": "Unidades retornadas." } } } },
+    "/units/tenant/{tenantId}": { "get": { "tags": ["Sistema"], "summary": "Listar unidades por tenant", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "name": "tenantId", "in": "path", "required": true, "schema": { "type": "integer" } }], "responses": { "200": { "description": "Unidades retornadas." } } } },
+    "/units/{id}": { "patch": { "tags": ["Sistema"], "summary": "Atualizar unidade", "description": "Contrato basico inferido das rotas reais; revisar payload antes de automacao completa.", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Unidade atualizada." } } } },
+    "/usuarios-internos/{id}/papel": { "patch": { "tags": ["Usuarios"], "summary": "Alterar papel de usuario interno", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Papel atualizado." } } } },
+    "/usuarios-internos/{id}/status": { "patch": { "tags": ["Usuarios"], "summary": "Alterar status de usuario interno", "security": [{ "bearerAuth": [] }, { "unitHeader": [] }], "parameters": [{ "$ref": "#/components/parameters/IdPath" }], "responses": { "200": { "description": "Status atualizado." } } } },
+    "/relatorios": { "get": { "tags": ["Sistema"], "summary": "Consultar rota atual de relatorios", "description": "Rota placeholder existente no backend; o contrato e basico e nao representa modulo finalizado.", "responses": { "200": { "description": "Mensagem placeholder retornada." } } } }
+  }
+}

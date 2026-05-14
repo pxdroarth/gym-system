@@ -1,5 +1,7 @@
 # Mapa de Requests — Insomnia
 
+Referencia complementar: `sistema-academia-openapi.json`.
+
 ## 1. Health
 
 ### GET /test-db

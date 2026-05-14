@@ -51,6 +51,13 @@ Requisitos esperados:
 
 - Node.js e npm instalados.
 - Java e Graphviz apenas se for exportar diagramas PlantUML localmente.
+- Versao de Node padronizada em `.nvmrc` e espelhada em `.node-version`.
+
+Antes de instalar dependencias em um PC novo, valide as versoes:
+
+```cmd
+tests\scripts\check-versions.cmd
+```
 
 Na raiz do projeto:
 
@@ -193,6 +200,7 @@ Não existe `backend/package.json`; o backend usa o `package.json` da raiz.
 - [Smoke tests manuais](docs/governance/smoke-tests.md)
 - [Testes e validações](tests/README.md)
 - [Ambiente local](docs/setup/ambiente-local.md)
+- [Versoes de ambiente](docs/setup/versoes-ambiente.md)
 - [UML PlantUML/SVG](docs/uml/README.md)
 - [Referências visuais de arquitetura](docs/architecture/referencias-visuais/README.md)
 - [Auditoria dos READMEs](docs/governance/readme-audit.md)
