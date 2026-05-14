@@ -201,6 +201,7 @@ Não existe `backend/package.json`; o backend usa o `package.json` da raiz.
 - [Testes e validações](tests/README.md)
 - [Ambiente local](docs/setup/ambiente-local.md)
 - [Versoes de ambiente](docs/setup/versoes-ambiente.md)
+- [Auditoria de cliente HTTP frontend](docs/frontend/http-client-audit.md)
 - [UML PlantUML/SVG](docs/uml/README.md)
 - [Referências visuais de arquitetura](docs/architecture/referencias-visuais/README.md)
 - [Auditoria dos READMEs](docs/governance/readme-audit.md)

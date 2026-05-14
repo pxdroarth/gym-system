@@ -1,0 +1,153 @@
+# Auditoria de Cliente HTTP — Frontend
+
+## 1. Objetivo
+
+Mapear o uso atual de `axios`, `fetch` e wrappers HTTP no frontend do Sistema Academia SA para preparar uma padronizacao segura do cliente HTTP antes do Bloco 4.
+
+Esta auditoria nao altera codigo funcional. O backend usa token opaco server-side, o frontend ainda mantem bearer token em `localStorage` por compatibilidade temporaria, e o refresh token continua em cookie HttpOnly `academia_sa_refresh`.
+
+## 2. Estado atual
+
+- O cliente HTTP central e `frontend/src/services/Api.js`.
+- O `Api.js` cria uma instancia `axios` com `baseURL` em `VITE_API_URL || http://localhost:3001` e `withCredentials: true`.
+- O bearer token e anexado em `Authorization` por interceptor central quando existe token em `authStorage`.
+- O refresh de sessao usa `POST /auth/refresh` com `_skipAuthHeader` e `_skipAuthRefresh`.
+- O interceptor 401 possui controle single-flight via `refreshPromise`.
+- Nao foram encontrados usos de `fetch` ou `window.fetch` em `frontend/src`.
+- Nao foram encontrados usos de axios direto fora de `Api.js`.
+- `Api.js` tambem concentra funcoes de dominio, alem da infraestrutura HTTP.
+
+## 3. Arquivos com axios
+
+| Arquivo | Funcao/componente | Endpoint | Metodo | Usa Api.js central? | Authorization | withCredentials | Tratamento de erro | Risco | Observacao |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `frontend/src/services/Api.js` | `api` | `VITE_API_URL` ou `http://localhost:3001` | instancia | Sim | Central via interceptor | Sim | Interceptors request/response | Alto | Cliente oficial atual da API interna. |
+| `frontend/src/services/Api.js` | `refreshAccessToken` | `/auth/refresh` | POST | Sim | Nao, usa `_skipAuthHeader` | Sim | Single-flight; limpa sessao em falha | Alto | Usa cookie HttpOnly; nao le cookie via JS. |
+| `frontend/src/services/authService.js` | `loginRequest` | `/auth/login` | POST | Sim | Central se token local existir | Sim | Rejeicao axios para caller | Alto | Fluxo sensivel; futuro ajuste pode explicitar skip de bearer no login. |
+| `frontend/src/services/authService.js` | `logoutRequest` | `/auth/logout` | POST | Sim | Central via interceptor | Sim | AuthContext limpa local mesmo em erro | Alto | Envia bearer e cookie automaticamente. |
+| `frontend/src/services/authService.js` | `logoutAllRequest` | `/auth/logout-all` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Funcao existe; uso de UI deve ser confirmado antes de padronizar. |
+| `frontend/src/services/authService.js` | `meRequest` | `/auth/me` | GET | Sim | Central via interceptor | Sim | Bootstrap controla erro | Alto | Usada para validar sessao. |
+| `frontend/src/services/Api.js` | `fetchAlunos` | `/alunos` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | GET autenticado comum. |
+| `frontend/src/services/Api.js` | `fetchAlunoById` | `/alunos/{id}` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | Usa path param. |
+| `frontend/src/services/Api.js` | `createAluno` | `/alunos` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | CRUD autenticado. |
+| `frontend/src/services/Api.js` | `updateAluno` | `/alunos/{id}` | PUT | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | CRUD autenticado. |
+| `frontend/src/services/Api.js` | `fetchAlunosPesquisa` | `/alunos/pesquisa` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | Usa query `termo`, `pagina`, `limite`. |
+| `frontend/src/services/Api.js` | `cadastrarMensalidade` | `/mensalidades` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | Dominio financeiro-operacional. |
+| `frontend/src/services/Api.js` | `fetchMensalidadesPorAluno` | `/mensalidades/aluno/{alunoId}` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | Usa paginacao. |
+| `frontend/src/services/Api.js` | `fetchMensalidades` | `/mensalidades` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | Usa params variaveis. |
+| `frontend/src/services/Api.js` | `registrarPagamento` | `/pagamentos` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Pagamento. |
+| `frontend/src/services/Api.js` | `fetchAcessos` | `/acessos/aluno/{alunoId}` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Acessos. |
+| `frontend/src/services/Api.js` | `fetchTodosAcessos` | `/acessos` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Acessos. |
+| `frontend/src/services/Api.js` | `simularAcesso` | `/acessos/mock-hikvision` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Acessos/mock operacional. |
+| `frontend/src/services/Api.js` | `fetchPlanos` | `/planos` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Baixo | GET simples. |
+| `frontend/src/services/Api.js` | `createPlano` | `/planos` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | CRUD autenticado. |
+| `frontend/src/services/Api.js` | `updatePlano` | `/planos/{id}` | PUT | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | CRUD autenticado. |
+| `frontend/src/services/Api.js` | `fetchPlanoAssociados` | `/plano-associado/{responsavelId}` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | Associacoes de plano. |
+| `frontend/src/services/Api.js` | `createPlanoAssociado` | `/plano-associado` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | Associacoes de plano. |
+| `frontend/src/services/Api.js` | `deletePlanoAssociado` | `/plano-associado/{id}` | DELETE | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | Associacoes de plano. |
+| `frontend/src/services/Api.js` | `fetchProdutos` | `/produtos` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Baixo | GET simples. |
+| `frontend/src/services/Api.js` | `createProduto` | `/produtos` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Upload/FormData com `multipart/form-data`. |
+| `frontend/src/services/Api.js` | `updateProduto` | `/produtos/{id}` | PUT | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Upload/FormData com `multipart/form-data`. |
+| `frontend/src/services/Api.js` | `deleteProduto` | `/produtos/{id}` | DELETE | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | CRUD autenticado. |
+| `frontend/src/services/Api.js` | `fetchVendasProdutos` | `/vendas-produtos` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Vendas; aceita params ou query string. |
+| `frontend/src/services/Api.js` | `createVendaProduto` | `/vendas-produtos` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Venda. |
+| `frontend/src/services/Api.js` | `fetchMensalidadesAlunoStatus` | `/mensalidades/aluno/{alunoId}` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | Funcao marcada como legado no proprio arquivo. |
+| `frontend/src/services/Api.js` | `registrarPagamentoAntecipado` | `/mensalidades/pagamento-antecipado` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Contrato deve ser reconferido antes da migracao. |
+| `frontend/src/services/Api.js` | `gerarMensalidadesFuturas` | `/mensalidades/gerar-futuras` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Contrato deve ser reconferido antes da migracao. |
+| `frontend/src/services/Api.js` | `updateMensalidadeStatus` | `/mensalidades/{id}/status` | PATCH | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | Atualizacao de status. |
+| `frontend/src/services/auditLogService.js` | `fetchAuditLogs` | `/audit-logs` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Auditoria. |
+| `frontend/src/services/auditLogService.js` | `fetchAuditLogById` | `/audit-logs/{id}` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Auditoria. |
+| `frontend/src/services/usuariosInternosService.js` | `listarUsuariosInternos` | `/usuarios-internos` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Usuarios/permissoes. |
+| `frontend/src/services/usuariosInternosService.js` | `criarUsuarioInterno` | `/usuarios-internos` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Usuarios/permissoes. |
+| `frontend/src/services/usuariosInternosService.js` | `alterarPapelUsuarioInterno` | `/usuarios-internos/{id}/papel` | PATCH | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Permissoes. |
+| `frontend/src/services/usuariosInternosService.js` | `alterarStatusUsuarioInterno` | `/usuarios-internos/{id}/status` | PATCH | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Usuarios/permissoes. |
+| `frontend/src/services/tenantService.js` | `fetchTenantOverview` | `/tenant-dashboard/resumo` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Tenant/unidade. |
+| `frontend/src/services/tenantService.js` | `listarTenants` | `/tenants` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Tenant/unidade. |
+| `frontend/src/services/tenantService.js` | `buscarTenant` | `/tenants/{id}` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Tenant/unidade. |
+| `frontend/src/services/tenantService.js` | `atualizarTenant` | `/tenants/{id}` | PATCH | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Tenant/unidade. |
+| `frontend/src/services/tenantService.js` | `listarUnitsPorTenant` | `/units/tenant/{tenantId}` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Unidade. |
+| `frontend/src/services/tenantService.js` | `atualizarUnit` | `/units/{id}` | PATCH | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Unidade. |
+| `frontend/src/services/contasFinanceiras.js` | `getContasFinanceiras` | `/contas-financeiras` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. |
+| `frontend/src/services/contasFinanceiras.js` | `criarContaFinanceira` | `/contas-financeiras` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. |
+| `frontend/src/services/contasFinanceiras.js` | `atualizarContaFinanceira` | `/contas-financeiras/{id}` | PUT | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. |
+| `frontend/src/services/contasFinanceiras.js` | `marcarComoPago` | `/contas-financeiras/{id}/status` | PATCH | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro/pagamento. |
+| `frontend/src/services/contasFinanceiras.js` | `deletarContaFinanceira` | `/contas-financeiras/{id}` | DELETE | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. |
+| `frontend/src/services/onboardingService.js` | `criarTenantOnboarding` | `/onboarding/tenants` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Onboarding/tenant. |
+| `frontend/src/services/dashboardService.js` | `getDashboardKPIs` | `/dashboard/financeiro/kpis` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller; normaliza arrays | Alto | Financeiro. |
+| `frontend/src/services/planoContasService.js` | `getPlanoContas` | `/plano-contas` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. |
+| `frontend/src/services/planoContasService.js` | `createPlanoConta` | `/plano-contas` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. |
+| `frontend/src/services/planoContasService.js` | `updatePlanoConta` | `/plano-contas/{id}` | PUT | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. |
+| `frontend/src/services/planoContasService.js` | `deletePlanoConta` | `/plano-contas/{id}` | DELETE | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. |
+
+## 4. Arquivos com fetch
+
+| Arquivo | Funcao/componente | Endpoint | Metodo | credentials | Authorization | FormData/upload | Tratamento de erro | Risco | Observacao |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Nenhum | Nenhum | Nenhum | Nenhum | Nao aplicavel | Nao aplicavel | Nao aplicavel | Nao aplicavel | Baixo | Nao foram encontrados `fetch(` ou `window.fetch` em `frontend/src`. |
+
+## 5. Clientes/wrappers existentes
+
+- `frontend/src/services/Api.js`: instancia central axios, interceptors, refresh single-flight, anexacao de bearer token, `X-Unit-Id` e funcoes de dominio historicas.
+- `frontend/src/services/authService.js`: wrapper de auth para login, logout, logout-all, me e refresh.
+- `frontend/src/utils/authStorage.js`: wrapper de `localStorage` para token e usuario. Deve continuar ate o Bloco 4.
+- `frontend/src/contexts/AuthContext.jsx`: orquestra bootstrap, login/logout, validacao de sessao, refresh e estado autenticado.
+- Services por dominio: `auditLogService.js`, `usuariosInternosService.js`, `tenantService.js`, `contasFinanceiras.js`, `onboardingService.js`, `dashboardService.js`, `planoContasService.js`.
+- `frontend/src/pages/produtos/ProdutosPage.jsx`: possui `VITE_API_URL || http://localhost:3001` para montar URL de imagem, nao para chamada HTTP.
+
+## 6. Problemas encontrados
+
+- `Api.js` mistura infraestrutura HTTP e muitas funcoes de dominio; isso aumenta o risco de mudancas amplas no cliente central.
+- O tratamento de erro e heterogeneo: a maioria dos services apenas propaga erro axios, e as paginas tratam mensagens de formas diferentes.
+- `authService.loginRequest` usa o cliente central sem explicitar `_skipAuthHeader`; se houver token antigo no storage, o interceptor pode enviar bearer tambem no login.
+- Existem endpoints legados em `Api.js` ligados a mensalidades que devem ser reconferidos contra as rotas reais antes de qualquer migracao automatica.
+- A base `http://localhost:3001` aparece tambem em `ProdutosPage.jsx` para imagens; nao e chamada HTTP, mas e duplicacao de base URL.
+- Dominios de alto risco estao no mesmo padrao generico de erro/retry: auth, auditoria, financeiro, pagamentos, vendas, acessos, usuarios/permissoes, tenant/onboarding e upload de produtos.
+- Nao foram encontrados `fetch` sem credentials, chamadas axios diretas fora do cliente central ou montagem manual de bearer fora de `Api.js`.
+- O uso de `localStorage` esta concentrado em `authStorage`, `AuthContext` e `Api.js`; isso e esperado ate o Bloco 4.
+
+## 7. Padrao recomendado
+
+- Manter `Api.js` como cliente oficial para API interna.
+- Usar uma instancia axios central com `withCredentials: true`.
+- Anexar `Authorization: Bearer <opaque token>` por interceptor central.
+- Manter refresh single-flight no interceptor 401.
+- Marcar chamadas de auth internas com flags explicitas: `_skipAuthRefresh` e, quando aplicavel, `_skipAuthHeader`.
+- Manter `authService` como camada segura de auth sobre o cliente central.
+- Criar helper padrao de erro humano, como `getApiErrorMessage(error)`, antes de migrar dominios criticos.
+- Permitir `fetch` apenas como excecao documentada: upload/stream especial, API externa isolada ou caso tecnico justificado.
+- Separar gradualmente infraestrutura HTTP de funcoes de dominio para reduzir acoplamento.
+
+## 8. Plano de migracao incremental
+
+**Fase A: Auth/API client central**
+
+Conferir flags de auth, manter single-flight, documentar uso oficial de `Api.js` e padronizar helper de erro.
+
+**Fase B: servicos criticos**
+
+Revisar `authService`, `usuariosInternosService`, `tenantService` e `onboardingService`, com foco em permissoes, unidade ativa e falhas 401/403.
+
+**Fase C: financeiro/auditoria/pagamentos**
+
+Padronizar `auditLogService`, `dashboardService`, `contasFinanceiras`, `planoContasService`, `registrarPagamento` e vendas com tratamento de erro consistente.
+
+**Fase D: dominios comuns**
+
+Migrar alunos, planos, associacoes, produtos e mensalidades para services por dominio, mantendo o mesmo contrato externo das paginas.
+
+**Fase E: remocao de duplicacoes**
+
+Remover duplicacao de base URL para midia por meio de helper dedicado e reduzir funcoes de dominio dentro de `Api.js`.
+
+**Fase F: preparacao para Bloco 4**
+
+Confinar uso de `localStorage` ao minimo necessario, preparar access token em memoria e manter refresh cookie HttpOnly sem leitura via JavaScript.
+
+## 9. Pendencias antes do Bloco 4
+
+- Validar contra backend real os endpoints legados de mensalidades antes de migrar ou remover chamadas.
+- Definir helper oficial de erro para mensagens de usuario.
+- Decidir estrategia para URL de midia/imagens sem duplicar `localhost:3001`.
+- Revisar `loginRequest` para evitar envio acidental de bearer antigo no login, sem alterar o fluxo funcional sem teste dedicado.
+- Confirmar uso real de `logoutAllRequest` na UI antes de padronizar fluxo visual.
+- Manter testes manuais de login, refresh, logout, reload e token invalido antes de remover `localStorage`.
