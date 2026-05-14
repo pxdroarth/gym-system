@@ -92,6 +92,7 @@ Esse formato é útil em validação local controlada, mas não é recomendado s
 | Categoria | Ferramenta | Status | Observação |
 |---|---|---|---|
 | Auth backend | `tests/scripts/smoke-auth.ps1` | feito | Cobre `/test-db`, login, cookie HttpOnly, `/auth/me`, refresh, token antigo inválido, logout e logout-all. |
+| Auth frontend | Manual + build | parcial | Bloco 3B usa refresh cookie com `withCredentials`; `localStorage` segue temporario ate o Bloco 4. |
 | API geral | Insomnia | pendente | Coleções e ambientes serão organizados nesta pasta. |
 | Permissões | Manual + Insomnia + futuro E2E | parcial | A matriz existe; a cobertura operacional ainda precisa crescer por perfil. |
 | Frontend E2E | Playwright | pendente | Não instalado/configurado nesta sprint. |

@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useEffect, useMemo, useState } from "react";
 import { isDevAutoLoginEnabled, getDevLoginCredentials } from "../utils/devAutoLogin";
-import { loginRequest, logoutRequest, meRequest } from "../services/authService";
+import { setAuthFailureHandler } from "../services/Api";
+import { loginRequest, logoutRequest, meRequest, refreshSession } from "../services/authService";
 import {
   clearAuthStorage,
   getAuthToken,
@@ -17,18 +18,17 @@ function unwrapData(payload) {
 }
 
 export function AuthProvider({ children }) {
-  const storedUser = getStoredUser();
-
-  const [token, setToken] = useState(() => getAuthToken());
-  const [user, setUser] = useState(() => storedUser);
+  const [token, setToken] = useState(null);
+  const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tenant, setTenant] = useState(() => storedUser?.tenant || null);
-  const [currentUnit, setCurrentUnit] = useState(() => storedUser?.currentUnit || null);
-  const [allowedUnits, setAllowedUnits] = useState(() => storedUser?.allowedUnits || []);
+  const [tenant, setTenant] = useState(null);
+  const [currentUnit, setCurrentUnit] = useState(null);
+  const [allowedUnits, setAllowedUnits] = useState([]);
   const [scopeVersion, setScopeVersion] = useState(0);
 
-  const applyUserScope = useCallback((resolvedUser, preferredUnitId = null) => {
+  const applyUserScope = useCallback((resolvedUser, preferredUnitId = null, options = {}) => {
     const units = Array.isArray(resolvedUser?.allowedUnits) ? resolvedUser.allowedUnits : [];
+    const shouldCommit = options.commit !== false;
 
     const preferredUnit = preferredUnitId
       ? units.find((unit) => Number(unit.id) === Number(preferredUnitId))
@@ -41,9 +41,11 @@ export function AuthProvider({ children }) {
       resolvedUser?.tenant ||
       (resolvedCurrentUnit ? { id: resolvedCurrentUnit.tenant_id } : null);
 
-    setTenant(resolvedTenant);
-    setCurrentUnit(resolvedCurrentUnit);
-    setAllowedUnits(units);
+    if (shouldCommit) {
+      setTenant(resolvedTenant);
+      setCurrentUnit(resolvedCurrentUnit);
+      setAllowedUnits(units);
+    }
 
     return resolvedUser
       ? {
@@ -65,6 +67,26 @@ export function AuthProvider({ children }) {
     setScopeVersion((version) => version + 1);
   }, []);
 
+  const commitAuthenticatedSession = useCallback(
+    (nextToken, nextUser) => {
+      if (!nextToken || !nextUser) {
+        clearSession();
+        return null;
+      }
+
+      setAuthToken(nextToken);
+      setStoredUser(nextUser);
+      setToken(nextToken);
+      setUser(nextUser);
+      setTenant(nextUser.tenant || null);
+      setCurrentUnit(nextUser.currentUnit || null);
+      setAllowedUnits(Array.isArray(nextUser.allowedUnits) ? nextUser.allowedUnits : []);
+
+      return nextUser;
+    },
+    [clearSession]
+  );
+
   const refreshMe = useCallback(async () => {
     const currentToken = getAuthToken();
 
@@ -73,17 +95,55 @@ export function AuthProvider({ children }) {
       return null;
     }
 
-    const raw = await meRequest();
+    const raw = await meRequest({ skipAuthRefresh: true });
     const data = unwrapData(raw);
 
     const storedUnitId = getStoredUser()?.currentUnit?.id || null;
-    const resolvedUser = applyUserScope(data, storedUnitId);
+    const resolvedUser = applyUserScope(data, storedUnitId, { commit: false });
 
-    setUser(resolvedUser);
-    setStoredUser(resolvedUser);
-
-    return resolvedUser;
+    return {
+      token: currentToken,
+      user: resolvedUser,
+    };
   }, [applyUserScope, clearSession]);
+
+  const applyAuthData = useCallback(
+    (authData, preferredUnitId = null) => {
+      if (!authData?.token) {
+        return null;
+      }
+
+      setAuthToken(authData.token);
+
+      const resolvedUser = applyUserScope(authData?.usuario || null, preferredUnitId);
+      setStoredUser(resolvedUser);
+
+      setToken(authData.token);
+      setUser(resolvedUser);
+
+      return resolvedUser;
+    },
+    [applyUserScope]
+  );
+
+  const tryRefreshSession = useCallback(async () => {
+    const storedUnitId = getStoredUser()?.currentUnit?.id || null;
+    const refreshed = await refreshSession();
+    const resolvedUser = applyUserScope(refreshed?.usuario || null, storedUnitId, { commit: false });
+    if (!refreshed?.token || !resolvedUser) {
+      clearSession();
+      throw new Error("Refresh nao retornou sessao valida.");
+    }
+    return {
+      token: refreshed?.token || null,
+      user: resolvedUser,
+    };
+  }, [applyUserScope, clearSession]);
+
+  useEffect(() => {
+    setAuthFailureHandler(clearSession);
+    return () => setAuthFailureHandler(null);
+  }, [clearSession]);
 
   useEffect(() => {
     let active = true;
@@ -102,27 +162,33 @@ export function AuthProvider({ children }) {
             const loginData = unwrapData(rawLogin);
 
             if (loginData?.token) {
-              setAuthToken(loginData.token);
               currentToken = loginData.token;
 
-              const resolvedUserFromLogin = applyUserScope(loginData?.usuario || null);
-              setStoredUser(resolvedUserFromLogin);
-              setToken(loginData.token);
-              setUser(resolvedUserFromLogin);
+              const resolvedUserFromLogin = applyUserScope(loginData?.usuario || null, null, { commit: false });
+              if (active) {
+                commitAuthenticatedSession(loginData.token, resolvedUserFromLogin);
+              }
             }
           }
         }
 
         if (!currentToken) {
-          clearSession();
+          const refreshed = await tryRefreshSession();
+          if (!active) return;
+          commitAuthenticatedSession(refreshed.token, refreshed.user);
           return;
         }
 
-        const resolvedUser = await refreshMe();
+        let resolved = null;
+        try {
+          resolved = await refreshMe();
+        } catch {
+          resolved = await tryRefreshSession();
+        }
+
         if (!active) return;
 
-        setToken(currentToken);
-        setUser(resolvedUser);
+        commitAuthenticatedSession(resolved.token, resolved.user);
       } catch {
         if (active) clearSession();
       } finally {
@@ -135,24 +201,18 @@ export function AuthProvider({ children }) {
     return () => {
       active = false;
     };
-  }, [applyUserScope, clearSession, refreshMe]);
+  }, [applyUserScope, clearSession, commitAuthenticatedSession, refreshMe, tryRefreshSession]);
 
   const login = useCallback(
     async ({ login, senha }) => {
       const raw = await loginRequest({ login, senha });
       const data = unwrapData(raw);
 
-      setAuthToken(data?.token || null);
-
-      const resolvedUser = applyUserScope(data?.usuario || null);
-      setStoredUser(resolvedUser);
-
-      setToken(data?.token || null);
-      setUser(resolvedUser);
+      applyAuthData(data);
 
       return data;
     },
-    [applyUserScope]
+    [applyAuthData]
   );
 
   const setActiveUnit = useCallback(

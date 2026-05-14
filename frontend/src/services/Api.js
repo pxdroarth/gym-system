@@ -1,14 +1,122 @@
 import axios from "axios";
-import { getAuthToken, getStoredUser } from "../utils/authStorage";
+import {
+  clearAuthStorage,
+  getAuthToken,
+  getStoredUser,
+  setAuthToken,
+  setStoredUser,
+} from "../utils/authStorage";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
 });
 
+let authFailureHandler = null;
+let refreshPromise = null;
+
+const AUTH_REFRESH_PATH = "/auth/refresh";
+const AUTH_ROUTES_WITHOUT_REFRESH_RETRY = [
+  "/auth/login",
+  AUTH_REFRESH_PATH,
+  "/auth/logout",
+  "/auth/logout-all",
+];
+
+function unwrapData(payload) {
+  return payload?.data ?? payload ?? null;
+}
+
+function getRequestPath(config = {}) {
+  const url = config.url || "";
+  if (!url) return "";
+
+  try {
+    const resolved = new URL(url, config.baseURL || API_BASE_URL);
+    return resolved.pathname;
+  } catch {
+    return url.split("?")[0];
+  }
+}
+
+function shouldSkipRefreshRetry(config = {}) {
+  if (config._skipAuthRefresh || config.skipAuthRefresh) return true;
+  const path = getRequestPath(config);
+  return AUTH_ROUTES_WITHOUT_REFRESH_RETRY.includes(path);
+}
+
+function normalizeRefreshedUser(user) {
+  if (!user) return null;
+
+  const storedUser = getStoredUser();
+  const units = Array.isArray(user.allowedUnits) ? user.allowedUnits : [];
+  const storedUnitId = storedUser?.currentUnit?.id;
+  const currentUnit = storedUnitId
+    ? units.find((unit) => Number(unit.id) === Number(storedUnitId)) || user.currentUnit || units[0] || null
+    : user.currentUnit || units[0] || null;
+  const tenant = user.tenant || (currentUnit ? { id: currentUnit.tenant_id } : null);
+
+  return {
+    ...user,
+    tenant,
+    currentUnit,
+    allowedUnits: units,
+  };
+}
+
+export function setAuthFailureHandler(handler) {
+  authFailureHandler = typeof handler === "function" ? handler : null;
+}
+
+function handleRefreshFailure() {
+  clearAuthStorage();
+  if (authFailureHandler) {
+    authFailureHandler();
+  }
+}
+
+async function requestRefreshAccessToken() {
+  const { data } = await api.post(
+    AUTH_REFRESH_PATH,
+    null,
+    {
+      _skipAuthHeader: true,
+      _skipAuthRefresh: true,
+    }
+  );
+  const refreshed = unwrapData(data);
+
+  if (refreshed?.token) {
+    setAuthToken(refreshed.token);
+  }
+
+  if (refreshed?.usuario) {
+    setStoredUser(normalizeRefreshedUser(refreshed.usuario));
+  }
+
+  return refreshed;
+}
+
+export async function refreshAccessToken() {
+  if (!refreshPromise) {
+    refreshPromise = requestRefreshAccessToken()
+      .catch((error) => {
+        handleRefreshFailure();
+        throw error;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+
+  return refreshPromise;
+}
+
 api.interceptors.request.use((config) => {
-  const token = getAuthToken();
+  config.headers = config.headers || {};
+  const token = config._skipAuthHeader || config.skipAuthHeader ? null : getAuthToken();
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -18,6 +126,34 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error?.config;
+    const status = error?.response?.status;
+
+    if (!originalRequest || status !== 401 || originalRequest._retry || shouldSkipRefreshRetry(originalRequest)) {
+      return Promise.reject(error);
+    }
+
+    originalRequest._retry = true;
+
+    try {
+      const refreshed = await refreshAccessToken();
+
+      if (!refreshed?.token) {
+        throw new Error("Refresh sem access token.");
+      }
+
+      originalRequest.headers = originalRequest.headers || {};
+      originalRequest.headers.Authorization = `Bearer ${refreshed.token}`;
+      return api(originalRequest);
+    } catch (refreshError) {
+      return Promise.reject(refreshError);
+    }
+  }
+);
 
 // ============ ALUNOS ============
 export async function fetchAlunos() {

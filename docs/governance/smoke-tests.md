@@ -35,7 +35,8 @@ Estes smoke tests validam rapidamente se o sistema sobe em ambiente limpo e se o
 - [ ] testar logout.
 - [ ] testar logout-all, se aplicável.
 - [ ] testar refresh backend via cookie, se possível via Insomnia/curl.
-- [ ] validar que frontend ainda depende de `localStorage` até Bloco 3B/4.
+- [ ] validar que frontend usa refresh cookie com `withCredentials` no Bloco 3B.
+- [ ] validar que frontend ainda mantem `localStorage` como compatibilidade temporaria ate o Bloco 4.
 - [ ] validar que financeiro não aparece para perfil não autorizado.
 - [ ] validar Histórico de Atividades bloqueado para perfil operacional.
 - [ ] registrar pagamento.
@@ -97,13 +98,14 @@ Use `curl.exe` no PowerShell se `curl` estiver apontando para alias local.
 | Usuário bloqueado/inativo | autenticar/operar com usuário não ativo. | Login/operação bloqueados. | Depende de massa de usuários. | feito |
 | Token cru em logs/auditoria | revisar registros de `audit_log` e logs de console. | Token cru não deve aparecer; fingerprint pode aparecer. | Verificação manual. | parcial |
 
-### Pendente no frontend Bloco 3B/4
+### Frontend Bloco 3B/4
 
 | Teste | Comando ou ação | Resultado esperado | Observação | Status |
 |---|---|---|---|---|
-| Refresh via cookie no frontend | manter sessão após expiração do access token usando cookie HttpOnly. | Ainda pendente. | `authService.js` não chama `/auth/refresh` hoje. | pendente |
-| Access token em memória | verificar ausência de access token em `localStorage`. | Ainda pendente. | `authStorage.js` persiste `academia_sa_auth_token` em `localStorage`. | pendente |
-| `withCredentials` no Axios | verificar envio automático de cookie cross-origin. | Ainda pendente. | Instância Axios atual não define `withCredentials`. | pendente |
+| Refresh via cookie no frontend | manter sessão após expiração do access token usando cookie HttpOnly. | Frontend tenta `/auth/refresh` e salva novo bearer temporariamente. | Cookie HttpOnly não é lido via JavaScript. | feito |
+| Interceptor 401 | forçar access token local inválido com refresh cookie válido. | Uma tentativa de refresh e retry da request original. | Não deve gerar loop infinito. | feito |
+| Access token em memória | verificar ausência de access token em `localStorage`. | Ainda pendente. | `authStorage.js` persiste `academia_sa_auth_token` em `localStorage` por compatibilidade temporaria. | pendente |
+| `withCredentials` no Axios | verificar envio automático de cookie cross-origin. | Cookie enviado automaticamente em login/refresh/logout e demais chamadas. | Bloco 3B configurou `withCredentials`. | feito |
 
 ## 9. Testes de domínio crítico
 
@@ -126,15 +128,14 @@ Use `curl.exe` no PowerShell se `curl` estiver apontando para alias local.
 | Ambiente sobe | `npm start` na raiz e `npm run dev` em `frontend`. | Backend e frontend disponíveis nas portas locais esperadas. | Scripts conferidos nos `package.json`. | feito |
 | API responde | `GET /test-db`. | SQLite responde com `db_time`. | Banco local atual. | feito |
 | Sessão básica | login, `/auth/me`, logout. | Fluxo de autenticação básico funciona. | Token opaco server-side. | feito |
-| Refresh backend | login, capturar cookie, chamar `/auth/refresh`. | Refresh rotaciona cookie e access token. | Backend implementado; frontend ainda pendente. | parcial |
+| Refresh frontend/backend | login, capturar cookie, chamar `/auth/refresh` ou invalidar access token local com cookie válido. | Refresh rotaciona cookie e access token. | Frontend Bloco 3B usa cookie HttpOnly com `withCredentials`; Bloco 4 ainda removerá persistência do access token em produção. | parcial |
 | UI principal | login, dashboard, menus, operação básica. | Telas principais carregam sem erro crítico. | Permissões finais ainda dependem da matriz. | parcial |
 | Domínio crítico | aluno, mensalidade, pagamento, venda, acesso, vínculo e auditoria. | Fluxos críticos executam com dados fictícios. | Validar por perfil antes de PostgreSQL. | parcial |
 
 ## 11. Problemas conhecidos
 
-- O frontend ainda não concluiu Bloco 3B/4 de sessão.
+- O frontend concluiu o Bloco 3B de sessão com refresh cookie e `withCredentials`; Bloco 4 ainda está pendente.
 - O frontend ainda persiste access token em `localStorage` no estado atual.
-- O frontend ainda não usa refresh cookie com `withCredentials` na instância Axios atual.
 - PostgreSQL ainda é futuro; SQLite é o banco atual.
 - `.env.example` não deve conter segredos reais.
 - O backend atual não carrega `backend/.env` automaticamente por código, pois não há dotenv configurado.

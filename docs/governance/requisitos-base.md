@@ -185,7 +185,7 @@ Visão consolidada da Rede, somente leitura, voltada a acompanhamento e governan
 
 **RF-024 [parcial]** O sistema deve aplicar escopo de Rede/Unidade nas consultas e operações conforme permissão do usuário.
 
-**RF-025 [pendente]** O frontend deve consumir refresh token via cookie HttpOnly com `withCredentials`.
+**RF-025 [feito]** O frontend deve consumir refresh token via cookie HttpOnly com `withCredentials`.
 
 **RF-026 [pendente]** O access token deve deixar de ser persistido em `localStorage` em produção.
 
@@ -247,7 +247,7 @@ Visão consolidada da Rede, somente leitura, voltada a acompanhamento e governan
 
 **RS-012 [pendente]** Produção não deve persistir access token em `localStorage`.
 
-**RS-013 [pendente]** Frontend deve usar refresh cookie com `withCredentials` e access token em memória.
+**RS-013 [parcial]** Frontend deve usar refresh cookie com `withCredentials` e access token em memória.
 
 **RS-014 [futuro]** Deploy de produção deve usar HTTPS obrigatório para cookie `Secure`.
 
@@ -371,7 +371,7 @@ Visão consolidada da Rede, somente leitura, voltada a acompanhamento e governan
 
 ## 14. Pendências antes do PostgreSQL
 
-- Finalizar Bloco 3B de segurança de sessão no frontend.
+- Validar Bloco 3B de segurança de sessão no frontend em smoke manual amplo.
 - Finalizar Bloco 4: access token curto em memória e remoção de persistência em `localStorage` em produção.
 - Finalizar Bloco 5: endurecimento de produção, CSP e política final de cookies/CORS.
 - Congelar matriz de permissões final.
