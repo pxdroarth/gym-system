@@ -183,3 +183,9 @@ Confinar uso de `localStorage` ao minimo necessario, preparar access token em me
 - O escopo ficou limitado a mensagens de erro exibidas ao usuario e reducao de logs com objeto bruto; endpoints, payloads, regras de negocio, auth core, bearer token e `localStorage` nao foram alterados.
 - Nao foram encontrados usos de `fetch` nem axios direto fora da infraestrutura central nesta etapa.
 - Dominios ainda pendentes devem ser tratados apenas se surgirem novos fluxos ou mensagens manuais em telas futuras; Bloco 4 segue pendente para remover a persistencia do access token em `localStorage` e preparar token em memoria.
+
+## Atualizacao 3C-F
+
+- Foi criado o plano de separacao incremental do `Api.js`, sem alterar codigo funcional, imports, endpoints, payloads, auth core, bearer token ou `localStorage`.
+- Documento: [`docs/frontend/api-service-split-plan.md`](api-service-split-plan.md).
+- O plano mantem `Api.js` como infraestrutura HTTP central e propõe migrar funcoes de dominio para services por etapas antes do Bloco 4.
