@@ -68,13 +68,22 @@ router.get('/:id', async (req, res, next) => {
 
 router.post('/', async (req, res, next) => {
   try {
+    const scope = requireScope(req);
     if (req.body?.liberacao_manual) {
       assertPermission(req, PERMISSIONS.ACESSO_LIBERACAO_MANUAL);
+      const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
+      const resultado = await AccessService.registrarTentativaAcesso(req.body.aluno_id, {
+        liberacaoManual: true,
+        motivo: req.body.motivo,
+        operador: actor.name,
+        actor,
+        scope,
+      });
+      return res.status(201).json(resultado);
     }
 
-    const scope = requireScope(req);
-    const acesso = await AccessService.registrarAcesso(req.body || {}, scope);
-    res.status(201).json(acesso);
+    const resultado = await AccessService.registrarTentativaAcesso(req.body?.aluno_id, { scope });
+    res.status(201).json(resultado);
   } catch (error) {
     next(error);
   }
@@ -82,42 +91,30 @@ router.post('/', async (req, res, next) => {
 
 router.put('/:id', async (req, res, next) => {
   const id = parseInt(req.params.id);
-  const { aluno_id, data_hora, resultado, motivo_bloqueio } = req.body;
 
-  if (!aluno_id || !resultado || !data_hora) {
-    return next(new AppError('Campos obrigatorios: aluno_id, resultado, data_hora', 400, 'ACESSO_PAYLOAD_INVALIDO'));
+  if (isNaN(id) || id <= 0) {
+    return next(new AppError('ID de acesso invalido', 400, 'ACESSO_ID_INVALIDO'));
   }
 
-  try {
-    const scope = requireScope(req);
-    const resultadoNormalizado = String(resultado).toLowerCase();
-    const result = await runExecute(
-      'UPDATE acesso SET aluno_id = ?, data_hora = ?, resultado = ?, motivo_bloqueio = ? WHERE id = ? AND tenant_id = ? AND unit_id = ?',
-      [aluno_id, data_hora, resultadoNormalizado, motivo_bloqueio || null, id, scope.tenant_id, scope.unit_id]
-    );
-
-    if (result.changes === 0) {
-      return next(new AppError('Acesso nao encontrado para atualizar', 404, 'ACESSO_NAO_ENCONTRADO'));
-    }
-
-    res.json({ id, aluno_id, data_hora, resultado: resultadoNormalizado, motivo_bloqueio: motivo_bloqueio || null });
-  } catch (error) {
-    next(error);
-  }
+  return next(new AppError(
+    'Registro de acesso e log operacional sensivel; alteracao direta nao permitida. Use liberacao_manual auditada para excecoes.',
+    403,
+    'ACESSO_REGISTRO_IMUTAVEL'
+  ));
 });
 
 router.delete('/:id', async (req, res, next) => {
   const id = parseInt(req.params.id);
-  try {
-    const scope = requireScope(req);
-    const result = await runExecute('DELETE FROM acesso WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
-    if (result.changes === 0) {
-      return next(new AppError('Acesso nao encontrado para deletar', 404, 'ACESSO_NAO_ENCONTRADO'));
-    }
-    res.json({ message: 'Acesso deletado com sucesso' });
-  } catch (error) {
-    next(error);
+
+  if (isNaN(id) || id <= 0) {
+    return next(new AppError('ID de acesso invalido', 400, 'ACESSO_ID_INVALIDO'));
   }
+
+  return next(new AppError(
+    'Registro de acesso e log operacional sensivel; exclusao direta nao permitida.',
+    403,
+    'ACESSO_REGISTRO_IMUTAVEL'
+  ));
 });
 
 router.post('/mock-hikvision', async (req, res, next) => {

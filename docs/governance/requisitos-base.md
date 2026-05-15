@@ -195,7 +195,7 @@ Visão consolidada da Rede, somente leitura, voltada a acompanhamento e governan
 
 ## 7. Regras de negócio
 
-**RN-001 [feito]** Mensalidade vencida deve bloquear acesso quando a regra operacional indicar inadimplência.
+**RN-001 [feito]** Mensalidade vencida deve bloquear acesso automaticamente; não existe tolerância automática para inadimplência.
 
 **RN-002 [feito]** No dia do vencimento, o acesso ainda deve ser permitido quando a mensalidade ainda não está vencida.
 
@@ -220,6 +220,8 @@ Visão consolidada da Rede, somente leitura, voltada a acompanhamento e governan
 **RN-012 [parcial]** Escopo de Unidade deve limitar operações conforme as unidades permitidas para o usuário.
 
 **RN-013 [pendente]** Matriz completa de permissões deve ser congelada antes da migração para PostgreSQL.
+
+**RN-014 [feito]** Aluno sem mensalidade registrada/vigente deve ser bloqueado automaticamente; a única exceção operacional é liberação manual autorizada e auditada.
 
 ## 8. Requisitos de segurança
 

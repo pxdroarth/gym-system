@@ -123,6 +123,18 @@ Nota 3C-B: o cliente central usa flags internas `_skipAuthHeader`, `_skipAuthRef
 | Financeiro restrito | acessar financeiro com perfis autorizados e não autorizados. | Autorizados acessam; operacionais não. | Backend deve ser a autoridade final. | parcial |
 | Fechamento mensal | criar/consultar fechamento, se houver massa/fluxo disponível. | Período fechado deve restringir alterações sensíveis conforme regra. | Cobertura ainda parcial nos requisitos. | parcial |
 
+### Casos obrigatorios de acesso sem tolerancia
+
+| Teste | Comando ou acao | Resultado esperado | Observacao | Status |
+|---|---|---|---|---|
+| Aluno ativo sem mensalidade | Simular acesso via `/acessos/mock-hikvision`. | Bloqueado com motivo `sem_mensalidade_registrada` ou `sem_mensalidade_vigente`. | Nao existe tolerancia automatica. | parcial |
+| POST `/acessos` sem override | Enviar `aluno_id` de aluno bloqueado para `POST /acessos` sem `liberacao_manual`. | Registro deve sair como `negado`; nunca `permitido` por payload direto. | Rota comum deve passar pela avaliacao do `AccessService`. | parcial |
+| PUT `/acessos/:id` com campo critico | Tentar alterar `resultado`, `aluno_id`, `data_hora`, `motivo_bloqueio` ou status critico de registro existente. | Bloqueado com `403` e codigo `ACESSO_REGISTRO_IMUTAVEL`. | Registro de acesso e log operacional sensivel; excecao deve usar liberacao manual auditada. | parcial |
+| DELETE `/acessos/:id` | Tentar apagar registro de acesso existente. | Bloqueado com `403` e codigo `ACESSO_REGISTRO_IMUTAVEL`. | Registro de acesso nao deve ser apagado fisicamente por rota comum. | parcial |
+| Mensalidade vencida | Simular acesso de aluno com mensalidade vencida ou parcial vencida. | Bloqueado com motivo `mensalidade_vencida` ou `responsavel_inadimplente`. | Vencimento menor que hoje bloqueia. | parcial |
+| Mensalidade em aberto no prazo | Simular acesso de aluno com vencimento futuro. | Liberado automaticamente. | Vencimento igual a hoje ainda libera. | parcial |
+| Liberacao manual auditada | Simular acesso bloqueado com `liberacao_manual`, `motivo` e operador autorizado. | Permitido como manual e evento `acesso_liberado_manual` no Historico/Auditoria. | Deve registrar operador, aluno, motivo original, unidade e rede. | parcial |
+
 ## 10. Resultado esperado
 
 | Teste | Comando ou ação | Resultado esperado | Observação | Status |

@@ -14,6 +14,7 @@ function getActorFromRequest(req) {
     return {
       id: String(req.operator.id),
       name: req.operator.nome || req.operator.login || `usuario_${req.operator.id}`,
+      login: req.operator.login || null,
       role: req.operator.papel,
     };
   }

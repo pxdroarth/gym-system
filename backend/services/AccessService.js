@@ -1,4 +1,4 @@
-const { runGet, runExecute } = require('../dbHelper');
+const { runGet, runExecute, runQuery } = require('../dbHelper');
 const AppError = require('../errors/AppError');
 const {
   ACESSO_RESULTADO,
@@ -8,6 +8,7 @@ const {
   VINCULO_STATUS,
 } = require('../constants/domainStates');
 const { PERMISSIONS, roleHasPermission } = require('../constants/userRoles');
+const AuditService = require('./AuditService');
 
 function resultadoBancoPorStatus(status) {
   return [
@@ -28,6 +29,15 @@ function estaVencida(vencimento) {
 
   const hoje = new Date().toISOString().slice(0, 10);
   return String(vencimento).slice(0, 10) < hoje;
+}
+
+function hojeISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function dataISO(value) {
+  if (!value || value === '0000-00-00') return null;
+  return String(value).slice(0, 10);
 }
 
 async function carregarAluno(alunoId, scope = null) {
@@ -55,193 +65,178 @@ async function carregarVinculo(alunoId, scope = null) {
   );
 }
 
-async function buscarMensalidadeCritica(alunoId, scope = null) {
+async function listarMensalidadesAcesso(alunoId, scope = null) {
   const scoped = scope?.tenant_id && scope?.unit_id
     ? 'AND tenant_id = ? AND unit_id = ?'
     : '';
-  const params = [
-    alunoId,
-    MENSALIDADE_STATUS.CANCELADO,
-  ];
+  const params = [alunoId];
   if (scope?.tenant_id && scope?.unit_id) params.push(scope.tenant_id, scope.unit_id);
-  params.push(
-    MENSALIDADE_STATUS.BLOQUEADA_POR_FECHAMENTO,
-    MENSALIDADE_STATUS.EM_ABERTO,
-    MENSALIDADE_STATUS.VENCIDO,
-    MENSALIDADE_STATUS.PARCIAL,
-    MENSALIDADE_STATUS.EM_REVERSAO_CONTROLADA,
-  );
-  return runGet(
+  return runQuery(
     `SELECT *
      FROM mensalidade
      WHERE aluno_id = ?
-       AND status != ?
        ${scoped}
+       AND deleted_at IS NULL
      ORDER BY
-       CASE
-         WHEN status = ? THEN 1
-         WHEN status = ? AND vencimento IS NOT NULL AND vencimento != '0000-00-00' AND DATE(vencimento) < DATE('now') THEN 2
-         WHEN status = ? THEN 3
-         WHEN status = ? THEN 4
-         WHEN status = ? THEN 5
-         ELSE 6
-       END,
-       DATE(vencimento) ASC,
-       id ASC
-     LIMIT 1`,
+       DATE(COALESCE(vencimento, data_fim, data_inicio, '1900-01-01')) DESC,
+       id DESC`,
     params
   );
+}
+
+function mensalidadeNoPeriodoAtual(mensalidade) {
+  const hoje = hojeISO();
+  const inicio = dataISO(mensalidade.data_inicio);
+  const fim = dataISO(mensalidade.data_fim);
+  const vencimento = dataISO(mensalidade.vencimento);
+
+  if (vencimento && vencimento >= hoje) return true;
+  if (inicio && fim) return inicio <= hoje && fim >= hoje;
+  if (fim) return fim >= hoje;
+  return false;
+}
+
+function motivoInadimplencia(vinculo) {
+  return vinculo ? 'responsavel_inadimplente' : 'mensalidade_vencida';
+}
+
+function respostaBloqueada(status, motivo, aluno, responsavel_id = null) {
+  return {
+    ok: false,
+    status,
+    resultado: ACESSO_RESULTADO.NEGADO,
+    motivo,
+    aluno,
+    responsavel_id,
+  };
 }
 
 async function avaliarAcessoAluno(alunoId, options = {}) {
   const id = Number(alunoId);
   if (!id) throw new AppError('aluno_id e obrigatorio', 400, 'ALUNO_ID_INVALIDO');
 
-  if (options.liberacaoManual) {
-    if (!options.actor?.role || !roleHasPermission(options.actor.role, PERMISSIONS.ACESSO_LIBERACAO_MANUAL)) {
-      throw new AppError('Permissao negada para liberacao manual de acesso', 403, 'PERMISSAO_NEGADA');
-    }
-
-    if (!options.motivo || !options.operador) {
-      throw new AppError('Liberacao manual exige motivo e operador', 400, 'LIBERACAO_MANUAL_INVALIDA');
-    }
-
-    return {
-      ok: true,
-      status: ACESSO_STATUS.LIBERADO_MANUAL,
-      resultado: ACESSO_RESULTADO.PERMITIDO,
-      motivo: options.motivo,
-      operador: options.operador,
-      responsavel_id: null,
-    };
-  }
-
   const aluno = await carregarAluno(id, options.scope);
   if (!aluno) {
-    return {
-      ok: false,
-      status: ACESSO_STATUS.BLOQUEADO_INATIVO,
-      resultado: ACESSO_RESULTADO.NEGADO,
-      motivo: 'Aluno nao encontrado',
-    };
+    return respostaBloqueada(ACESSO_STATUS.BLOQUEADO_INATIVO, 'aluno_inativo', null);
   }
 
-  if ((aluno.status || '').toLowerCase() !== 'ativo') {
-    return {
-      ok: false,
-      status: ACESSO_STATUS.BLOQUEADO_INATIVO,
-      resultado: ACESSO_RESULTADO.NEGADO,
-      motivo: 'Cadastro inativo',
-      aluno,
-    };
+  const statusAluno = (aluno.status || '').toLowerCase();
+  if (statusAluno !== 'ativo') {
+    return respostaBloqueada(
+      ACESSO_STATUS.BLOQUEADO_INATIVO,
+      statusAluno === 'bloqueado' ? 'aluno_bloqueado' : 'aluno_inativo',
+      aluno
+    );
   }
 
   const vinculo = await carregarVinculo(id, options.scope);
   if (vinculo?.status === VINCULO_STATUS.PENDENTE_REGULARIZACAO) {
-    return {
-      ok: false,
-      status: ACESSO_STATUS.BLOQUEADO_PENDENTE_REGULARIZACAO,
-      resultado: ACESSO_RESULTADO.NEGADO,
-      motivo: 'Vinculo pendente de regularizacao',
+    return respostaBloqueada(
+      ACESSO_STATUS.BLOQUEADO_PENDENTE_REGULARIZACAO,
+      'vinculo_irregular',
       aluno,
-      responsavel_id: vinculo.responsavel_id,
-    };
+      vinculo.responsavel_id
+    );
   }
 
   const idFinanceiro = vinculo ? vinculo.responsavel_id : id;
   const responsavel = vinculo ? await carregarAluno(idFinanceiro, options.scope) : aluno;
 
   if (!responsavel) {
-    return {
-      ok: false,
-      status: ACESSO_STATUS.BLOQUEADO_PENDENTE_REGULARIZACAO,
-      resultado: ACESSO_RESULTADO.NEGADO,
-      motivo: 'Responsavel nao encontrado',
-      responsavel_id: vinculo.responsavel_id,
-    };
-  }
-
-  if ((responsavel.status || '').toLowerCase() !== 'ativo') {
-    return {
-      ok: false,
-      status: ACESSO_STATUS.BLOQUEADO_INATIVO,
-      resultado: ACESSO_RESULTADO.NEGADO,
-      motivo: vinculo ? 'Responsavel inativo' : 'Cadastro inativo',
+    return respostaBloqueada(
+      ACESSO_STATUS.BLOQUEADO_PENDENTE_REGULARIZACAO,
+      'vinculo_irregular',
       aluno,
-      responsavel_id: vinculo ? vinculo.responsavel_id : null,
-    };
+      vinculo.responsavel_id
+    );
   }
 
-  const mensalidade = await buscarMensalidadeCritica(idFinanceiro, options.scope);
+  const statusResponsavel = (responsavel.status || '').toLowerCase();
+  if (statusResponsavel !== 'ativo') {
+    return respostaBloqueada(
+      ACESSO_STATUS.BLOQUEADO_INATIVO,
+      vinculo ? 'vinculo_irregular' : (statusResponsavel === 'bloqueado' ? 'aluno_bloqueado' : 'aluno_inativo'),
+      aluno,
+      vinculo ? vinculo.responsavel_id : null
+    );
+  }
+
+  const mensalidades = await listarMensalidadesAcesso(idFinanceiro, options.scope);
   const responsavel_id = vinculo ? vinculo.responsavel_id : null;
 
-  if (!mensalidade) {
-    return {
-      ok: true,
-      status: ACESSO_STATUS.LIBERADO,
-      resultado: ACESSO_RESULTADO.PERMITIDO,
-      motivo: null,
+  if (!mensalidades.length) {
+    return respostaBloqueada(
+      ACESSO_STATUS.BLOQUEADO_INADIMPLENCIA,
+      'sem_mensalidade_registrada',
       aluno,
-      responsavel_id,
-    };
+      responsavel_id
+    );
   }
 
-  if (mensalidade.status === MENSALIDADE_STATUS.BLOQUEADA_POR_FECHAMENTO) {
-    return {
-      ok: false,
-      status: ACESSO_STATUS.BLOQUEADO_PENDENTE_REGULARIZACAO,
-      resultado: ACESSO_RESULTADO.NEGADO,
-      motivo: 'Mensalidade bloqueada por fechamento',
+  const mensalidadeVencida = mensalidades.find((mensalidade) => (
+    mensalidade.status === MENSALIDADE_STATUS.VENCIDO
+    || (
+      [MENSALIDADE_STATUS.EM_ABERTO, MENSALIDADE_STATUS.PARCIAL].includes(mensalidade.status)
+      && estaVencida(mensalidade.vencimento)
+    )
+  ));
+
+  if (mensalidadeVencida) {
+    return respostaBloqueada(
+      ACESSO_STATUS.BLOQUEADO_INADIMPLENCIA,
+      motivoInadimplencia(vinculo),
       aluno,
-      responsavel_id,
-    };
+      responsavel_id
+    );
   }
 
-  if (mensalidade.status === MENSALIDADE_STATUS.VENCIDO) {
-    return {
-      ok: false,
-      status: ACESSO_STATUS.BLOQUEADO_INADIMPLENCIA,
-      resultado: ACESSO_RESULTADO.NEGADO,
-      motivo: vinculo ? 'Responsavel inadimplente' : 'Inadimplente',
+  const mensalidadeVigente = mensalidades.find(mensalidadeNoPeriodoAtual);
+
+  if (!mensalidadeVigente) {
+    return respostaBloqueada(
+      ACESSO_STATUS.BLOQUEADO_INADIMPLENCIA,
+      'sem_mensalidade_vigente',
       aluno,
-      responsavel_id,
-    };
+      responsavel_id
+    );
   }
 
-  if (
-    mensalidade.status === MENSALIDADE_STATUS.EM_ABERTO &&
-    estaVencida(mensalidade.vencimento)
-  ) {
-    return {
-      ok: false,
-      status: ACESSO_STATUS.BLOQUEADO_INADIMPLENCIA,
-      resultado: ACESSO_RESULTADO.NEGADO,
-      motivo: vinculo ? 'Responsavel inadimplente' : 'Inadimplente',
+  if (mensalidadeVigente.status === MENSALIDADE_STATUS.CANCELADO) {
+    return respostaBloqueada(
+      ACESSO_STATUS.BLOQUEADO_INADIMPLENCIA,
+      'sem_mensalidade_vigente',
       aluno,
-      responsavel_id,
-    };
+      responsavel_id
+    );
   }
 
-  if (mensalidade.status === MENSALIDADE_STATUS.PARCIAL) {
-    if (estaVencida(mensalidade.vencimento)) {
-      return {
-        ok: false,
-        status: ACESSO_STATUS.BLOQUEADO_INADIMPLENCIA,
-        resultado: ACESSO_RESULTADO.NEGADO,
-        motivo: vinculo ? 'Responsavel inadimplente' : 'Inadimplente',
-        aluno,
-        responsavel_id,
-      };
-    }
+  if (mensalidadeVigente.status === MENSALIDADE_STATUS.BLOQUEADA_POR_FECHAMENTO) {
+    return respostaBloqueada(
+      ACESSO_STATUS.BLOQUEADO_PENDENTE_REGULARIZACAO,
+      'vinculo_irregular',
+      aluno,
+      responsavel_id
+    );
+  }
 
+  if (mensalidadeVigente.status === MENSALIDADE_STATUS.PARCIAL) {
     return {
       ok: true,
       status: ACESSO_STATUS.LIBERADO_COM_RESTRICAO,
       resultado: ACESSO_RESULTADO.PERMITIDO,
-      motivo: 'Mensalidade parcial',
+      motivo: 'mensalidade_parcial_no_prazo',
       aluno,
       responsavel_id,
     };
+  }
+
+  if (![MENSALIDADE_STATUS.PAGO, MENSALIDADE_STATUS.EM_ABERTO].includes(mensalidadeVigente.status)) {
+    return respostaBloqueada(
+      ACESSO_STATUS.BLOQUEADO_INADIMPLENCIA,
+      'sem_mensalidade_vigente',
+      aluno,
+      responsavel_id
+    );
   }
 
   return {
@@ -292,7 +287,76 @@ async function registrarAcesso(payload = {}, scope = null) {
 }
 
 async function registrarTentativaAcesso(alunoId, options = {}) {
-  const avaliacao = await avaliarAcessoAluno(alunoId, options);
+  const avaliacao = await avaliarAcessoAluno(alunoId, { ...options, liberacaoManual: false });
+
+  if (options.liberacaoManual) {
+    if (!options.actor?.role || !roleHasPermission(options.actor.role, PERMISSIONS.ACESSO_LIBERACAO_MANUAL)) {
+      throw new AppError('Permissao negada para liberacao manual de acesso', 403, 'PERMISSAO_NEGADA');
+    }
+
+    const motivoManual = String(options.motivo || '').trim();
+    if (!motivoManual || !options.operador) {
+      throw new AppError('Liberacao manual exige motivo e operador', 400, 'LIBERACAO_MANUAL_INVALIDA');
+    }
+
+    if (avaliacao.ok) {
+      throw new AppError('Liberacao manual so pode ser usada quando o acesso automatico estiver bloqueado', 400, 'LIBERACAO_MANUAL_SEM_BLOQUEIO');
+    }
+
+    const acessoManual = await registrarAcesso({
+      aluno_id: alunoId,
+      resultado: ACESSO_RESULTADO.PERMITIDO,
+      motivo_bloqueio: avaliacao.motivo || null,
+    }, options.scope);
+
+    const avaliacaoManual = {
+      ok: true,
+      status: ACESSO_STATUS.LIBERADO_MANUAL,
+      resultado: ACESSO_RESULTADO.PERMITIDO,
+      motivo: 'liberacao_manual',
+      motivo_manual: motivoManual,
+      motivo_bloqueio_original: avaliacao.motivo || null,
+      operador: options.operador,
+      responsavel_id: avaliacao.responsavel_id || null,
+    };
+
+    await AuditService.logAction({
+      actor: options.actor,
+      action: 'acesso_liberado_manual',
+      module: 'acessos',
+      recordType: 'acesso',
+      recordId: acessoManual.id,
+      before: {
+        resultado_anterior: ACESSO_RESULTADO.NEGADO,
+        avaliacao_original: avaliacao,
+      },
+      after: {
+        acesso: acessoManual,
+        avaliacao: avaliacaoManual,
+      },
+      metadata: {
+        operador_id: options.actor?.id || null,
+        operador_nome: options.actor?.name || options.operador || null,
+        operador_login: options.actor?.login || null,
+        aluno_id: Number(alunoId),
+        motivo: motivoManual,
+        resultado_anterior: 'bloqueado',
+        motivo_bloqueio_original: avaliacao.motivo || null,
+        unit_id: options.scope?.unit_id || null,
+        tenant_id: options.scope?.tenant_id || null,
+        timestamp: new Date().toISOString(),
+      },
+      tenant_id: options.scope?.tenant_id || null,
+      unit_id: options.scope?.unit_id || null,
+    });
+
+    return {
+      mensagem: 'Acesso permitido por liberacao manual auditada.',
+      acesso: acessoManual,
+      avaliacao: avaliacaoManual,
+    };
+  }
+
   const resultadoBanco = resultadoBancoPorStatus(avaliacao.status);
   const acesso = await registrarAcesso({
     aluno_id: alunoId,
