@@ -7,6 +7,7 @@ import EmptyState from "./ui/EmptyState";
 import Input from "./ui/Input";
 import Modal from "./ui/Modal";
 import Table from "./ui/Table";
+import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
 function badgeAcesso(resultado) {
   const status = String(resultado || "").toLowerCase();
@@ -24,11 +25,13 @@ export default function ModalAcessosHoje({ onClose }) {
   const [ordenAsc, setOrdenAsc] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filtroNome, setFiltroNome] = useState("");
+  const [erro, setErro] = useState(null);
 
   useEffect(() => {
     async function carregar() {
       setLoading(true);
       try {
+        setErro(null);
         const [todosAcessos, listaAlunos] = await Promise.all([fetchTodosAcessos(), fetchAlunos()]);
 
         const hoje = new Date();
@@ -48,7 +51,7 @@ export default function ModalAcessosHoje({ onClose }) {
 
         setAcessos(acessosComNome);
       } catch (error) {
-        console.error("Erro ao carregar acessos do dia:", error);
+        setErro(getApiErrorMessage(error));
       } finally {
         setLoading(false);
       }
@@ -119,6 +122,8 @@ export default function ModalAcessosHoje({ onClose }) {
 
         {loading ? (
           <EmptyState title="Carregando acessos..." />
+        ) : erro ? (
+          <EmptyState title={erro} />
         ) : acessosOrdenados.length === 0 ? (
           <EmptyState title="Nenhum acesso encontrado para hoje." />
         ) : (

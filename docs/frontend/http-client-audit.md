@@ -167,3 +167,11 @@ Confinar uso de `localStorage` ao minimo necessario, preparar access token em me
 - Fluxos de auth core, refresh cookie e interceptor 401 nao foram alterados nesta etapa.
 - Ainda ficam pendentes dominios como pagamentos/mensalidades, acessos, produtos, planos, onboarding/tenant e modais financeiros.
 - Bloco 4 segue pendente para remover a persistencia do access token em `localStorage` e preparar token em memoria.
+
+## Atualização 3C-D
+
+- `getApiErrorMessage` foi aplicado em fluxos criticos de pagamentos, mensalidades e acessos.
+- Arquivos alterados: `PerfilPage.jsx`, `PagamentoAntecipado.jsx`, `ModalNovaMensalidade.jsx`, `TelaMensalidade.jsx`, `GerarMensalidadesFuturas.jsx`, `ModalAcessosHoje.jsx` e `Dashboard.jsx`.
+- O escopo ficou limitado a mensagens de erro e remocao de logs com objeto bruto; endpoints, payloads, regras de negocio, auth core, bearer token e `localStorage` nao foram alterados.
+- Ainda ficam pendentes dominios como produtos, planos, onboarding/tenant, dashboard financeiro, plano de contas e modais financeiros restantes.
+- Bloco 4 segue pendente para remover a persistencia do access token em `localStorage` e preparar token em memoria.

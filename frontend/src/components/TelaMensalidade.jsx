@@ -5,6 +5,7 @@ import Card from "./ui/Card";
 import EmptyState from "./ui/EmptyState";
 import Table from "./ui/Table";
 import { updateMensalidadeStatus } from "../services/Api";
+import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
 function formatValor(valor) {
   const num = Number(valor);
@@ -32,7 +33,7 @@ export default function TelaMensalidade({ mensalidades, atualizarMensalidades })
         await atualizarMensalidades();
       }
     } catch (error) {
-      alert("Erro ao registrar pagamento.");
+      alert(getApiErrorMessage(error));
     } finally {
       setLoadingId(null);
     }

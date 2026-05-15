@@ -10,6 +10,7 @@ import EmptyState from "../components/ui/EmptyState";
 import KpiCard from "../components/ui/KpiCard";
 import PageHeader from "../components/ui/PageHeader";
 import Table from "../components/ui/Table";
+import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
 function badgeAcesso(resultado) {
   const status = String(resultado || "").toLowerCase().trim();
@@ -42,8 +43,7 @@ export default function Dashboard() {
       setAcessos(acessosComNome.sort((a, b) => new Date(b.data_hora) - new Date(a.data_hora)));
       setErro(null);
     } catch (error) {
-      setErro("Erro ao carregar dados do dashboard.");
-      console.error(error);
+      setErro(getApiErrorMessage(error));
     }
   }
 

@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { gerarMensalidadesFuturas } from "../services/Api";
+import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
 export default function GerarMensalidadesFuturas({ alunoId, planoId, onGerar }) {
   const [meses, setMeses] = useState(3);
@@ -21,7 +22,7 @@ export default function GerarMensalidadesFuturas({ alunoId, planoId, onGerar }) 
 
       if (onGerar) onGerar(); // Atualiza lista no componente pai
     } catch (error) {
-      setMensagem(`Erro: ${error.message}`);
+      setMensagem(`Erro: ${getApiErrorMessage(error)}`);
     } finally {
       setLoading(false);
     }

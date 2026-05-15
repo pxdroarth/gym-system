@@ -18,6 +18,7 @@ import EmptyState from "../../components/ui/EmptyState";
 import Pagination from "../../components/ui/Pagination";
 import Table from "../../components/ui/Table";
 import { TabButton, Tabs } from "../../components/ui/Tabs";
+import { getApiErrorMessage } from "../../utils/getApiErrorMessage";
 
 function formatarData(data) {
   if (!data) return "-";
@@ -92,7 +93,7 @@ export default function PerfilPage() {
       setAluno(data);
       setErro(null);
     } catch (err) {
-      setErro(err.message || "Aluno não encontrado");
+      setErro(getApiErrorMessage(err));
     }
   }
 
@@ -101,8 +102,9 @@ export default function PerfilPage() {
       const data = await fetchMensalidadesPorAluno(id, paginaMensalidade, 10);
       setMensalidades(data.mensalidades || []);
       setTotalMensalidades(data.total || 0);
-    } catch {
+    } catch (error) {
       setMensalidades([]);
+      setToastMsg(getApiErrorMessage(error));
     }
   }
 
@@ -111,8 +113,9 @@ export default function PerfilPage() {
       const data = await fetchAcessos(id, paginaAcesso, 10);
       setAcessos(data.acessos || []);
       setTotalAcessos(data.total || 0);
-    } catch {
+    } catch (error) {
       setAcessos([]);
+      setToastMsg(getApiErrorMessage(error));
     }
   }
 
@@ -148,7 +151,7 @@ export default function PerfilPage() {
       setToastMsg("Pagamento registrado com sucesso.");
       await Promise.all([carregarAluno(), carregarMensalidades()]);
     } catch (error) {
-      setToastMsg(error?.response?.data?.error || "Erro ao registrar pagamento.");
+      setToastMsg(getApiErrorMessage(error));
     } finally {
       setCarregandoPagamentoId(null);
     }
@@ -161,7 +164,7 @@ export default function PerfilPage() {
       setToastMsg(resposta?.mensagem || "Teste de acesso executado.");
       await carregarAcessos();
     } catch (error) {
-      setToastMsg(error?.response?.data?.error || "Erro ao simular acesso.");
+      setToastMsg(getApiErrorMessage(error));
     } finally {
       setSimulandoAcesso(false);
     }

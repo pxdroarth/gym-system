@@ -7,6 +7,7 @@ import EmptyState from "../../components/ui/EmptyState";
 import Input from "../../components/ui/Input";
 import PageHeader from "../../components/ui/PageHeader";
 import { fetchMensalidadesAlunoStatus, registrarPagamentoAntecipado } from "../../services/Api";
+import { getApiErrorMessage } from "../../utils/getApiErrorMessage";
 
 export default function PagamentoAntecipado({ alunoId }) {
   const { control, handleSubmit, watch, setValue } = useForm({
@@ -31,9 +32,8 @@ export default function PagamentoAntecipado({ alunoId }) {
           setMensalidades(data.mensalidades);
         }
       } catch (error) {
-        setMensagem("Erro ao carregar mensalidades");
+        setMensagem(`Erro: ${getApiErrorMessage(error)}`);
         setMensalidades([]);
-        console.error(error);
       }
     }
     fetchMensalidades();
@@ -66,7 +66,7 @@ export default function PagamentoAntecipado({ alunoId }) {
       setValue("mensalidadesIds", []);
       setValue("desconto", 0);
     } catch (error) {
-      setMensagem(`Erro: ${error.message}`);
+      setMensagem(`Erro: ${getApiErrorMessage(error)}`);
     }
   };
 

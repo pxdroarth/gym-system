@@ -4,6 +4,7 @@ import { cadastrarMensalidade } from '../../services/Api';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Modal from '../../components/ui/Modal';
+import { getApiErrorMessage } from '../../utils/getApiErrorMessage';
 
 function sugerirVencimento(diaVencimento) {
   const hoje = new Date();
@@ -53,7 +54,7 @@ export default function ModalNovaMensalidade({ open, aluno, onClose, onSuccess }
       onSuccess?.();
       onClose();
     } catch (err) {
-      toast.error(err?.response?.data?.error || err.message || 'Erro ao registrar mensalidade');
+      toast.error(getApiErrorMessage(err));
     } finally {
       setCarregando(false);
     }
