@@ -117,3 +117,13 @@ Depois que os dominios estiverem em services separados e os imports antigos fore
 - Reconferir endpoints legados de mensalidades contra backend real antes de apagar aliases.
 - Confirmar que nao restaram imports diretos de funcoes de dominio a partir de `Api.js`.
 - Manter `Api.js` como infraestrutura HTTP unica antes de alterar armazenamento do access token.
+
+## Atualizacao 3C-G
+
+- Foram criados wrappers por dominio em `frontend/src/services/` para os exports de dominio que ainda vivem em `Api.js`: `alunoService.js`, `planoService.js`, `planoAssociadoService.js`, `mensalidadeService.js`, `pagamentoService.js`, `acessoService.js`, `produtoService.js` e `vendaProdutoService.js`.
+- Cada arquivo novo apenas importa e reexporta as funcoes atuais do `Api.js`, preservando assinatura, retorno, endpoint, payload, tratamento de erro e a instancia HTTP central existente.
+- `Api.js` permanece como fonte funcional temporaria e continua sendo o unico lugar com cliente HTTP, interceptors, refresh single-flight, auth core e os exports legados consumidos hoje pela aplicacao.
+- Nenhum consumidor foi migrado nesta sprint; paginas, componentes e contexto seguem importando de `Api.js` ate a migracao incremental de imports em etapas futuras.
+- `auditLogService.js`, `tenantService.js`, `onboardingService.js`, `dashboardService.js`, `contasFinanceiras.js`, `planoContasService.js` e `authService.js` permanecem como services separados ja existentes; nao foi criado wrapper artificial para dominios que nao possuem export real de dominio no `Api.js`.
+- Proximos passos recomendados: migrar imports por dominio em PRs pequenos, comecando por fluxos de menor risco, mantendo aliases legados no `Api.js` durante a transicao e validando build + smoke por dominio a cada etapa.
+- Auth, interceptor, refresh e o service de auth permanecem fora desta separacao e devem continuar estaveis no `Api.js`/`authService.js` ate o Bloco 4.
