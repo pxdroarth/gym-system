@@ -9,6 +9,7 @@ import {
   fetchPlanos,
   updateAluno,
 } from "../../services/Api";
+import getApiErrorMessage from "../../utils/getApiErrorMessage";
 
 export default function FormAlunoPage() {
   const { id } = useParams();
@@ -37,7 +38,7 @@ export default function FormAlunoPage() {
   useEffect(() => {
     fetchPlanos()
       .then(setPlanos)
-      .catch(() => setErro("Erro ao carregar planos"));
+      .catch((error) => setErro(getApiErrorMessage(error)));
   }, []);
 
   useEffect(() => {
@@ -54,8 +55,8 @@ export default function FormAlunoPage() {
           data_nascimento: data.data_nascimento || "",
           matricula: data.matricula || "",
         });
-      } catch (err) {
-        setErro(err.message || "Aluno não encontrado");
+      } catch (error) {
+        setErro(getApiErrorMessage(error));
       }
     })();
   }, [id, isNovo]);
@@ -119,8 +120,9 @@ export default function FormAlunoPage() {
       toast.success(isNovo ? "Aluno cadastrado com sucesso!" : "Aluno atualizado com sucesso!");
       navigate("/alunos");
     } catch (error) {
-      toast.error(error.message || "Erro ao salvar aluno");
-      setErro(String(error.message || error));
+      const message = getApiErrorMessage(error);
+      toast.error(message);
+      setErro(message);
     } finally {
       setCarregando(false);
     }

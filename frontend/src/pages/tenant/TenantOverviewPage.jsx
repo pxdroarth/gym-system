@@ -8,6 +8,7 @@ import KpiCard from "../../components/ui/KpiCard";
 import PageHeader from "../../components/ui/PageHeader";
 import Table from "../../components/ui/Table";
 import { fetchTenantOverview } from "../../services/tenantService";
+import getApiErrorMessage from "../../utils/getApiErrorMessage";
 import { UI_PERMISSIONS } from "../../utils/permissions";
 
 function moeda(valor) {
@@ -28,7 +29,7 @@ export default function TenantOverviewPage() {
         const resposta = await fetchTenantOverview();
         if (active) setData(resposta.data);
       } catch (error) {
-        if (active) setErro(error?.response?.data?.error || error.message || "Erro ao carregar consolidado.");
+        if (active) setErro(getApiErrorMessage(error));
       } finally {
         if (active) setLoading(false);
       }

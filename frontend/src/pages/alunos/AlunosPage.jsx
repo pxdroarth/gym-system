@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, CircleSlash, Search, Users, WalletCards } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 import { fetchAlunos } from "../../services/Api";
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
@@ -11,6 +12,7 @@ import KpiCard from "../../components/ui/KpiCard";
 import PageHeader from "../../components/ui/PageHeader";
 import Pagination from "../../components/ui/Pagination";
 import Table from "../../components/ui/Table";
+import getApiErrorMessage from "../../utils/getApiErrorMessage";
 
 const ORDER = (import.meta.env?.VITE_ALUNOS_ORDER || "asc").toLowerCase();
 
@@ -62,7 +64,8 @@ export default function AlunosPage() {
       setAlunos(normalizados);
       setPaginaAtual(1);
     } catch (error) {
-      console.error("Erro ao buscar alunos:", error);
+      console.error("Erro ao buscar alunos.");
+      toast.error(getApiErrorMessage(error));
     }
   }
 

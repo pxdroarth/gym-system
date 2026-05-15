@@ -7,6 +7,7 @@ import EmptyState from "../../components/ui/EmptyState";
 import Input from "../../components/ui/Input";
 import KpiCard from "../../components/ui/KpiCard";
 import PillButton from "../../components/ui/PillButton";
+import getApiErrorMessage from "../../utils/getApiErrorMessage";
 
 export default function FinanceiroDashboard() {
   const [dados, setDados] = useState(null);
@@ -34,8 +35,8 @@ export default function FinanceiroDashboard() {
       setDados(data);
       setErro(false);
     } catch (error) {
-      console.error("Erro ao carregar dashboard financeiro:", error);
-      setErro(true);
+      console.error("Erro ao carregar dashboard financeiro.");
+      setErro(getApiErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -131,7 +132,7 @@ export default function FinanceiroDashboard() {
         </div>
       </Card>
 
-      {erro && <Card className="p-4 text-red-700 font-semibold">Falha ao carregar dashboard financeiro.</Card>}
+      {erro && <Card className="p-4 text-red-700 font-semibold">{erro}</Card>}
       {loading && <EmptyState title="Carregando dashboard financeiro..." />}
 
       {dados && !loading && (

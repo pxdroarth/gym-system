@@ -20,6 +20,7 @@ import {
   listarTenants,
   listarUnitsPorTenant,
 } from "../../services/tenantService";
+import getApiErrorMessage from "../../utils/getApiErrorMessage";
 import { UI_PERMISSIONS } from "../../utils/permissions";
 
 const tenantStatus = ["ativo", "inativo"];
@@ -105,7 +106,7 @@ export default function OnboardingTenantPage() {
       const resolvedId = preferredId || rows[0]?.id || "";
       setSelectedTenantId(resolvedId ? String(resolvedId) : "");
     } catch (error) {
-      toast.error(error?.response?.data?.error || error.message || "Erro ao carregar redes.");
+      toast.error(getApiErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -120,7 +121,7 @@ export default function OnboardingTenantPage() {
       const resposta = await listarUnitsPorTenant(tenantId);
       setUnits(resposta.data || []);
     } catch (error) {
-      toast.error(error?.response?.data?.error || error.message || "Erro ao carregar unidades.");
+      toast.error(getApiErrorMessage(error));
     }
   }
 
@@ -195,7 +196,7 @@ export default function OnboardingTenantPage() {
       setWizardStep(0);
       await carregarTenants(resposta.data?.tenant?.id);
     } catch (error) {
-      toast.error(error?.response?.data?.error || error.message || "Erro ao criar rede.");
+      toast.error(getApiErrorMessage(error));
     } finally {
       setSavingCreate(false);
     }
@@ -214,7 +215,7 @@ export default function OnboardingTenantPage() {
       await carregarTenants(selectedTenant.id);
       await carregarUnits(selectedTenant.id);
     } catch (error) {
-      toast.error(error?.response?.data?.error || error.message || "Erro ao salvar configuracao.");
+      toast.error(getApiErrorMessage(error));
     } finally {
       setSavingConfig(false);
     }

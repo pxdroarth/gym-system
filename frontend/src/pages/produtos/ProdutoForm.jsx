@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { toast } from "react-toastify";
 import { createProduto, updateProduto } from "../../services/Api";
 import Button from "../../components/ui/Button";
+import getApiErrorMessage from "../../utils/getApiErrorMessage";
 
 export default function ProdutoForm({ produto, onSuccess, onCancel }) {
   const {
@@ -43,7 +44,7 @@ export default function ProdutoForm({ produto, onSuccess, onCancel }) {
 
       onSuccess();
     } catch (error) {
-      toast.error(`Erro: ${error.message || "Erro desconhecido"}`);
+      toast.error(getApiErrorMessage(error));
     }
   };
 

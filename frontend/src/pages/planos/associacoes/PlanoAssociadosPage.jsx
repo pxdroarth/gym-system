@@ -15,6 +15,7 @@ import {
   fetchAlunosPesquisa,
   fetchPlanoAssociados,
 } from "../../../services/Api";
+import getApiErrorMessage from "../../../utils/getApiErrorMessage";
 
 function AlunoLinha({ aluno, action, actionLabel, muted }) {
   return (
@@ -29,14 +30,6 @@ function AlunoLinha({ aluno, action, actionLabel, muted }) {
         </Button>
       )}
     </div>
-  );
-}
-
-function getOperationErrorMessage(error) {
-  return (
-    error?.response?.data?.error ||
-    error?.response?.data?.message ||
-    "Não foi possível concluir a operação."
   );
 }
 
@@ -92,7 +85,7 @@ export default function PlanoAssociadosPage() {
         }));
         setAssociados(arr);
       } catch (e) {
-        toast.error(e.message || "Erro ao carregar vinculos");
+        toast.error(getApiErrorMessage(e));
       } finally {
         setCarregandoAssociados(false);
       }
@@ -142,7 +135,7 @@ export default function PlanoAssociadosPage() {
       setResultados((prev) => prev.filter((x) => x.id !== aluno.id));
       setBusca("");
     } catch (e) {
-      toast.error(getOperationErrorMessage(e));
+      toast.error(getApiErrorMessage(e));
     }
   }
 
@@ -152,7 +145,7 @@ export default function PlanoAssociadosPage() {
       toast.info(`Removido: ${v.matricula} - ${v.nome}`);
       setAssociados((prev) => prev.filter((a) => a.id !== v.id));
     } catch (e) {
-      toast.error(getOperationErrorMessage(e));
+      toast.error(getApiErrorMessage(e));
     }
   }
 
@@ -166,7 +159,7 @@ export default function PlanoAssociadosPage() {
       toast.info("Todos os vinculos foram removidos.");
       setAssociados([]);
     } catch (e) {
-      toast.error(getOperationErrorMessage(e));
+      toast.error(getApiErrorMessage(e));
     }
   }
 

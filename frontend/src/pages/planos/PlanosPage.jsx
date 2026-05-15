@@ -7,6 +7,7 @@ import EmptyState from "../../components/ui/EmptyState";
 import PageHeader from "../../components/ui/PageHeader";
 import Table from "../../components/ui/Table";
 import { fetchPlanos } from "../../services/Api";
+import getApiErrorMessage from "../../utils/getApiErrorMessage";
 import ModalPlanoForm from "./ModalPlanoForm";
 
 export default function PlanosPage() {
@@ -24,8 +25,8 @@ export default function PlanosPage() {
     try {
       const data = await fetchPlanos();
       setPlanos(data);
-    } catch (err) {
-      toast.error("Erro ao carregar planos");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
     } finally {
       setCarregando(false);
     }

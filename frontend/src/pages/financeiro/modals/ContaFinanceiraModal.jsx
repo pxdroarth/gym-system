@@ -5,6 +5,7 @@ import Button from "../../../components/ui/Button";
 import Input from "../../../components/ui/Input";
 import Modal from "../../../components/ui/Modal";
 import Select from "../../../components/ui/Select";
+import getApiErrorMessage from "../../../utils/getApiErrorMessage";
 
 export default function ContaFinanceiraModal({ aberto, conta, onClose, onSalvo }) {
   const [form, setForm] = useState({
@@ -32,7 +33,7 @@ export default function ContaFinanceiraModal({ aberto, conta, onClose, onSalvo }
         plano_contas_id: conta?.plano_contas_id || "",
         observacao: conta?.observacao || "",
       });
-      getPlanoContas().then(setPlanos);
+      getPlanoContas().then(setPlanos).catch((error) => setErro(getApiErrorMessage(error)));
     }
   }, [aberto, conta]);
 
@@ -61,7 +62,7 @@ export default function ContaFinanceiraModal({ aberto, conta, onClose, onSalvo }
       if (onSalvo) onSalvo();
       onClose();
     } catch (error) {
-      setErro("Erro ao salvar conta financeira");
+      setErro(getApiErrorMessage(error));
     } finally {
       setSalvando(false);
     }

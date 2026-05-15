@@ -11,6 +11,7 @@ import Modal from "../../components/ui/Modal";
 import PageHeader from "../../components/ui/PageHeader";
 import StockBar from "../../components/ui/StockBar";
 import Table from "../../components/ui/Table";
+import getApiErrorMessage from "../../utils/getApiErrorMessage";
 import ProdutoForm from "./ProdutoForm";
 
 const API_URL = import.meta.env?.VITE_API_URL || "http://localhost:3001";
@@ -37,7 +38,7 @@ export default function ProdutosPage() {
       const dados = await fetchProdutos();
       setProdutos(Array.isArray(dados) ? dados : []);
     } catch (error) {
-      toast.error("Erro ao carregar produtos");
+      toast.error(getApiErrorMessage(error));
     }
   }
 
@@ -48,7 +49,7 @@ export default function ProdutosPage() {
         toast.success("Produto excluído!");
         carregarProdutos();
       } catch (error) {
-        toast.error(`Erro ao excluir: ${error.message || ""}`);
+        toast.error(getApiErrorMessage(error));
       }
     }
   }

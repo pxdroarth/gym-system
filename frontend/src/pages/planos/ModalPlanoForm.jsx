@@ -4,6 +4,7 @@ import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Modal from "../../components/ui/Modal";
 import { createPlano, updatePlano } from "../../services/Api";
+import getApiErrorMessage from "../../utils/getApiErrorMessage";
 
 function criarFormVazio() {
   return {
@@ -67,7 +68,7 @@ export default function ModalPlanoForm({ open, onClose, planoEdicao, onSalvar })
       toast.success("Plano salvo com sucesso!");
       onSalvar?.();
     } catch (error) {
-      toast.error(error.message || "Erro ao salvar plano");
+      toast.error(getApiErrorMessage(error));
     } finally {
       setCarregando(false);
     }

@@ -13,6 +13,7 @@ import Input from "../../components/ui/Input";
 import Modal from "../../components/ui/Modal";
 import Select from "../../components/ui/Select";
 import Table from "../../components/ui/Table";
+import getApiErrorMessage from "../../utils/getApiErrorMessage";
 
 function tipoBadge(tipo) {
   return tipo === "receita"
@@ -38,7 +39,7 @@ export default function PlanoContasPage() {
       const data = await getPlanoContas();
       setContas(data);
     } catch (error) {
-      setErro("Erro ao carregar contas");
+      setErro(getApiErrorMessage(error));
     }
   };
 
@@ -83,7 +84,7 @@ export default function PlanoContasPage() {
       fecharModal();
       carregarContas();
     } catch (error) {
-      setErro("Erro ao salvar conta");
+      setErro(getApiErrorMessage(error));
     }
   };
 
@@ -93,7 +94,7 @@ export default function PlanoContasPage() {
       await deletePlanoConta(id);
       carregarContas();
     } catch (error) {
-      alert("Erro ao excluir");
+      alert(getApiErrorMessage(error));
     }
   };
 

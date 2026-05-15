@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Building2 } from "lucide-react";
 import { toast } from "react-toastify";
 import useAuth from "../../hooks/useAuth";
+import getApiErrorMessage from "../../utils/getApiErrorMessage";
 
 export default function UnitScopeSelector() {
   const { currentUnit, allowedUnits, setActiveUnit } = useAuth();
@@ -19,7 +20,7 @@ export default function UnitScopeSelector() {
       toast.success(`Unidade alterada para ${unit.nome}.`);
       navigate("/dashboard");
     } catch (error) {
-      toast.error(error.message || "Não foi possível alterar a unidade.");
+      toast.error(getApiErrorMessage(error));
     }
   }
 
