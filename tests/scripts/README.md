@@ -53,3 +53,48 @@ powershell -ExecutionPolicy Bypass -File tests\scripts\smoke-auth.ps1 -BaseUrl "
 - token antigo inválido
 - logout
 - logout-all
+
+## `smoke-acesso.js`
+
+### Objetivo
+
+Validar a regra critica de acesso/mensalidade do DOM-ACESSO-01 sem depender do frontend nem de senha real.
+
+### Pre-requisitos
+
+- Node.js disponivel.
+- Dependencias ja instaladas na raiz do projeto.
+- Banco SQLite local/demo disponivel.
+- Usar somente em ambiente local/demo, nunca em producao.
+
+### Execucao
+
+```cmd
+tests\scripts\smoke-acesso.cmd
+```
+
+Alternativa direta com Node:
+
+```cmd
+node tests\scripts\smoke-acesso.js
+```
+
+### Fixtures
+
+- O teste cria tenant, unidade, plano, alunos, mensalidades, acessos e auditoria com prefixo `SMOKE_ACESSO_`.
+- A limpeza antes/depois remove apenas registros associados a esse prefixo e aos alunos criados pelo teste.
+- O script nao altera schema, nao cria migration e nao usa dados reais.
+
+### Validacoes feitas
+
+- aluno ativo sem mensalidade bloqueado.
+- mensalidade vencida bloqueada.
+- mensalidade parcial vencida bloqueada.
+- mensalidade em aberto dentro do prazo liberada.
+- vencimento no dia atual liberado.
+- mensalidade paga liberada.
+- `POST /acessos` comum nao burla a regra.
+- liberacao manual sem motivo bloqueada.
+- liberacao manual com motivo/operador auditada em `audit_log`.
+- `PUT /acessos/:id` bloqueado com `ACESSO_REGISTRO_IMUTAVEL`.
+- `DELETE /acessos/:id` bloqueado com `ACESSO_REGISTRO_IMUTAVEL`.

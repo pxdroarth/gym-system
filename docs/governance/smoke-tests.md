@@ -135,6 +135,14 @@ Nota 3C-B: o cliente central usa flags internas `_skipAuthHeader`, `_skipAuthRef
 | Mensalidade em aberto no prazo | Simular acesso de aluno com vencimento futuro. | Liberado automaticamente. | Vencimento igual a hoje ainda libera. | parcial |
 | Liberacao manual auditada | Simular acesso bloqueado com `liberacao_manual`, `motivo` e operador autorizado. | Permitido como manual e evento `acesso_liberado_manual` no Historico/Auditoria. | Deve registrar operador, aluno, motivo original, unidade e rede. | parcial |
 
+Automacao local disponivel:
+
+```cmd
+tests\scripts\smoke-acesso.cmd
+```
+
+O smoke automatizado usa fixtures locais com prefixo `SMOKE_ACESSO_`, valida acesso/mensalidade sem tolerancia automatica e limpa apenas registros criados por ele. Use somente em banco local/demo; nao usar em producao.
+
 ## 10. Resultado esperado
 
 | Teste | Comando ou ação | Resultado esperado | Observação | Status |

@@ -78,6 +78,14 @@ powershell -ExecutionPolicy Bypass -File tests\scripts\smoke-auth.ps1 -Login adm
 
 Esse formato é útil em validação local controlada, mas não é recomendado salvar senha em histórico, shell script, README complementar ou arquivo versionado.
 
+Smoke de acesso/mensalidade:
+
+```cmd
+tests\scripts\smoke-acesso.cmd
+```
+
+Esse teste usa fixtures locais com prefixo `SMOKE_ACESSO_`, valida a regra de acesso sem tolerancia automatica e limpa apenas os registros criados por ele. Use somente em banco local/demo, nunca em producao.
+
 ## 6. Política de segurança
 
 - Não commitar senha.
@@ -93,6 +101,7 @@ Esse formato é útil em validação local controlada, mas não é recomendado s
 |---|---|---|---|
 | Auth backend | `tests/scripts/smoke-auth.ps1` | feito | Cobre `/test-db`, login, cookie HttpOnly, `/auth/me`, refresh, token antigo inválido, logout e logout-all. |
 | Auth frontend | Manual + build | parcial | Bloco 3B usa refresh cookie com `withCredentials`; `localStorage` segue temporario ate o Bloco 4. |
+| Acesso/mensalidade | `tests/scripts/smoke-acesso.js` | feito | Cobre bloqueio sem mensalidade, vencida/parcial vencida, liberacoes regulares, POST comum, PUT/DELETE imutaveis e liberacao manual auditada. |
 | API geral | Insomnia | pendente | Coleções e ambientes serão organizados nesta pasta. |
 | Permissões | Manual + Insomnia + futuro E2E | parcial | A matriz existe; a cobertura operacional ainda precisa crescer por perfil. |
 | Frontend E2E | Playwright | pendente | Não instalado/configurado nesta sprint. |
