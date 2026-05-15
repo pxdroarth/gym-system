@@ -159,3 +159,11 @@ Confinar uso de `localStorage` ao minimo necessario, preparar access token em me
 - `logoutRequest` e `logoutAllRequest` continuam podendo enviar o bearer atual, mas nao tentam refresh automatico se receberem 401.
 - Criado `frontend/src/utils/getApiErrorMessage.js` para mensagem humana sem expor token, cookie, stack trace ou objeto bruto.
 - A migracao de mensagens de erro dos dominios ficou para fase seguinte; nesta etapa o helper foi usado apenas no fluxo central de login/AuthContext.
+
+## Atualização 3C-C
+
+- `getApiErrorMessage` foi aplicado de forma incremental em pontos criticos de baixo risco: login, usuarios internos, historico/auditoria, contas financeiras e vendas de produtos.
+- O escopo ficou limitado a mensagens de erro exibidas ao usuario; nao houve mudanca de endpoint, payload, regra de negocio, bearer token ou `localStorage`.
+- Fluxos de auth core, refresh cookie e interceptor 401 nao foram alterados nesta etapa.
+- Ainda ficam pendentes dominios como pagamentos/mensalidades, acessos, produtos, planos, onboarding/tenant e modais financeiros.
+- Bloco 4 segue pendente para remover a persistencia do access token em `localStorage` e preparar token em memoria.

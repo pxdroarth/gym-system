@@ -12,6 +12,7 @@ import Input from "../../components/ui/Input";
 import Pagination from "../../components/ui/Pagination";
 import Select from "../../components/ui/Select";
 import Table from "../../components/ui/Table";
+import { getApiErrorMessage } from "../../utils/getApiErrorMessage";
 import ContaFinanceiraModal from "./modals/ContaFinanceiraModal";
 
 const perPage = 10;
@@ -59,7 +60,7 @@ export default function ContasFinanceirasPage() {
       setContas(dados.data || []);
       setTotal(dados.total || 0);
     } catch (error) {
-      setErro("Erro ao buscar contas financeiras");
+      setErro(getApiErrorMessage(error));
     }
   }
 
@@ -102,8 +103,8 @@ export default function ContasFinanceirasPage() {
     try {
       await marcarComoPago(id);
       carregar(page);
-    } catch {
-      alert("Erro ao confirmar pagamento");
+    } catch (error) {
+      alert(getApiErrorMessage(error));
     }
   }
 
@@ -112,8 +113,8 @@ export default function ContasFinanceirasPage() {
     try {
       await deletarContaFinanceira(id);
       carregar(page);
-    } catch {
-      alert("Erro ao excluir conta");
+    } catch (error) {
+      alert(getApiErrorMessage(error));
     }
   }
 

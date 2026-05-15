@@ -6,6 +6,7 @@ import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import Input from "../../components/ui/Input";
 import useAuth from "../../hooks/useAuth";
+import { getApiErrorMessage } from "../../utils/getApiErrorMessage";
 
 export default function LoginPage() {
   const { login, isAuthenticated, loading } = useAuth();
@@ -33,7 +34,7 @@ export default function LoginPage() {
       toast.success("Login realizado com sucesso.");
       navigate(from, { replace: true });
     } catch (error) {
-      toast.error(error?.response?.data?.error || error.message || "Erro ao autenticar.");
+      toast.error(getApiErrorMessage(error));
     } finally {
       setSubmitting(false);
     }

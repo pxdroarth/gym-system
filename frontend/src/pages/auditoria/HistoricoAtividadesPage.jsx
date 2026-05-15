@@ -12,6 +12,7 @@ import Select from "../../components/ui/Select";
 import Table from "../../components/ui/Table";
 import useAuth from "../../hooks/useAuth";
 import { fetchAuditLogById, fetchAuditLogs } from "../../services/auditLogService";
+import { getApiErrorMessage } from "../../utils/getApiErrorMessage";
 import { UI_PERMISSIONS } from "../../utils/permissions";
 
 const initialFilters = {
@@ -118,7 +119,7 @@ export default function HistoricoAtividadesPage() {
         limite: payload.limite || prev.limite,
       }));
     } catch (error) {
-      setErro(error?.response?.data?.error || error.message || "Nao foi possivel carregar o historico.");
+      setErro(getApiErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -153,7 +154,7 @@ export default function HistoricoAtividadesPage() {
     } catch (error) {
       setSelectedLog({
         ...log,
-        detalheErro: error?.response?.data?.error || error.message || "Nao foi possivel carregar o detalhe.",
+        detalheErro: getApiErrorMessage(error),
       });
     } finally {
       setDetailLoading(false);

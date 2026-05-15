@@ -13,6 +13,7 @@ import Pagination from "../../components/ui/Pagination";
 import PillButton from "../../components/ui/PillButton";
 import Select from "../../components/ui/Select";
 import Table from "../../components/ui/Table";
+import { getApiErrorMessage } from "../../utils/getApiErrorMessage";
 
 function formatarMoeda(valor) {
   return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -57,7 +58,7 @@ export default function VendasProdutosPage() {
       const dados = await fetchProdutos();
       setProdutos(dados);
     } catch (error) {
-      toast.error("Erro ao carregar produtos");
+      toast.error(getApiErrorMessage(error));
     }
   }
 
@@ -72,7 +73,7 @@ export default function VendasProdutosPage() {
       setVendas(vendasLista);
       setTotal(totalVendas);
     } catch (error) {
-      toast.error("Erro ao carregar vendas");
+      toast.error(getApiErrorMessage(error));
     }
   }
 
@@ -104,7 +105,7 @@ export default function VendasProdutosPage() {
       carregarProdutos();
       carregarVendas();
     } catch (error) {
-      toast.error("Erro ao registrar venda");
+      toast.error(getApiErrorMessage(error));
     } finally {
       setRegistrandoVenda(false);
     }

@@ -18,6 +18,7 @@ import {
   criarUsuarioInterno,
   listarUsuariosInternos,
 } from "../../services/usuariosInternosService";
+import { getApiErrorMessage } from "../../utils/getApiErrorMessage";
 import { getRoleLabel, ROLES, UI_PERMISSIONS } from "../../utils/permissions";
 import UsuarioInternoModal from "./UsuarioInternoModal";
 
@@ -52,7 +53,7 @@ export default function UsuariosInternosPage() {
       const resposta = await listarUsuariosInternos();
       setUsuarios(resposta.data || []);
     } catch (error) {
-      toast.error(error?.response?.data?.error || error.message || "Erro ao carregar usuarios internos.");
+      toast.error(getApiErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -70,7 +71,7 @@ export default function UsuariosInternosPage() {
       setModalAberto(false);
       await carregarUsuarios();
     } catch (error) {
-      toast.error(error?.response?.data?.error || error.message || "Erro ao criar usuario.");
+      toast.error(getApiErrorMessage(error));
     } finally {
       setSalvando(false);
     }
@@ -83,7 +84,7 @@ export default function UsuariosInternosPage() {
       toast.success("Papel atualizado.");
       await carregarUsuarios();
     } catch (error) {
-      toast.error(error?.response?.data?.error || error.message || "Erro ao alterar papel.");
+      toast.error(getApiErrorMessage(error));
     }
   }
 
@@ -94,7 +95,7 @@ export default function UsuariosInternosPage() {
       toast.success("Status atualizado.");
       await carregarUsuarios();
     } catch (error) {
-      toast.error(error?.response?.data?.error || error.message || "Erro ao alterar status.");
+      toast.error(getApiErrorMessage(error));
     }
   }
 
