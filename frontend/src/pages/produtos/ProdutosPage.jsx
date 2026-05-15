@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Boxes, PackagePlus, ShieldAlert } from "lucide-react";
 import { toast } from "react-toastify";
-import { deleteProduto, fetchProdutos } from "../../services/Api";
+import { deleteProduto, fetchProdutos } from "../../services/produtoService";
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";

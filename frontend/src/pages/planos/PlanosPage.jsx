@@ -6,7 +6,7 @@ import Card from "../../components/ui/Card";
 import EmptyState from "../../components/ui/EmptyState";
 import PageHeader from "../../components/ui/PageHeader";
 import Table from "../../components/ui/Table";
-import { fetchPlanos } from "../../services/Api";
+import { fetchPlanos } from "../../services/planoService";
 import getApiErrorMessage from "../../utils/getApiErrorMessage";
 import ModalPlanoForm from "./ModalPlanoForm";
 

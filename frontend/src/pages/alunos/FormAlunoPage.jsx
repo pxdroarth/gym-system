@@ -3,12 +3,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
   createAluno,
-  createPlanoAssociado,
   fetchAlunoById,
   fetchAlunosPesquisa,
-  fetchPlanos,
   updateAluno,
-} from "../../services/Api";
+} from "../../services/alunoService";
+import { createPlanoAssociado } from "../../services/planoAssociadoService";
+import { fetchPlanos } from "../../services/planoService";
 import getApiErrorMessage from "../../utils/getApiErrorMessage";
 
 export default function FormAlunoPage() {

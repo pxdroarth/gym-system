@@ -10,11 +10,13 @@ import KpiCard from "../../../components/ui/KpiCard";
 import Modal from "../../../components/ui/Modal";
 import PageHeader from "../../../components/ui/PageHeader";
 import {
+  fetchAlunosPesquisa,
+} from "../../../services/alunoService";
+import {
   createPlanoAssociado,
   deletePlanoAssociado,
-  fetchAlunosPesquisa,
   fetchPlanoAssociados,
-} from "../../../services/Api";
+} from "../../../services/planoAssociadoService";
 import getApiErrorMessage from "../../../utils/getApiErrorMessage";
 
 function AlunoLinha({ aluno, action, actionLabel, muted }) {

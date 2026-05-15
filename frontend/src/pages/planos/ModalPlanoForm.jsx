@@ -3,7 +3,7 @@ import { toast } from "react-toastify";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Modal from "../../components/ui/Modal";
-import { createPlano, updatePlano } from "../../services/Api";
+import { createPlano, updatePlano } from "../../services/planoService";
 import getApiErrorMessage from "../../utils/getApiErrorMessage";
 
 function criarFormVazio() {
