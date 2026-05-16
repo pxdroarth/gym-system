@@ -86,6 +86,13 @@ Não commite `.env` real, senha, token, cookie ou qualquer segredo.
 
 O backend atual não carrega `.env` automaticamente por código se `dotenv` não estiver configurado. No estado atual do projeto, variáveis do backend precisam ser definidas no shell/processo quando necessário.
 
+Segurança dev/prod:
+
+- Em desenvolvimento, o backend aceita CORS para `http://localhost:3000` e `http://localhost:5173` quando nenhuma origem é configurada.
+- Em produção, defina `CORS_ORIGINS` ou `FRONTEND_URL` com origem HTTPS explícita.
+- O refresh cookie é `HttpOnly`; em produção usa `Secure=true`.
+- Consulte [Segurança de Produção](seguranca-producao.md) antes de deploy web.
+
 ## 7. Validação automática do ambiente
 
 Use:

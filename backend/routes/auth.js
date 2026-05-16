@@ -2,6 +2,11 @@ const express = require('express');
 const router = express.Router();
 const AuthService = require('../services/AuthService');
 
+router.use((_req, res, next) => {
+  res.setHeader('Cache-Control', 'no-store');
+  next();
+});
+
 router.post('/login', async (req, res, next) => {
   try {
     const result = await AuthService.login(req.body || {}, req);

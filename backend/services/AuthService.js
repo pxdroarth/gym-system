@@ -28,6 +28,27 @@ function getRefreshTtlDays() {
   return readPositiveNumber(process.env.AUTH_REFRESH_TOKEN_TTL_DAYS) || DEFAULT_REFRESH_DAYS;
 }
 
+function readBoolean(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const normalized = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'sim'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'nao'].includes(normalized)) return false;
+  return null;
+}
+
+function getCookieSameSite() {
+  const configured = String(process.env.COOKIE_SAME_SITE || '').trim().toLowerCase();
+  if (['strict', 'lax', 'none'].includes(configured)) return configured;
+  return 'lax';
+}
+
+function getCookieSecure(sameSite) {
+  if (sameSite === 'none') return true;
+  if (process.env.NODE_ENV === 'production') return true;
+  const configured = readBoolean(process.env.COOKIE_SECURE);
+  return configured === true;
+}
+
 function sanitizeUser(user) {
   if (!user) return user;
   const { senha_hash, ...safe } = user;
@@ -58,10 +79,11 @@ function tokenFingerprint(token) {
 }
 
 function getRefreshCookieOptions(expiresAt = null) {
+  const sameSite = getCookieSameSite();
   const options = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
+    secure: getCookieSecure(sameSite),
+    sameSite,
     path: '/auth',
   };
 

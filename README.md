@@ -23,6 +23,7 @@ Este repositório está em fase de portfólio e evolução técnica. Os dados at
 - Bootstrap SQLite limpo já corrigido.
 - Governança documentada em requisitos, matriz de permissões e UML.
 - Integração Hikvision/catraca é futura; a fase atual considera webcam local/simulação.
+- Hardening inicial do Bloco 5 documentado para CORS, cookies, HTTPS e headers.
 - Produção comercial real ainda não está declarada como pronta.
 
 ## Estrutura principal
@@ -139,6 +140,7 @@ Esse endpoint consulta o SQLite local e confirma que a API conseguiu acessar o b
 - Backend/API: `3001`.
 - Frontend Vite: `5173`.
 - CORS local aceito pelo backend: `http://localhost:3000` e `http://localhost:5173`.
+- CORS de produção deve usar `CORS_ORIGINS` ou `FRONTEND_URL` com origem HTTPS explícita.
 
 ## Banco local e dados
 
@@ -164,7 +166,7 @@ Observação importante: o backend atual não carrega `.env` automaticamente por
 
 Variáveis relevantes observadas:
 
-- Backend: `NODE_ENV`, `BOOTSTRAP_ADMIN_LOGIN`, `BOOTSTRAP_ADMIN_PASSWORD`, `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_EMAIL`, `AUTH_SESSION_HOURS`.
+- Backend: `NODE_ENV`, `PORT`, `CORS_ORIGINS`, `FRONTEND_URL`, `COOKIE_SECURE`, `COOKIE_SAME_SITE`, `TRUST_PROXY`, `BOOTSTRAP_ADMIN_LOGIN`, `BOOTSTRAP_ADMIN_PASSWORD`, `BOOTSTRAP_ADMIN_NAME`, `BOOTSTRAP_ADMIN_EMAIL`, `AUTH_SESSION_HOURS`.
 - Frontend: `VITE_DEV_AUTO_LOGIN`, `VITE_DEV_LOGIN`, `VITE_DEV_PASSWORD`, além de variáveis opcionais usadas pelo código como `VITE_API_URL`.
 
 ## Scripts conferidos
@@ -201,6 +203,7 @@ Não existe `backend/package.json`; o backend usa o `package.json` da raiz.
 - [Smoke tests manuais](docs/governance/smoke-tests.md)
 - [Testes e validações](tests/README.md)
 - [Ambiente local](docs/setup/ambiente-local.md)
+- [Segurança de Produção](docs/setup/seguranca-producao.md)
 - [Versoes de ambiente](docs/setup/versoes-ambiente.md)
 - [Auditoria de cliente HTTP frontend](docs/frontend/http-client-audit.md)
 - [Plano de separacao do Api.js frontend](docs/frontend/api-service-split-plan.md)
@@ -211,8 +214,7 @@ Não existe `backend/package.json`; o backend usa o `package.json` da raiz.
 
 ## Roadmap próximo
 
-- Hardening de producao no Bloco 5: cookie Secure, HTTPS, CSP e CORS por ambiente.
-- Endurecer CORS, cookies, CSP e variáveis de ambiente para deploy.
+- Validar hardening do Bloco 5 no ambiente real de deploy: HTTPS, CORS, cookie Secure, CSP e proxy.
 - Congelar matriz de permissões antes da migração.
 - Revisar auditoria B1/B2/B3 e escopo por Rede/Unidade.
 - Documentar smoke tests manuais repetíveis.

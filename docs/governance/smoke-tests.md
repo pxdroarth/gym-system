@@ -37,6 +37,11 @@ Estes smoke tests validam rapidamente se o sistema sobe em ambiente limpo e se o
 - [ ] testar refresh backend via cookie, se possível via Insomnia/curl.
 - [ ] validar que frontend usa refresh cookie com `withCredentials` no Bloco 3B.
 - [ ] validar que frontend nao persiste access token em `localStorage`/`sessionStorage` no Bloco 4.
+- [ ] validar CORS local em `http://localhost:5173` no Bloco 5.
+- [ ] validar que origem nao autorizada e bloqueada em configuracao de producao.
+- [ ] validar que cookie de refresh continua `HttpOnly`.
+- [ ] validar que cookie `Secure` fica ativo em producao e desativado apenas em dev/local sem HTTPS.
+- [ ] validar que producao usa HTTPS.
 - [ ] validar que financeiro não aparece para perfil não autorizado.
 - [ ] validar Histórico de Atividades bloqueado para perfil operacional.
 - [ ] registrar pagamento.
@@ -109,6 +114,18 @@ Nota 3C-B: o cliente central usa flags internas `_skipAuthHeader`, `_skipAuthRef
 | Access token em memória | verificar ausencia de access token em `localStorage` e `sessionStorage`. | Token fica somente em memoria. | Chaves legadas `academia_sa_auth_token` e `academia_sa_auth_user` sao limpas/ignoradas. | feito |
 | `withCredentials` no Axios | verificar envio automático de cookie cross-origin. | Cookie enviado automaticamente em login/refresh/logout e demais chamadas. | Bloco 3B configurou `withCredentials`. | feito |
 
+### Hardening Bloco 5
+
+| Teste | Comando ou ação | Resultado esperado | Observação | Status |
+|---|---|---|---|---|
+| CORS localhost dev | acessar frontend em `http://localhost:5173` chamando API local. | Login, refresh e logout funcionam com credenciais. | Defaults dev aceitam `localhost:3000` e `localhost:5173`. | feito |
+| CORS producao explicito | iniciar backend com `NODE_ENV=production` e `CORS_ORIGINS` definido. | Apenas origens configuradas recebem CORS. | Nao usar `*` com credentials. | parcial |
+| Origem nao autorizada | chamar API com `Origin` fora da allowlist em producao. | Requisicao bloqueada com erro controlado. | Validar no ambiente alvo. | parcial |
+| Cookie HttpOnly | login deve retornar `academia_sa_refresh` com `HttpOnly`. | Cookie nao fica acessivel via JavaScript. | Preservado do fluxo de auth. | feito |
+| Cookie Secure | em `NODE_ENV=production`, cookie deve sair com `Secure`. | Em dev/local sem HTTPS, `Secure=false` permite uso local. | Configuravel por `COOKIE_SECURE` apenas fora de production. | parcial |
+| Access token em storage | apos login/reload/logout, verificar `localStorage` e `sessionStorage`. | Nenhum bearer token persistido. | Bloco 4 permanece valido. | feito |
+| HTTPS producao | deploy deve expor API e frontend por HTTPS. | Refresh cookie Secure funciona e browser envia cookie. | Obrigatorio antes de producao comercial. | pendente |
+
 ## 9. Testes de domínio crítico
 
 | Domínio | Comando ou ação | Resultado esperado | Observação | Status |
@@ -158,7 +175,7 @@ O smoke automatizado usa fixtures locais com prefixo `SMOKE_ACESSO_`, valida ace
 
 - O frontend concluiu o Bloco 4 de sessao com access token em memoria e refresh cookie HttpOnly com `withCredentials`.
 - O frontend nao deve persistir bearer token em `localStorage` ou `sessionStorage`; chaves legadas de auth devem ser limpas/ignoradas.
-- Bloco 5 ainda deve tratar hardening de producao: cookie Secure, HTTPS, CSP e CORS por ambiente.
+- Bloco 5 adicionou hardening inicial de producao: CORS por ambiente, cookie Secure/SameSite por ambiente, headers de seguranca e documentacao de HTTPS.
 - PostgreSQL ainda é futuro; SQLite é o banco atual.
 - `.env.example` não deve conter segredos reais.
 - O backend atual não carrega `backend/.env` automaticamente por código, pois não há dotenv configurado.

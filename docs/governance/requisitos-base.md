@@ -187,7 +187,7 @@ Visão consolidada da Rede, somente leitura, voltada a acompanhamento e governan
 
 **RF-025 [feito]** O frontend deve consumir refresh token via cookie HttpOnly com `withCredentials`.
 
-**RF-026 [pendente]** O access token deve deixar de ser persistido em `localStorage` em produção.
+**RF-026 [feito]** O access token deve deixar de ser persistido em `localStorage` em produção.
 
 **RF-027 [futuro]** O sistema deve operar sobre PostgreSQL em ambiente de deploy web.
 
@@ -243,15 +243,15 @@ Visão consolidada da Rede, somente leitura, voltada a acompanhamento e governan
 
 **RS-009 [feito]** Usuário bloqueado/inativo deve ser impedido de autenticar e operar.
 
-**RS-010 [parcial]** CORS deve permitir credenciais sem usar origin `*`, preservando localhost.
+**RS-010 [feito]** CORS deve permitir credenciais sem usar origin `*`, preservando localhost.
 
-**RS-011 [pendente]** CSP deve ser configurada para reduzir risco de XSS.
+**RS-011 [parcial]** CSP deve ser configurada para reduzir risco de XSS.
 
 **RS-012 [pendente]** Produção não deve persistir access token em `localStorage`.
 
 **RS-013 [parcial]** Frontend deve usar refresh cookie com `withCredentials` e access token em memória.
 
-**RS-014 [futuro]** Deploy de produção deve usar HTTPS obrigatório para cookie `Secure`.
+**RS-014 [parcial]** Deploy de produção deve usar HTTPS obrigatório para cookie `Secure`.
 
 ## 9. Requisitos de auditoria
 
@@ -329,7 +329,7 @@ Visão consolidada da Rede, somente leitura, voltada a acompanhamento e governan
 
 **RNF-005 [pendente]** O sistema deve estar preparado para PostgreSQL antes de deploy web.
 
-**RNF-006 [pendente]** O sistema deve estar preparado para deploy web com configuração segura.
+**RNF-006 [parcial]** O sistema deve estar preparado para deploy web com configuração segura.
 
 **RNF-007 [parcial]** A interface deve ter responsividade razoável para uso administrativo.
 
@@ -374,8 +374,8 @@ Visão consolidada da Rede, somente leitura, voltada a acompanhamento e governan
 ## 14. Pendências antes do PostgreSQL
 
 - Validar Bloco 3B de segurança de sessão no frontend em smoke manual amplo.
-- Finalizar Bloco 4: access token curto em memória e remoção de persistência em `localStorage` em produção.
-- Finalizar Bloco 5: endurecimento de produção, CSP e política final de cookies/CORS.
+- Validar Bloco 4 em ambiente de deploy: access token em memória e ausência de persistência em `localStorage`/`sessionStorage`.
+- Validar Bloco 5 no ambiente real: HTTPS, proxy, CORS final, CSP do frontend e política final de cookies.
 - Congelar matriz de permissões final.
 - Revisar Auditoria B1/B2/B3 e sua apresentação no Histórico de Atividades.
 - Consolidar helper global de erro e formato padrão de resposta.

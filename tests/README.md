@@ -86,6 +86,14 @@ tests\scripts\smoke-acesso.cmd
 
 Esse teste usa fixtures locais com prefixo `SMOKE_ACESSO_`, valida a regra de acesso sem tolerancia automatica e limpa apenas os registros criados por ele. Use somente em banco local/demo, nunca em producao.
 
+Checklist de seguranca do Bloco 5:
+
+- CORS local deve aceitar `http://localhost:3000` e `http://localhost:5173`.
+- Producao deve configurar `CORS_ORIGINS` ou `FRONTEND_URL` sem usar `*`.
+- Cookie `academia_sa_refresh` deve permanecer `HttpOnly`.
+- Cookie `Secure` deve estar ativo em producao com HTTPS.
+- Access token nao deve voltar para `localStorage` ou `sessionStorage`.
+
 ## 6. Política de segurança
 
 - Não commitar senha.
@@ -101,6 +109,7 @@ Esse teste usa fixtures locais com prefixo `SMOKE_ACESSO_`, valida a regra de ac
 |---|---|---|---|
 | Auth backend | `tests/scripts/smoke-auth.ps1` | feito | Cobre `/test-db`, login, cookie HttpOnly, `/auth/me`, refresh, token antigo inválido, logout e logout-all. |
 | Auth frontend | Manual + build | parcial | Bloco 4 usa access token em memoria e refresh cookie HttpOnly; `localStorage`/`sessionStorage` nao devem guardar bearer token. |
+| Hardening producao | Manual + smoke auth | parcial | Bloco 5 cobre CORS por ambiente, cookie Secure/SameSite, HTTPS documentado e headers minimos. |
 | Acesso/mensalidade | `tests/scripts/smoke-acesso.js` | feito | Cobre bloqueio sem mensalidade, vencida/parcial vencida, liberacoes regulares, POST comum, PUT/DELETE imutaveis e liberacao manual auditada. |
 | API geral | Insomnia | pendente | Coleções e ambientes serão organizados nesta pasta. |
 | Permissões | Manual + Insomnia + futuro E2E | parcial | A matriz existe; a cobertura operacional ainda precisa crescer por perfil. |

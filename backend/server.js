@@ -1,19 +1,69 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const AppError = require('./errors/AppError');
 const errorHandler = require('./middlewares/errorHandler');
 const ensureSchema = require('./database/ensureSchema');
 const operatorContext = require('./middlewares/operatorContext');
 const scopeContext = require('./middlewares/scopeContext');
+const securityHeaders = require('./middlewares/securityHeaders');
 
 const app = express();
-const port = 3001;
+const port = process.env.PORT || 3001;
+const isProduction = process.env.NODE_ENV === 'production';
 
-app.use(cors({
-  origin: [
+function splitOrigins(value) {
+  return String(value || '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
+function getAllowedOrigins() {
+  const configuredOrigins = [
+    ...splitOrigins(process.env.CORS_ORIGINS),
+    ...splitOrigins(process.env.FRONTEND_URL),
+  ];
+
+  if (configuredOrigins.includes('*')) {
+    throw new Error('CORS_ORIGINS nao deve usar "*" com credenciais.');
+  }
+
+  if (configuredOrigins.length) {
+    return [...new Set(configuredOrigins)];
+  }
+
+  if (isProduction) {
+    throw new Error('CORS_ORIGINS ou FRONTEND_URL e obrigatorio em production.');
+  }
+
+  return [
     'http://localhost:3000',
     'http://localhost:5173',
-  ],
+  ];
+}
+
+const allowedOrigins = getAllowedOrigins();
+
+if (isProduction || process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true') {
+  app.set('trust proxy', 1);
+}
+
+app.use(securityHeaders);
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin) {
+      callback(null, true);
+      return;
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new AppError('Origem CORS nao autorizada', 403, 'CORS_ORIGIN_NOT_ALLOWED'));
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Unit-Id'],

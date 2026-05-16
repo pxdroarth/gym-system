@@ -89,6 +89,8 @@ tests\scripts\check-env.cmd
 tests\scripts\smoke-auth.cmd -Login admin
 ```
 
+Para deploy web, revise tambem [Seguranca de Producao](seguranca-producao.md), especialmente `NODE_ENV`, `CORS_ORIGINS`, `FRONTEND_URL`, `COOKIE_SECURE`, `COOKIE_SAME_SITE` e HTTPS.
+
 ## 7. Ferramentas opcionais
 
 - Java e Graphviz para PlantUML.
