@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { CalendarDays, PackageCheck, ShoppingCart, Wallet } from "lucide-react";
 import { toast } from "react-toastify";
-import { createVendaProduto, fetchProdutos, fetchVendasProdutos } from "../../services/Api";
+import { fetchProdutos } from "../../services/produtoService";
+import { createVendaProduto, fetchVendasProdutos } from "../../services/vendaProdutoService";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import EmptyState from "../../components/ui/EmptyState";

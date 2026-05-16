@@ -127,3 +127,12 @@ Depois que os dominios estiverem em services separados e os imports antigos fore
 - `auditLogService.js`, `tenantService.js`, `onboardingService.js`, `dashboardService.js`, `contasFinanceiras.js`, `planoContasService.js` e `authService.js` permanecem como services separados ja existentes; nao foi criado wrapper artificial para dominios que nao possuem export real de dominio no `Api.js`.
 - Proximos passos recomendados: migrar imports por dominio em PRs pequenos, comecando por fluxos de menor risco, mantendo aliases legados no `Api.js` durante a transicao e validando build + smoke por dominio a cada etapa.
 - Auth, interceptor, refresh e o service de auth permanecem fora desta separacao e devem continuar estaveis no `Api.js`/`authService.js` ate o Bloco 4.
+
+## Atualizacao 3C-I
+
+- Consumidores migrados nesta etapa: `frontend/src/pages/vendasProdutos/VendasProdutosPage.jsx` e migracao parcial de `frontend/src/pages/alunos/PerfilPage.jsx`.
+- Em `VendasProdutosPage.jsx`, os imports de produtos e vendas sairam de `Api.js` e passaram para `produtoService.js` e `vendaProdutoService.js`, mantendo chamadas, filtros, payloads e retorno exatamente iguais.
+- Em `PerfilPage.jsx`, apenas chamadas simples de aluno/plano foram migradas para `alunoService.js` e `planoService.js`; mensalidades, pagamentos e acessos continuam importados de `Api.js` por serem mais sensiveis e pedirem bloco proprio.
+- Consumidores mantidos em `Api.js` por risco: `Dashboard.jsx`, `ModalAcessosHoje.jsx`, `ModalNovaMensalidade.jsx`, `PagamentoAntecipado.jsx`, `GerarMensalidadesFuturas.jsx` e `TelaMensalidade.jsx`.
+- Dominios ainda pendentes para blocos proprios: mensalidades, pagamentos, acessos/liberacao e financeiro mais sensivel, para evitar migracao em lote de fluxos com regra critica e necessidade de smoke especifico.
+- `Api.js` continua compativel e preserva todos os exports legados durante a migracao incremental dos consumidores.

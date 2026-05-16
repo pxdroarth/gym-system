@@ -5,12 +5,12 @@ import ToastNotification from "../../components/ToastNotification";
 import ModalNovaMensalidade from "./ModalNovaMensalidade";
 import {
   fetchAcessos,
-  fetchAlunoById,
   fetchMensalidadesPorAluno,
-  fetchPlanos,
   registrarPagamento,
   simularAcesso,
 } from "../../services/Api";
+import { fetchAlunoById } from "../../services/alunoService";
+import { fetchPlanos } from "../../services/planoService";
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";

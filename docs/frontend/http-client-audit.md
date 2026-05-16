@@ -184,6 +184,10 @@ Confinar uso de `localStorage` ao minimo necessario, preparar access token em me
 - Nao foram encontrados usos de `fetch` nem axios direto fora da infraestrutura central nesta etapa.
 - Dominios ainda pendentes devem ser tratados apenas se surgirem novos fluxos ou mensagens manuais em telas futuras; Bloco 4 segue pendente para remover a persistencia do access token em `localStorage` e preparar token em memoria.
 
+## Atualizacao 3C-I
+
+- Consumidores de risco medio de produtos, vendas e leituras simples de aluno/plano seguem migrando para wrappers de dominio, enquanto acessos, mensalidades e pagamentos permanecem em `Api.js` por exigirem etapa propria com validacao mais cautelosa.
+
 ## Atualizacao 3C-G
 
 - Foram adicionados wrappers de dominio em `frontend/src/services/` que reexportam as funcoes atuais do `Api.js` sem mudar comportamento, cliente HTTP ou auth core.
