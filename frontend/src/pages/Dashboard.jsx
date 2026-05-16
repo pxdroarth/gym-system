@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Activity, ArrowRight, ShieldCheck, UserCheck, UserX, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { fetchAlunos, fetchTodosAcessos } from "../services/Api";
+import { fetchAlunos } from "../services/alunoService";
+import { fetchTodosAcessos } from "../services/acessoService";
 import ModalAcessosHoje from "../components/ModalAcessosHoje";
 import Badge from "../components/ui/Badge";
 import Button from "../components/ui/Button";

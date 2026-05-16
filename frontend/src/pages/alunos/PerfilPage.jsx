@@ -3,10 +3,7 @@ import { Activity, CreditCard, Edit3, Phone, ShieldCheck, UserRound } from "luci
 import { useNavigate, useParams } from "react-router-dom";
 import ToastNotification from "../../components/ToastNotification";
 import ModalNovaMensalidade from "./ModalNovaMensalidade";
-import {
-  fetchAcessos,
-  simularAcesso,
-} from "../../services/Api";
+import { fetchAcessos, simularAcesso } from "../../services/acessoService";
 import { fetchAlunoById } from "../../services/alunoService";
 import { fetchMensalidadesPorAluno } from "../../services/mensalidadeService";
 import { registrarPagamento } from "../../services/pagamentoService";

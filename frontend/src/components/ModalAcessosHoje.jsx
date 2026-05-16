@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { ArrowDownUp, CalendarDays, ShieldCheck } from "lucide-react";
-import { fetchAlunos, fetchTodosAcessos } from "../services/Api";
+import { fetchAlunos } from "../services/alunoService";
+import { fetchTodosAcessos } from "../services/acessoService";
 import Badge from "./ui/Badge";
 import Button from "./ui/Button";
 import EmptyState from "./ui/EmptyState";

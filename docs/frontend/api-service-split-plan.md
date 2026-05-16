@@ -143,3 +143,11 @@ Depois que os dominios estiverem em services separados e os imports antigos fore
 - As funcoes migradas mantiveram nomes, parametros, retornos, payloads e endpoints: `cadastrarMensalidade`, `fetchMensalidadesPorAluno`, `fetchMensalidadesAlunoStatus`, `gerarMensalidadesFuturas`, `updateMensalidadeStatus`, `registrarPagamentoAntecipado` e `registrarPagamento`.
 - `PerfilPage.jsx` permanece parcialmente em `Api.js` apenas para acessos (`fetchAcessos`, `simularAcesso`), preservando a separacao entre mensalidades/pagamentos e o bloco futuro de acessos/liberacao.
 - Continuam para blocos proprios os dominios de acessos/liberacao e financeiro mais amplo, para evitar migracao em lote de fluxos com regra critica e necessidade de smoke dedicado.
+
+## Atualizacao 3C-K
+
+- Consumidores migrados para `acessoService.js`: `frontend/src/pages/Dashboard.jsx`, `frontend/src/components/ModalAcessosHoje.jsx` e o trecho de acessos de `frontend/src/pages/alunos/PerfilPage.jsx`.
+- As funcoes migradas mantiveram nomes, parametros, retornos, payloads e endpoints: `fetchAcessos`, `fetchTodosAcessos` e `simularAcesso`.
+- `Dashboard.jsx` e `ModalAcessosHoje.jsx` tambem deixaram de importar `fetchAlunos` de `Api.js`, passando a usar `alunoService.js`, o que elimina o uso direto de `Api.js` em paginas e componentes do frontend.
+- Nenhuma regra de bloqueio por mensalidade, liberacao manual, auditoria, simulacao ou leitura de historico foi alterada; a mudanca ficou restrita a origem dos imports.
+- `Api.js` continua compativel e permanece como fonte central consumida pelos wrappers de service.
