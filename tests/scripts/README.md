@@ -98,3 +98,21 @@ node tests\scripts\smoke-acesso.js
 - liberacao manual com motivo/operador auditada em `audit_log`.
 - `PUT /acessos/:id` bloqueado com `ACESSO_REGISTRO_IMUTAVEL`.
 - `DELETE /acessos/:id` bloqueado com `ACESSO_REGISTRO_IMUTAVEL`.
+
+## `reset-admin-password.js`
+
+### Objetivo
+
+Resetar senha de usuario interno/admin no SQLite local usando o mesmo hash do AuthService.
+
+### Uso seguro (somente local/admin)
+
+```cmd
+tests\scripts\reset-admin-password.cmd admin
+```
+
+- Informe a nova senha apenas no prompt interativo do terminal.
+- Nunca passe senha por argumento.
+- Nunca commitar senha real.
+- O script revoga sessoes/tokens ativos do usuario informado.
+- Ao finalizar, execute `tests\scripts\smoke-auth.cmd` para validar o login.
