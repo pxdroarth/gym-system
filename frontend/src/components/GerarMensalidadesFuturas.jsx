@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { gerarMensalidadesFuturas } from "../services/Api";
+import { gerarMensalidadesFuturas } from "../services/mensalidadeService";
 import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
 export default function GerarMensalidadesFuturas({ alunoId, planoId, onGerar }) {

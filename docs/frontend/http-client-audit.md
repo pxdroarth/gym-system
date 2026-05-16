@@ -188,6 +188,10 @@ Confinar uso de `localStorage` ao minimo necessario, preparar access token em me
 
 - Consumidores de risco medio de produtos, vendas e leituras simples de aluno/plano seguem migrando para wrappers de dominio, enquanto acessos, mensalidades e pagamentos permanecem em `Api.js` por exigirem etapa propria com validacao mais cautelosa.
 
+## Atualizacao 3C-J
+
+- Os consumidores de mensalidades e pagamentos passaram a importar os wrappers de `mensalidadeService.js` e `pagamentoService.js`, enquanto os fluxos de acessos permanecem centralizados em `Api.js` para um bloco separado.
+
 ## Atualizacao 3C-G
 
 - Foram adicionados wrappers de dominio em `frontend/src/services/` que reexportam as funcoes atuais do `Api.js` sem mudar comportamento, cliente HTTP ou auth core.

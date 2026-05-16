@@ -6,7 +6,7 @@ import Card from "../../components/ui/Card";
 import EmptyState from "../../components/ui/EmptyState";
 import Input from "../../components/ui/Input";
 import PageHeader from "../../components/ui/PageHeader";
-import { fetchMensalidadesAlunoStatus, registrarPagamentoAntecipado } from "../../services/Api";
+import { fetchMensalidadesAlunoStatus, registrarPagamentoAntecipado } from "../../services/mensalidadeService";
 import { getApiErrorMessage } from "../../utils/getApiErrorMessage";
 
 export default function PagamentoAntecipado({ alunoId }) {

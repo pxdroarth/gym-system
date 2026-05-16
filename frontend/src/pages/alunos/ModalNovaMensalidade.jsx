@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { toast } from 'react-toastify';
-import { cadastrarMensalidade } from '../../services/Api';
+import { cadastrarMensalidade } from '../../services/mensalidadeService';
 import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Modal from '../../components/ui/Modal';

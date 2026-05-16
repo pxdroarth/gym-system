@@ -136,3 +136,10 @@ Depois que os dominios estiverem em services separados e os imports antigos fore
 - Consumidores mantidos em `Api.js` por risco: `Dashboard.jsx`, `ModalAcessosHoje.jsx`, `ModalNovaMensalidade.jsx`, `PagamentoAntecipado.jsx`, `GerarMensalidadesFuturas.jsx` e `TelaMensalidade.jsx`.
 - Dominios ainda pendentes para blocos proprios: mensalidades, pagamentos, acessos/liberacao e financeiro mais sensivel, para evitar migracao em lote de fluxos com regra critica e necessidade de smoke especifico.
 - `Api.js` continua compativel e preserva todos os exports legados durante a migracao incremental dos consumidores.
+
+## Atualizacao 3C-J
+
+- Consumidores migrados para `mensalidadeService.js` e `pagamentoService.js`: `frontend/src/pages/alunos/PerfilPage.jsx` nos trechos de mensalidades/pagamento, `frontend/src/pages/alunos/ModalNovaMensalidade.jsx`, `frontend/src/pages/mensalidades/PagamentoAntecipado.jsx`, `frontend/src/components/GerarMensalidadesFuturas.jsx` e `frontend/src/components/TelaMensalidade.jsx`.
+- As funcoes migradas mantiveram nomes, parametros, retornos, payloads e endpoints: `cadastrarMensalidade`, `fetchMensalidadesPorAluno`, `fetchMensalidadesAlunoStatus`, `gerarMensalidadesFuturas`, `updateMensalidadeStatus`, `registrarPagamentoAntecipado` e `registrarPagamento`.
+- `PerfilPage.jsx` permanece parcialmente em `Api.js` apenas para acessos (`fetchAcessos`, `simularAcesso`), preservando a separacao entre mensalidades/pagamentos e o bloco futuro de acessos/liberacao.
+- Continuam para blocos proprios os dominios de acessos/liberacao e financeiro mais amplo, para evitar migracao em lote de fluxos com regra critica e necessidade de smoke dedicado.

@@ -4,7 +4,7 @@ import Button from "./ui/Button";
 import Card from "./ui/Card";
 import EmptyState from "./ui/EmptyState";
 import Table from "./ui/Table";
-import { updateMensalidadeStatus } from "../services/Api";
+import { updateMensalidadeStatus } from "../services/mensalidadeService";
 import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
 function formatValor(valor) {
