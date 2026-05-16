@@ -151,3 +151,11 @@ Depois que os dominios estiverem em services separados e os imports antigos fore
 - `Dashboard.jsx` e `ModalAcessosHoje.jsx` tambem deixaram de importar `fetchAlunos` de `Api.js`, passando a usar `alunoService.js`, o que elimina o uso direto de `Api.js` em paginas e componentes do frontend.
 - Nenhuma regra de bloqueio por mensalidade, liberacao manual, auditoria, simulacao ou leitura de historico foi alterada; a mudanca ficou restrita a origem dos imports.
 - `Api.js` continua compativel e permanece como fonte central consumida pelos wrappers de service.
+
+## Atualizacao 3C-L
+
+- Fronteira do `Api.js` consolidada no frontend.
+- Documento criado: `docs/frontend/api-boundary.md`.
+- Regra validada: paginas e componentes nao devem importar `services/Api` diretamente.
+- Services por dominio permanecem como fachada publica para a UI.
+- `Api.js` continua como infraestrutura HTTP central e mantem exports legados temporarios para compatibilidade.

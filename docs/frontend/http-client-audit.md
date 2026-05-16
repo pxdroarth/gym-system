@@ -196,6 +196,10 @@ Confinar uso de `localStorage` ao minimo necessario, preparar access token em me
 
 - Os consumidores de acessos passaram a usar `acessoService.js`, enquanto leituras auxiliares de alunos nesses mesmos pontos usam `alunoService.js`; com isso, `Api.js` deixa de ser importado diretamente por paginas e componentes, permanecendo como base dos wrappers.
 
+## Atualizacao 3C-L
+
+- A fronteira arquitetural do `Api.js` foi consolidada e documentada em `docs/frontend/api-boundary.md`, reforcando a regra de consumo via services por dominio para paginas e componentes.
+
 ## Atualizacao 3C-G
 
 - Foram adicionados wrappers de dominio em `frontend/src/services/` que reexportam as funcoes atuais do `Api.js` sem mudar comportamento, cliente HTTP ou auth core.
