@@ -1,36 +1,57 @@
 const TOKEN_KEY = "academia_sa_auth_token";
 const USER_KEY = "academia_sa_auth_user";
 
+let accessToken = null;
+let storedUser = null;
+
+function removeAuthKeys(storage) {
+  if (!storage) return;
+  try {
+    storage.removeItem(TOKEN_KEY);
+    storage.removeItem(USER_KEY);
+  } catch {
+    // Storage can be unavailable in restricted browser contexts.
+  }
+}
+
+export function clearLegacyAuthStorage() {
+  if (typeof window === "undefined") return;
+  try {
+    removeAuthKeys(window.localStorage);
+    removeAuthKeys(window.sessionStorage);
+  } catch {
+    // Accessing storage itself can fail when a browser blocks it.
+  }
+}
+
 export function getAuthToken() {
-  return window.localStorage.getItem(TOKEN_KEY);
+  return accessToken;
 }
 
 export function setAuthToken(token) {
+  clearLegacyAuthStorage();
+
   if (!token) {
-    window.localStorage.removeItem(TOKEN_KEY);
+    accessToken = null;
     return;
   }
-  window.localStorage.setItem(TOKEN_KEY, token);
+
+  accessToken = token;
 }
 
 export function getStoredUser() {
-  const raw = window.localStorage.getItem(USER_KEY);
-  if (!raw) return null;
-
-  try {
-    return JSON.parse(raw);
-  } catch {
-    window.localStorage.removeItem(USER_KEY);
-    return null;
-  }
+  return storedUser;
 }
 
 export function setStoredUser(user) {
+  clearLegacyAuthStorage();
+
   if (!user) {
-    window.localStorage.removeItem(USER_KEY);
+    storedUser = null;
     return;
   }
-  window.localStorage.setItem(USER_KEY, JSON.stringify(user));
+
+  storedUser = user;
 }
 
 export function updateStoredUser(updater) {
@@ -43,6 +64,7 @@ export function updateStoredUser(updater) {
 }
 
 export function clearAuthStorage() {
-  window.localStorage.removeItem(TOKEN_KEY);
-  window.localStorage.removeItem(USER_KEY);
+  accessToken = null;
+  storedUser = null;
+  clearLegacyAuthStorage();
 }

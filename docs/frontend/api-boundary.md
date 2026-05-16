@@ -2,27 +2,29 @@
 
 ## 1. Objetivo
 
-Definir a fronteira arquitetural do frontend para que `Api.js` permaneça como infraestrutura HTTP central, sem uso direto por páginas e componentes.
+Explicar que `Api.js` e a infraestrutura HTTP central e nao deve ser usado diretamente por paginas/componentes.
 
 ## 2. Regra principal
 
-- Páginas e componentes devem usar services por domínio.
+- Paginas e componentes devem usar services por dominio.
 - Services podem usar `Api.js`.
 - `Api.js` deve concentrar `axios`, interceptors, auth header, refresh e flags internas.
-- Auth/session deve continuar isolado em `authService`/`AuthContext` até o Bloco 4.
+- Auth/session continua isolado em `authService`/`AuthContext`.
+- Access token deve ficar somente em memoria; reload depende do refresh cookie HttpOnly.
 
 ## 3. O que permanece em Api.js
 
-- instância `axios`
+- instancia `axios`
 - `baseURL`
 - `withCredentials`
 - request interceptor
 - response interceptor
 - refresh single-flight
 - flags `_skipAuthHeader`, `_skipAuthRefresh`, `_retry`
-- exports legados temporários para compatibilidade
+- access token em memoria via `authStorage`
+- exports legados temporarios, enquanto existirem
 
-## 4. Services por domínio
+## 4. Services por dominio
 
 - `alunoService`
 - `planoService`
@@ -32,29 +34,30 @@ Definir a fronteira arquitetural do frontend para que `Api.js` permaneça como i
 - `acessoService`
 - `produtoService`
 - `vendaProdutoService`
-- demais services já existentes: `authService`, `auditLogService`, `tenantService`, `onboardingService`, `usuariosInternosService`, `dashboardService`, `contasFinanceiras`, `planoContasService`
+- demais services ja existentes: `authService`, `auditLogService`, `tenantService`, `onboardingService`, `usuariosInternosService`, `dashboardService`, `contasFinanceiras`, `planoContasService`
 
-## 5. Regra para novos códigos
+## 5. Regra para novos codigos
 
-- não importar diretamente de `services/Api` em `pages/components`
-- criar ou usar service de domínio
-- não criar nova instância `axios`
-- não duplicar `baseURL`
-- não ler cookie HttpOnly por JavaScript
-- não montar `Authorization` manualmente fora do padrão
+- nao importar diretamente de `services/Api` em `pages/components`
+- criar ou usar service de dominio
+- nao criar nova instancia `axios`
+- nao duplicar `baseURL`
+- nao ler cookie HttpOnly por JS
+- nao montar `Authorization` manualmente fora do padrao
+- nao persistir bearer token em `localStorage` ou `sessionStorage`
 
-## 6. Exceções permitidas
+## 6. Excecoes permitidas
 
-Exceções devem ser raras e justificadas:
+Excecoes devem ser raras e justificadas:
 
-- `authService`/`AuthContext`, quando necessário para sessão
-- testes técnicos
+- `authService`/`AuthContext`, se necessario
+- testes tecnicos
 - infraestrutura HTTP
-- casos documentados em auditoria/plano
+- casos documentados
 
-## 7. Pendências futuras
+## 7. Pendencias futuras
 
-- remover exports legados do `Api.js` quando todos os services tiverem implementação própria
-- mover implementações de domínio para dentro dos services gradualmente
-- Bloco 4: access token em memória
+- remover exports legados do `Api.js` quando todos os services tiverem implementacao propria
+- mover implementacoes de dominio para dentro dos services gradualmente
+- Bloco 5: hardening de producao com cookie Secure, HTTPS, CSP e CORS por ambiente
 - Playwright/E2E depois do Bloco 4

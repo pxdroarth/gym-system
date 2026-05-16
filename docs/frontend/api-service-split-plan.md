@@ -159,3 +159,11 @@ Depois que os dominios estiverem em services separados e os imports antigos fore
 - Regra validada: paginas e componentes nao devem importar `services/Api` diretamente.
 - Services por dominio permanecem como fachada publica para a UI.
 - `Api.js` continua como infraestrutura HTTP central e mantem exports legados temporarios para compatibilidade.
+
+## Atualizacao Bloco 4
+
+- Access token deixou de ser persistido em `localStorage` e passou a ficar somente em memoria no frontend.
+- Reload da aplicacao depende do refresh cookie HttpOnly e de `/auth/refresh` para recuperar a sessao.
+- Chaves legadas de auth (`academia_sa_auth_token` e `academia_sa_auth_user`) sao limpas/ignoradas.
+- `Api.js` segue como infraestrutura HTTP central, sem nova instancia axios e sem mudanca de endpoints, payloads ou regras de negocio.
+- Bloco 5 deve tratar hardening de producao: cookie Secure, HTTPS, CSP e CORS por ambiente.

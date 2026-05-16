@@ -4,7 +4,7 @@
 
 Mapear o uso atual de `axios`, `fetch` e wrappers HTTP no frontend do Sistema Academia SA para preparar uma padronizacao segura do cliente HTTP antes do Bloco 4.
 
-Esta auditoria nao altera codigo funcional. O backend usa token opaco server-side, o frontend ainda mantem bearer token em `localStorage` por compatibilidade temporaria, e o refresh token continua em cookie HttpOnly `academia_sa_refresh`.
+Esta auditoria nao altera codigo funcional. O backend usa token opaco server-side, o frontend mantem access token apenas em memoria desde o Bloco 4, e o refresh token continua em cookie HttpOnly `academia_sa_refresh`.
 
 ## 2. Estado atual
 
@@ -89,7 +89,7 @@ Esta auditoria nao altera codigo funcional. O backend usa token opaco server-sid
 
 - `frontend/src/services/Api.js`: instancia central axios, interceptors, refresh single-flight, anexacao de bearer token, `X-Unit-Id` e funcoes de dominio historicas.
 - `frontend/src/services/authService.js`: wrapper de auth para login, logout, logout-all, me e refresh.
-- `frontend/src/utils/authStorage.js`: wrapper de `localStorage` para token e usuario. Deve continuar ate o Bloco 4.
+- `frontend/src/utils/authStorage.js`: store em memoria para access token e usuario, com limpeza de chaves legadas de auth em `localStorage`/`sessionStorage`.
 - `frontend/src/contexts/AuthContext.jsx`: orquestra bootstrap, login/logout, validacao de sessao, refresh e estado autenticado.
 - Services por dominio: `auditLogService.js`, `usuariosInternosService.js`, `tenantService.js`, `contasFinanceiras.js`, `onboardingService.js`, `dashboardService.js`, `planoContasService.js`.
 - `frontend/src/pages/produtos/ProdutosPage.jsx`: possui `VITE_API_URL || http://localhost:3001` para montar URL de imagem, nao para chamada HTTP.
@@ -103,7 +103,7 @@ Esta auditoria nao altera codigo funcional. O backend usa token opaco server-sid
 - A base `http://localhost:3001` aparece tambem em `ProdutosPage.jsx` para imagens; nao e chamada HTTP, mas e duplicacao de base URL.
 - Dominios de alto risco estao no mesmo padrao generico de erro/retry: auth, auditoria, financeiro, pagamentos, vendas, acessos, usuarios/permissoes, tenant/onboarding e upload de produtos.
 - Nao foram encontrados `fetch` sem credentials, chamadas axios diretas fora do cliente central ou montagem manual de bearer fora de `Api.js`.
-- O uso de `localStorage` esta concentrado em `authStorage`, `AuthContext` e `Api.js`; isso e esperado ate o Bloco 4.
+- `localStorage` e `sessionStorage` nao devem armazenar bearer token; chaves legadas de auth sao removidas pela camada de sessao.
 
 ## 7. Padrao recomendado
 
@@ -199,6 +199,12 @@ Confinar uso de `localStorage` ao minimo necessario, preparar access token em me
 ## Atualizacao 3C-L
 
 - A fronteira arquitetural do `Api.js` foi consolidada e documentada em `docs/frontend/api-boundary.md`, reforcando a regra de consumo via services por dominio para paginas e componentes.
+
+## Atualizacao Bloco 4
+
+- Access token passou a ficar somente em memoria no frontend; reload usa refresh cookie HttpOnly via `/auth/refresh`.
+- `authStorage.js` limpa e ignora chaves legadas de auth em `localStorage`/`sessionStorage`, incluindo `academia_sa_auth_token` e `academia_sa_auth_user`.
+- Bloco 5 permanece responsavel por hardening de producao: cookie Secure, HTTPS, CSP e CORS por ambiente.
 
 ## Atualizacao 3C-G
 

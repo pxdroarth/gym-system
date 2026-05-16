@@ -11,6 +11,7 @@ Este repositório está em fase de portfólio e evolução técnica. Os dados at
 - Banco atual: SQLite local.
 - Autenticação: token opaco validado server-side, não JWT.
 - Refresh token: backend com cookie HttpOnly no Bloco 3A e consumo frontend com `withCredentials` no Bloco 3B.
+- Access token no frontend: mantido somente em memoria desde o Bloco 4; reload depende do refresh cookie HttpOnly.
 - Evolução planejada: PostgreSQL e deploy web antes de qualquer empacotamento desktop.
 - Electron: etapa final/opcional, não é o modo principal atual.
 
@@ -210,7 +211,7 @@ Não existe `backend/package.json`; o backend usa o `package.json` da raiz.
 
 ## Roadmap próximo
 
-- Remover dependência de `localStorage` para access token em produção no Bloco 4.
+- Hardening de producao no Bloco 5: cookie Secure, HTTPS, CSP e CORS por ambiente.
 - Endurecer CORS, cookies, CSP e variáveis de ambiente para deploy.
 - Congelar matriz de permissões antes da migração.
 - Revisar auditoria B1/B2/B3 e escopo por Rede/Unidade.

@@ -36,7 +36,7 @@ Estes smoke tests validam rapidamente se o sistema sobe em ambiente limpo e se o
 - [ ] testar logout-all, se aplicável.
 - [ ] testar refresh backend via cookie, se possível via Insomnia/curl.
 - [ ] validar que frontend usa refresh cookie com `withCredentials` no Bloco 3B.
-- [ ] validar que frontend ainda mantem `localStorage` como compatibilidade temporaria ate o Bloco 4.
+- [ ] validar que frontend nao persiste access token em `localStorage`/`sessionStorage` no Bloco 4.
 - [ ] validar que financeiro não aparece para perfil não autorizado.
 - [ ] validar Histórico de Atividades bloqueado para perfil operacional.
 - [ ] registrar pagamento.
@@ -106,7 +106,7 @@ Nota 3C-B: o cliente central usa flags internas `_skipAuthHeader`, `_skipAuthRef
 |---|---|---|---|---|
 | Refresh via cookie no frontend | manter sessão após expiração do access token usando cookie HttpOnly. | Frontend tenta `/auth/refresh` e salva novo bearer temporariamente. | Cookie HttpOnly não é lido via JavaScript. | feito |
 | Interceptor 401 | forçar access token local inválido com refresh cookie válido. | Uma tentativa de refresh e retry da request original. | Não deve gerar loop infinito. | feito |
-| Access token em memória | verificar ausência de access token em `localStorage`. | Ainda pendente. | `authStorage.js` persiste `academia_sa_auth_token` em `localStorage` por compatibilidade temporaria. | pendente |
+| Access token em memória | verificar ausencia de access token em `localStorage` e `sessionStorage`. | Token fica somente em memoria. | Chaves legadas `academia_sa_auth_token` e `academia_sa_auth_user` sao limpas/ignoradas. | feito |
 | `withCredentials` no Axios | verificar envio automático de cookie cross-origin. | Cookie enviado automaticamente em login/refresh/logout e demais chamadas. | Bloco 3B configurou `withCredentials`. | feito |
 
 ## 9. Testes de domínio crítico
@@ -150,14 +150,15 @@ O smoke automatizado usa fixtures locais com prefixo `SMOKE_ACESSO_`, valida ace
 | Ambiente sobe | `npm start` na raiz e `npm run dev` em `frontend`. | Backend e frontend disponíveis nas portas locais esperadas. | Scripts conferidos nos `package.json`. | feito |
 | API responde | `GET /test-db`. | SQLite responde com `db_time`. | Banco local atual. | feito |
 | Sessão básica | login, `/auth/me`, logout. | Fluxo de autenticação básico funciona. | Token opaco server-side. | feito |
-| Refresh frontend/backend | login, capturar cookie, chamar `/auth/refresh` ou invalidar access token local com cookie válido. | Refresh rotaciona cookie e access token. | Frontend Bloco 3B usa cookie HttpOnly com `withCredentials`; Bloco 4 ainda removerá persistência do access token em produção. | parcial |
+| Refresh frontend/backend | login, capturar cookie, chamar `/auth/refresh` ou recarregar a UI com cookie valido. | Refresh rotaciona cookie e recupera access token em memoria. | Frontend Bloco 4 nao persiste bearer token em `localStorage`. | parcial |
 | UI principal | login, dashboard, menus, operação básica. | Telas principais carregam sem erro crítico. | Permissões finais ainda dependem da matriz. | parcial |
 | Domínio crítico | aluno, mensalidade, pagamento, venda, acesso, vínculo e auditoria. | Fluxos críticos executam com dados fictícios. | Validar por perfil antes de PostgreSQL. | parcial |
 
 ## 11. Problemas conhecidos
 
-- O frontend concluiu o Bloco 3B de sessão com refresh cookie e `withCredentials`; Bloco 4 ainda está pendente.
-- O frontend ainda persiste access token em `localStorage` no estado atual.
+- O frontend concluiu o Bloco 4 de sessao com access token em memoria e refresh cookie HttpOnly com `withCredentials`.
+- O frontend nao deve persistir bearer token em `localStorage` ou `sessionStorage`; chaves legadas de auth devem ser limpas/ignoradas.
+- Bloco 5 ainda deve tratar hardening de producao: cookie Secure, HTTPS, CSP e CORS por ambiente.
 - PostgreSQL ainda é futuro; SQLite é o banco atual.
 - `.env.example` não deve conter segredos reais.
 - O backend atual não carrega `backend/.env` automaticamente por código, pois não há dotenv configurado.

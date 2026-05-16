@@ -100,7 +100,7 @@ Esse teste usa fixtures locais com prefixo `SMOKE_ACESSO_`, valida a regra de ac
 | Categoria | Ferramenta | Status | Observação |
 |---|---|---|---|
 | Auth backend | `tests/scripts/smoke-auth.ps1` | feito | Cobre `/test-db`, login, cookie HttpOnly, `/auth/me`, refresh, token antigo inválido, logout e logout-all. |
-| Auth frontend | Manual + build | parcial | Bloco 3B usa refresh cookie com `withCredentials`; `localStorage` segue temporario ate o Bloco 4. |
+| Auth frontend | Manual + build | parcial | Bloco 4 usa access token em memoria e refresh cookie HttpOnly; `localStorage`/`sessionStorage` nao devem guardar bearer token. |
 | Acesso/mensalidade | `tests/scripts/smoke-acesso.js` | feito | Cobre bloqueio sem mensalidade, vencida/parcial vencida, liberacoes regulares, POST comum, PUT/DELETE imutaveis e liberacao manual auditada. |
 | API geral | Insomnia | pendente | Coleções e ambientes serão organizados nesta pasta. |
 | Permissões | Manual + Insomnia + futuro E2E | parcial | A matriz existe; a cobertura operacional ainda precisa crescer por perfil. |

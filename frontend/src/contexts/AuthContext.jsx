@@ -5,6 +5,7 @@ import { setAuthFailureHandler } from "../services/Api";
 import { loginRequest, logoutRequest, meRequest, refreshSession } from "../services/authService";
 import {
   clearAuthStorage,
+  clearLegacyAuthStorage,
   getAuthToken,
   getStoredUser,
   setAuthToken,
@@ -151,6 +152,7 @@ export function AuthProvider({ children }) {
 
     async function bootstrap() {
       setLoading(true);
+      clearLegacyAuthStorage();
 
       try {
         let currentToken = getAuthToken();
