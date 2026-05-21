@@ -20,19 +20,25 @@ function askHidden(prompt) {
     stdin.resume();
     stdin.setEncoding('utf8');
 
-    const onData = (char) => {
-      const key = String(char || '');
+    let settled = false;
+
+    const finish = (handler, result) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      handler(result);
+    };
+
+    const handleKey = (key) => {
 
       if (key === '\u0003') {
-        cleanup();
-        reject(new Error('Operacao cancelada'));
+        finish(reject, new Error('Operacao cancelada'));
         return;
       }
 
       if (key === '\r' || key === '\n') {
         stdout.write('\n');
-        cleanup();
-        resolve(value);
+        finish(resolve, value);
         return;
       }
 
@@ -43,6 +49,13 @@ function askHidden(prompt) {
 
       if (key >= ' ') {
         value += key;
+      }
+    };
+
+    const onData = (chunk) => {
+      for (const key of String(chunk || '')) {
+        if (settled) break;
+        handleKey(key);
       }
     };
 

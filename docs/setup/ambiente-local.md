@@ -156,6 +156,18 @@ O backend executa bootstrap/`ensureSchema` na inicialização. Em ambiente limpo
 
 Use credenciais locais válidas. Não coloque senha real em arquivo versionado.
 
+Para resetar a senha do admin local com o mesmo hash usado pelo backend, use:
+
+```cmd
+tests\scripts\reset-admin-password.cmd admin
+```
+
+Informe a nova senha apenas no prompt interativo. Depois valide:
+
+```cmd
+tests\scripts\smoke-auth.cmd -Login admin
+```
+
 ### PowerShell bloqueando script
 
 Execute com:
