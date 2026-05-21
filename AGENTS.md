@@ -32,6 +32,15 @@ automação assistida por IA
 8. UX
 9. features novas
 
+## Perfil de modelo/inteligência por escopo
+
+Regra global obrigatória:
+
+```txt
+Não usar modelos mini.
+Não usar inteligência baixa.
+Piso mínimo do projeto: GPT-5.4 com inteligência média.
+
 ## Contexto obrigatório
 
 Antes de mudanças relevantes, consulte:
