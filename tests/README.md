@@ -100,6 +100,17 @@ tests\scripts\e2e-playwright.cmd
 
 O setup inicial sobe backend + frontend automaticamente e roda um sanity test da tela de login. A base completa fica em `tests/e2e/`.
 
+Suite inicial de auth E2E:
+
+```cmd
+npm run e2e:auth
+```
+
+Use credenciais locais por ambiente:
+
+- `E2E_LOGIN`
+- `E2E_PASSWORD`
+
 Checklist de seguranca do Bloco 5:
 
 - CORS local deve aceitar `http://localhost:3000` e `http://localhost:5173`.
@@ -124,7 +135,7 @@ Checklist de seguranca do Bloco 5:
 | Auth backend | `tests/scripts/smoke-auth.ps1` | feito | Cobre `/test-db`, login, cookie HttpOnly, `/auth/me`, refresh, token antigo invalido, logout e logout-all. |
 | Auth frontend | Manual + build | parcial | Bloco 4 usa access token em memoria e refresh cookie HttpOnly; `localStorage`/`sessionStorage` nao devem guardar bearer token. |
 | Hardening producao | Manual + smoke auth | parcial | Bloco 5 cobre CORS por ambiente, cookie Secure/SameSite, HTTPS documentado e headers minimos. |
-| Frontend E2E | Playwright | parcial | Bloco 6A adiciona setup minimo, script e sanity test de `/login`. |
+| Frontend E2E | Playwright | parcial | Blocos 6A/6B adicionam setup minimo, script, sanity de `/login` e primeira suite real de auth por env. |
 | Acesso/mensalidade | `tests/scripts/smoke-acesso.js` | feito | Cobre bloqueio sem mensalidade, vencida/parcial vencida, liberacoes regulares, POST comum, PUT/DELETE imutaveis e liberacao manual auditada. |
 | API geral | Insomnia | pendente | Colecoes e ambientes serao organizados nesta pasta. |
 | Permissoes | Manual + Insomnia + futuro E2E | parcial | A matriz existe; a cobertura operacional ainda precisa crescer por perfil. |

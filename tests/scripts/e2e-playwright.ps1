@@ -1,6 +1,6 @@
 param(
-  [string]$FrontendPort = "4173",
-  [string]$ApiUrl = "http://127.0.0.1:3001",
+  [string]$FrontendPort = "5173",
+  [string]$ApiUrl = "http://localhost:3001",
   [switch]$Headed,
   [Parameter(ValueFromRemainingArguments = $true)]
   [string[]]$PlaywrightArgs
@@ -8,8 +8,23 @@ param(
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$frontendUrl = "http://127.0.0.1:$FrontendPort"
 $jobs = @()
+
+$resolvedFrontendPort = $FrontendPort
+$resolvedApiUrl = $ApiUrl
+$resolvedPlaywrightArgs = @($PlaywrightArgs)
+
+if ($resolvedFrontendPort -notmatch '^\d+$') {
+  $resolvedPlaywrightArgs = @($resolvedFrontendPort) + $resolvedPlaywrightArgs
+  $resolvedFrontendPort = "5173"
+}
+
+if ($resolvedApiUrl -notmatch '^https?://') {
+  $resolvedPlaywrightArgs = @($resolvedApiUrl) + $resolvedPlaywrightArgs
+  $resolvedApiUrl = "http://localhost:3001"
+}
+
+$frontendUrl = "http://localhost:$resolvedFrontendPort"
 
 function Test-UrlReady {
   param([string]$Url)
@@ -44,7 +59,7 @@ function Wait-Url {
 }
 
 try {
-  if (-not (Test-UrlReady "$ApiUrl/test-db")) {
+  if (-not (Test-UrlReady "$resolvedApiUrl/test-db")) {
     $jobs += Start-Job -Name "academia-backend-playwright" -ScriptBlock {
       param($cwd)
       Set-Location $cwd
@@ -58,23 +73,23 @@ try {
       Set-Location $cwd
       $env:VITE_API_URL = $apiUrl
       $env:VITE_DEV_AUTO_LOGIN = "false"
-      npm.cmd run dev -- --host 127.0.0.1 --port $frontendPort --strictPort
-    } -ArgumentList (Join-Path $root "frontend"), $ApiUrl, $FrontendPort
+      npm.cmd run dev -- --host localhost --port $frontendPort --strictPort
+    } -ArgumentList (Join-Path $root "frontend"), $resolvedApiUrl, $resolvedFrontendPort
   }
 
-  Wait-Url -Url "$ApiUrl/test-db"
+  Wait-Url -Url "$resolvedApiUrl/test-db"
   Wait-Url -Url "$frontendUrl/login"
 
   $env:PLAYWRIGHT_BASE_URL = $frontendUrl
-  $env:PLAYWRIGHT_FRONTEND_PORT = $FrontendPort
-  $env:PLAYWRIGHT_API_URL = $ApiUrl
+  $env:PLAYWRIGHT_FRONTEND_PORT = $resolvedFrontendPort
+  $env:PLAYWRIGHT_API_URL = $resolvedApiUrl
 
   $resolvedArgs = @("playwright", "test")
   if ($Headed) {
     $resolvedArgs += "--headed"
   }
-  if ($PlaywrightArgs) {
-    $resolvedArgs += $PlaywrightArgs
+  if ($resolvedPlaywrightArgs) {
+    $resolvedArgs += $resolvedPlaywrightArgs
   }
 
   & npx.cmd @resolvedArgs

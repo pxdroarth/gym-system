@@ -33,7 +33,35 @@ tests\scripts\e2e-playwright.cmd
 O setup sobe:
 
 - backend em `http://127.0.0.1:3001`
-- frontend Vite em `http://127.0.0.1:4173`
+- backend em `http://localhost:3001`
+- frontend Vite em `http://localhost:5173`
+
+## Auth E2E
+
+Para a suite real de autenticacao, defina credenciais locais por variavel de ambiente:
+
+```powershell
+$env:E2E_LOGIN="admin"
+$env:E2E_PASSWORD="SUA_SENHA_LOCAL"
+npm run e2e:auth
+```
+
+Alternativa CMD:
+
+```cmd
+set E2E_LOGIN=admin
+set E2E_PASSWORD=SUA_SENHA_LOCAL
+npm run e2e:auth
+```
+
+Cobertura inicial:
+
+- login pela UI
+- acesso a rota protegida
+- reload mantendo sessao via refresh cookie
+- ausencia de bearer em `localStorage` e `sessionStorage`
+- logout
+- bloqueio de rota protegida apos logout
 
 Se os browsers ainda nao estiverem instalados, rode:
 

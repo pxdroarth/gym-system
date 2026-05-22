@@ -9,7 +9,9 @@
     "frontend": "npm --prefix frontend run dev",
     "build:frontend": "npm --prefix frontend run build",
     "e2e": "powershell -ExecutionPolicy Bypass -File tests/scripts/e2e-playwright.ps1",
-    "e2e:headed": "powershell -ExecutionPolicy Bypass -File tests/scripts/e2e-playwright.ps1 -Headed"
+    "e2e:headed": "powershell -ExecutionPolicy Bypass -File tests/scripts/e2e-playwright.ps1 -Headed",
+    "e2e:auth": "powershell -ExecutionPolicy Bypass -File tests/scripts/e2e-playwright.ps1 tests/e2e/playwright/auth.spec.js",
+    "e2e:auth:headed": "powershell -ExecutionPolicy Bypass -File tests/scripts/e2e-playwright.ps1 -Headed tests/e2e/playwright/auth.spec.js"
   },
   "engines": {
     "node": ">=20 <23",

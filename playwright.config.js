@@ -1,7 +1,7 @@
 const { defineConfig, devices } = require('@playwright/test');
 
-const FRONTEND_PORT = process.env.PLAYWRIGHT_FRONTEND_PORT || '4173';
-const FRONTEND_URL = process.env.PLAYWRIGHT_BASE_URL || `http://127.0.0.1:${FRONTEND_PORT}`;
+const FRONTEND_PORT = process.env.PLAYWRIGHT_FRONTEND_PORT || '5173';
+const FRONTEND_URL = process.env.PLAYWRIGHT_BASE_URL || `http://localhost:${FRONTEND_PORT}`;
 const isCI = Boolean(process.env.CI);
 
 module.exports = defineConfig({
