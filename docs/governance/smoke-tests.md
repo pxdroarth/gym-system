@@ -192,6 +192,7 @@ powershell -ExecutionPolicy Bypass -File tests\scripts\smoke-auth.ps1 -Login adm
 ```
 
 - Auth backend está automatizado parcialmente.
+- Playwright possui setup mínimo em `tests/e2e/` com sanity test inicial da rota `/login`.
 - API geral, frontend, carga e permissões completas ainda serão expandidos.
 - Insomnia será usado para API manual/semiautomatizada. Consulte `tests/insomnia/README.md` e `tests/insomnia/requests-map.md`.
 - Playwright será usado futuramente para E2E.

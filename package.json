@@ -7,7 +7,9 @@
     "start": "node backend/server.js",
     "backend": "node backend/server.js",
     "frontend": "npm --prefix frontend run dev",
-    "build:frontend": "npm --prefix frontend run build"
+    "build:frontend": "npm --prefix frontend run build",
+    "e2e": "powershell -ExecutionPolicy Bypass -File tests/scripts/e2e-playwright.ps1",
+    "e2e:headed": "powershell -ExecutionPolicy Bypass -File tests/scripts/e2e-playwright.ps1 -Headed"
   },
   "engines": {
     "node": ">=20 <23",
@@ -20,5 +22,8 @@
     "mysql2": "^3.14.1",
     "node-cron": "^4.0.7",
     "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0"
   }
 }

@@ -1,27 +1,62 @@
 # Testes E2E
 
-Esta pasta será usada futuramente para Playwright. O objetivo é validar o frontend real no navegador, cobrindo navegação, autenticação e fluxos críticos de interface.
+Esta pasta usa Playwright para validar o frontend real no navegador, cobrindo navegacao, autenticacao e fluxos criticos de interface.
 
-Playwright ainda não será instalado nesta sprint.
+Neste bloco foi criado apenas o setup minimo e incremental.
 
-## Cenários futuros
+## Estrutura atual
+
+```txt
+tests/
+  e2e/
+    playwright/
+      smoke.spec.js
+    fixtures/
+    screenshots/
+    traces/
+```
+
+## Como rodar
+
+Pela raiz:
+
+```cmd
+npm run e2e
+```
+
+Alternativa direta:
+
+```cmd
+tests\scripts\e2e-playwright.cmd
+```
+
+O setup sobe:
+
+- backend em `http://127.0.0.1:3001`
+- frontend Vite em `http://127.0.0.1:4173`
+
+Se os browsers ainda nao estiverem instalados, rode:
+
+```cmd
+npx playwright install chromium
+```
+
+## Cenarios futuros
 
 - login pela UI
 - dashboard
 - logout
-- permissões visuais
+- permissoes visuais
 - financeiro restrito
-- histórico restrito
+- historico restrito
 - acesso direto por rota protegida
 - fluxo de pagamento
 - fluxo de aluno
 - fluxo de venda
 - consolidado somente leitura
 
-## Comando futuro
+## Estado atual
 
-```bash
-npx playwright test
-```
-
-Status: pendente até instalação/configuração do Playwright.
+- sanity test de `/login`
+- screenshots e traces apenas em falha
+- base pronta para blocos de auth, permissoes e acesso

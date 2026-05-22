@@ -26,6 +26,8 @@ backend/.env.*
 dist/
 build/
 coverage/
+playwright-report/
+test-results/
 
 frontend/dist/
 frontend/build/
@@ -83,3 +85,7 @@ Desktop.ini
 backend/*.sqbprodocs/uml/sistema-academia-uml.zip
 backend/uploads/
 paletas-telas
+tests/e2e/playwright-report/
+tests/e2e/results/
+tests/e2e/screenshots/*.png
+tests/e2e/traces/*.zip
