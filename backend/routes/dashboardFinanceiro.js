@@ -31,8 +31,9 @@ router.get('/kpis', async (req, res) => {
   }
 });
 
-router.post('/sincronizar', async (_req, res) => {
+router.post('/sincronizar', async (req, res) => {
   try {
+    requireScope(req);
     await sincronizarFinanceiro();
     res.json({ ok: true, message: 'Sincronizacao executada com sucesso!' });
   } catch (e) {

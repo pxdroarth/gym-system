@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { runQuery, runGet, runExecute } = require('../dbHelper');
+const { requireScope } = require('../helpers/scope');
 
 function normalizePlanoPayload(body = {}) {
   const nome = String(body.nome || '').trim();
@@ -32,9 +33,10 @@ function validarPlano(payload) {
 
 router.get('/', async (req, res) => {
   try {
+    const scope = requireScope(req);
     const { compartilhado, q } = req.query;
-    const filtros = [];
-    const params = [];
+    const filtros = ['tenant_id = ?'];
+    const params = [scope.tenant_id];
 
     if (compartilhado === '0' || compartilhado === '1') {
       filtros.push('compartilhado = ?');
@@ -68,6 +70,7 @@ router.get('/:id', async (req, res) => {
   if (!id) return res.status(400).json({ error: 'ID inválido' });
 
   try {
+    const scope = requireScope(req);
     const row = await runGet(`
       SELECT *,
              CASE
@@ -75,8 +78,8 @@ router.get('/:id', async (req, res) => {
                ELSE 0
              END AS max_vinculados
       FROM plano
-      WHERE id = ?
-    `, [id]);
+      WHERE id = ? AND tenant_id = ?
+    `, [id, scope.tenant_id]);
 
     if (!row) return res.status(404).json({ error: 'Plano não encontrado' });
     res.json(row);
@@ -91,12 +94,16 @@ router.post('/', async (req, res) => {
   if (erro) return res.status(400).json({ error: erro });
 
   try {
-    const existente = await runGet('SELECT id FROM plano WHERE LOWER(nome) = LOWER(?) LIMIT 1', [payload.nome]);
+    const scope = requireScope(req);
+    const existente = await runGet(
+      'SELECT id FROM plano WHERE LOWER(nome) = LOWER(?) AND tenant_id = ? LIMIT 1',
+      [payload.nome, scope.tenant_id]
+    );
     if (existente) return res.status(409).json({ error: 'Já existe um plano com esse nome' });
 
     const result = await runExecute(
-      `INSERT INTO plano (nome, valor_base, descricao, duracao_em_dias, compartilhado, quantidade_max_pessoas)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO plano (nome, valor_base, descricao, duracao_em_dias, compartilhado, quantidade_max_pessoas, tenant_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         payload.nome,
         payload.valor_base,
@@ -104,10 +111,11 @@ router.post('/', async (req, res) => {
         payload.duracao_em_dias,
         payload.compartilhado,
         payload.quantidade_max_pessoas,
+        scope.tenant_id,
       ]
     );
 
-    const criado = await runGet('SELECT * FROM plano WHERE id = ?', [result.lastID]);
+    const criado = await runGet('SELECT * FROM plano WHERE id = ? AND tenant_id = ?', [result.lastID, scope.tenant_id]);
     res.status(201).json(criado);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -123,12 +131,13 @@ router.put('/:id', async (req, res) => {
   if (erro) return res.status(400).json({ error: erro });
 
   try {
-    const atual = await runGet('SELECT * FROM plano WHERE id = ?', [id]);
+    const scope = requireScope(req);
+    const atual = await runGet('SELECT * FROM plano WHERE id = ? AND tenant_id = ?', [id, scope.tenant_id]);
     if (!atual) return res.status(404).json({ error: 'Plano não encontrado para atualizar' });
 
     const ocupacao = await runGet(
-      `SELECT COUNT(*) AS total FROM aluno WHERE plano_id = ? AND status = 'ativo'`,
-      [id]
+      `SELECT COUNT(*) AS total FROM aluno WHERE plano_id = ? AND status = 'ativo' AND tenant_id = ? AND unit_id = ?`,
+      [id, scope.tenant_id, scope.unit_id]
     );
 
     if ((ocupacao?.total || 0) > payload.quantidade_max_pessoas) {
@@ -140,7 +149,7 @@ router.put('/:id', async (req, res) => {
     await runExecute(
       `UPDATE plano
        SET nome = ?, valor_base = ?, descricao = ?, duracao_em_dias = ?, compartilhado = ?, quantidade_max_pessoas = ?
-       WHERE id = ?`,
+       WHERE id = ? AND tenant_id = ?`,
       [
         payload.nome,
         payload.valor_base,
@@ -149,10 +158,11 @@ router.put('/:id', async (req, res) => {
         payload.compartilhado,
         payload.quantidade_max_pessoas,
         id,
+        scope.tenant_id,
       ]
     );
 
-    const atualizado = await runGet('SELECT * FROM plano WHERE id = ?', [id]);
+    const atualizado = await runGet('SELECT * FROM plano WHERE id = ? AND tenant_id = ?', [id, scope.tenant_id]);
     res.json(atualizado);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -164,12 +174,16 @@ router.delete('/:id', async (req, res) => {
   if (!id) return res.status(400).json({ error: 'ID inválido' });
 
   try {
-    const alunosAtivos = await runGet('SELECT COUNT(*) AS total FROM aluno WHERE plano_id = ?', [id]);
+    const scope = requireScope(req);
+    const alunosAtivos = await runGet(
+      'SELECT COUNT(*) AS total FROM aluno WHERE plano_id = ? AND tenant_id = ? AND unit_id = ?',
+      [id, scope.tenant_id, scope.unit_id]
+    );
     if ((alunosAtivos?.total || 0) > 0) {
       return res.status(400).json({ error: 'Não é possível excluir um plano vinculado a alunos' });
     }
 
-    const result = await runExecute('DELETE FROM plano WHERE id = ?', [id]);
+    const result = await runExecute('DELETE FROM plano WHERE id = ? AND tenant_id = ?', [id, scope.tenant_id]);
     if (result.changes === 0) return res.status(404).json({ error: 'Plano não encontrado para deletar' });
     res.json({ message: 'Plano deletado com sucesso' });
   } catch (error) {
