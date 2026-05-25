@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const packageJson = require('../package.json');
 const AppError = require('./errors/AppError');
 const errorHandler = require('./middlewares/errorHandler');
 const ensureSchema = require('./database/ensureSchema');
@@ -115,6 +116,16 @@ async function start() {
   app.use('/audit-logs', require('./routes/auditLogs'));
   app.use('/usuarios-internos', require('./routes/usuariosInternos'));
   app.use('/relatorios', require('./routes/relatorios'));
+
+  app.get('/health', (_req, res) => {
+    res.json({
+      status: 'ok',
+      service: packageJson.name,
+      timestamp: new Date().toISOString(),
+      uptime_seconds: Number(process.uptime().toFixed(3)),
+      environment: process.env.NODE_ENV || 'development',
+    });
+  });
 
   app.get('/test-db', (req, res) => {
     db.get('SELECT datetime("now") AS agora', [], (err, row) => {
