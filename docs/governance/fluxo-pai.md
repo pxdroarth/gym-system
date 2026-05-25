@@ -139,21 +139,25 @@ Hoje o sistema já possui:
 ## Posição atual
 
 ```txt
-CHECKPOINT 5.1 — AUTH LOCAL / SMOKE GATE
+CHECKPOINT 5.1 — AUTH LOCAL / SMOKE GATE (CONCLUÍDO)
 ```
 
-Depois:
+Gate principal atual:
 
 ```txt
-BLOCO 6A — SETUP PLAYWRIGHT
+tests\scripts\smoke-auth.cmd
+tests\scripts\smoke-acesso.cmd
+npm.cmd --prefix frontend run build
 ```
+
+Playwright/E2E permanece criado apenas como infraestrutura experimental e será retomado em fase futura de maturidade/CI.
 
 ---
 
 # CHECKPOINT 5.1 — AUTH LOCAL / SMOKE GATE
 
 ## STATUS
-🔄 PENDENTE CURTO
+✅ CONCLUÍDO
 
 ## Objetivo
 
@@ -192,13 +196,18 @@ npm.cmd --prefix frontend run build
 # BLOCO 6 — PLAYWRIGHT / MCP / E2E
 
 ## STATUS
-⏭️ PRÓXIMO APÓS CHECKPOINT 5.1
+⏸️ PAUSADO PARA FASE FUTURA DE MATURIDADE/CI
 
 ## Objetivo
 
-Transformar fluxos críticos em validação automatizada real.
+Manter a infraestrutura inicial de E2E criada, sem torná-la gate principal nesta fase.
 
 ## BLOCO 6A — SETUP PLAYWRIGHT
+
+### Status
+
+- criado
+- manter como infraestrutura experimental
 
 ### Inclui
 
@@ -222,6 +231,11 @@ tests/
 
 ## BLOCO 6B — E2E AUTH
 
+### Status
+
+- criado
+- não é gate principal nesta fase
+
 ### Fluxos
 
 - login
@@ -235,6 +249,11 @@ tests/
 
 ## BLOCO 6C — E2E PERMISSÕES
 
+### Status
+
+- pausado
+- futuro
+
 ### Fluxos
 
 - financeiro restrito
@@ -245,6 +264,11 @@ tests/
 - escopo operacional
 
 ## BLOCO 6D — E2E ACESSO
+
+### Status
+
+- pausado
+- futuro
 
 ### Fluxos
 
@@ -265,6 +289,14 @@ Permitir automação assistida por agente:
 - geração assistida de testes
 - validação operacional
 - automação futura
+
+### Observação de governança
+
+- O gate principal atual voltou a ser:
+  - `tests\scripts\smoke-auth.cmd`
+  - `tests\scripts\smoke-acesso.cmd`
+  - `npm.cmd --prefix frontend run build`
+- A expansão de E2E/Playwright será retomada em fase futura de maturidade/CI.
 
 ---
 
@@ -697,12 +729,12 @@ Operação quase solo baseada em IA.
 ## Sequência recomendada
 
 ```txt
-1. CHECKPOINT 5.1 — Auth local / smoke-auth gate
-2. BLOCO 6A — Setup Playwright
-3. BLOCO 6B — E2E Auth
-4. BLOCO 6C — E2E Permissões
-5. BLOCO 6D — E2E Acesso
-6. BLOCO 6E — MCP
+1. Gate principal: `tests\scripts\smoke-auth.cmd`, `tests\scripts\smoke-acesso.cmd` e `npm.cmd --prefix frontend run build`
+2. BLOCO 6A — Setup Playwright (infraestrutura experimental já criada)
+3. BLOCO 6B — E2E Auth (criado, mas fora do gate principal)
+4. BLOCO 6C — E2E Permissões (pausado)
+5. BLOCO 6D — E2E Acesso (pausado)
+6. BLOCO 6E — MCP (futuro)
 7. OBS-01 — Correlation ID/logs estruturados
 8. OBS-02 — Catálogo de erros
 9. OBS-03 — Eventos internos de integração
