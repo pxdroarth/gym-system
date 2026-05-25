@@ -18,9 +18,10 @@ function errorHandler(err, req, res, _next) {
     status_code: 500,
   }));
   return res.status(500).json({
-    error: 'Erro interno do servidor',
-    ok: false,
-    code: 'INTERNAL_ERROR',
+    success: false,
+    error: 'internal_server_error',
+    message: 'Erro interno do servidor.',
+    correlation_id: req?.correlationId || req?.correlation_id || null,
   });
 }
 
