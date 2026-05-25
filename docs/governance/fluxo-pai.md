@@ -389,11 +389,21 @@ Criar ambiente realista antes de produção comercial.
 # FASE 7 — OBSERVABILIDADE OPERACIONAL
 
 ## STATUS
-⏳ FUTURA / TRANSVERSAL
+🔄 PARCIAL / TRANSVERSAL
 
 ## Objetivo
 
 Permitir supervisão técnica e operacional do SaaS, API, auth, financeiro, acesso, dispositivos físicos, gateways locais e integrações futuras.
+
+Base já concluída nesta mini-fase:
+
+- correlation_id por request
+- validação do `x-correlation-id` recebido
+- logs estruturados mínimos por request
+- `GET /health`
+- fallback 404 JSON com `correlation_id`
+- erro interno 500 seguro com `correlation_id`
+- inventário documental inicial em [docs/governance/error-contracts.md](/C:/sistema-academia-main/docs/governance/error-contracts.md)
 
 A observabilidade deve responder:
 
@@ -419,6 +429,11 @@ Automatizar resposta depois
 
 ## OBS-01 — CORRELATION ID E LOGS ESTRUTURADOS
 
+### Status
+
+- concluído na base atual
+- evoluções futuras ficam para fases posteriores de observabilidade
+
 ### Inclui
 
 - correlation_id por request crítica
@@ -438,6 +453,11 @@ Automatizar resposta depois
 - tracing distribuído completo
 
 ## OBS-02 — CATÁLOGO DE ERROS
+
+### Status
+
+- inventário inicial concluído
+- padronização futura ainda pendente
 
 ### Categorias
 
@@ -735,12 +755,10 @@ Operação quase solo baseada em IA.
 4. BLOCO 6C — E2E Permissões (pausado)
 5. BLOCO 6D — E2E Acesso (pausado)
 6. BLOCO 6E — MCP (futuro)
-7. OBS-01 — Correlation ID/logs estruturados
-8. OBS-02 — Catálogo de erros
-9. OBS-03 — Eventos internos de integração
-10. BLOCO 9A — Contrato Access Device Platform
-11. BLOCO 9B — Modelo persistente
-12. BLOCO 9C — Provider Simulator
+7. OBS-03 — Eventos internos de integração
+8. BLOCO 9A — Contrato Access Device Platform
+9. BLOCO 9B — Modelo persistente
+10. BLOCO 9C — Provider Simulator
 ```
 
 ## Não priorizar agora
