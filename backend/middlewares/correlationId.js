@@ -1,5 +1,8 @@
 const { randomUUID } = require('crypto');
 
+const CORRELATION_ID_MAX_LENGTH = 128;
+const CORRELATION_ID_PATTERN = /^[A-Za-z0-9_.:-]+$/;
+
 function generateCorrelationId() {
   if (typeof randomUUID === 'function') {
     return randomUUID();
@@ -11,8 +14,16 @@ function generateCorrelationId() {
 function resolveCorrelationId(req) {
   const incomingCorrelationId = req.get('x-correlation-id');
 
-  if (typeof incomingCorrelationId === 'string' && incomingCorrelationId.trim()) {
-    return incomingCorrelationId.trim();
+  if (typeof incomingCorrelationId === 'string') {
+    const sanitizedCorrelationId = incomingCorrelationId.trim();
+
+    if (
+      sanitizedCorrelationId
+      && sanitizedCorrelationId.length <= CORRELATION_ID_MAX_LENGTH
+      && CORRELATION_ID_PATTERN.test(sanitizedCorrelationId)
+    ) {
+      return sanitizedCorrelationId;
+    }
   }
 
   return generateCorrelationId();
