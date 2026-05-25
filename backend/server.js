@@ -4,6 +4,7 @@ const path = require('path');
 const AppError = require('./errors/AppError');
 const errorHandler = require('./middlewares/errorHandler');
 const ensureSchema = require('./database/ensureSchema');
+const correlationId = require('./middlewares/correlationId');
 const operatorContext = require('./middlewares/operatorContext');
 const scopeContext = require('./middlewares/scopeContext');
 const securityHeaders = require('./middlewares/securityHeaders');
@@ -49,6 +50,7 @@ if (isProduction || process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY =
   app.set('trust proxy', 1);
 }
 
+app.use(correlationId);
 app.use(securityHeaders);
 app.use(cors({
   origin(origin, callback) {
@@ -66,7 +68,8 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Unit-Id'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Unit-Id', 'X-Correlation-Id'],
+  exposedHeaders: ['X-Correlation-Id'],
 }));
 
 const db = require('./database');
