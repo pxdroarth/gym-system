@@ -134,6 +134,15 @@ async function start() {
     });
   });
 
+  app.use((req, res) => {
+    res.status(404).json({
+      success: false,
+      error: 'not_found',
+      message: 'Rota não encontrada.',
+      correlation_id: req.correlationId || req.correlation_id || null,
+    });
+  });
+
   app.use(errorHandler);
 
   app.listen(port, () => {
