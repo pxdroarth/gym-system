@@ -19,6 +19,14 @@ tests\scripts\env-doctor.cmd
 
 Ele nao instala dependencias, nao altera arquivos e nao faz bootstrap automatico.
 
+O bootstrap assistido de dependencias segue separado:
+
+```cmd
+tests\scripts\env-bootstrap.cmd
+```
+
+Por padrao ele roda em dry-run/plano, apenas mostra o que seria executado e so instala dependencias npm com flag explicita e confirmacao interativa.
+
 ## 2. Matriz oficial de ambiente suportado
 
 ### Obrigatorio
@@ -144,6 +152,25 @@ Se a porta estiver ocupada:
 ```cmd
 tests\scripts\env-doctor.cmd
 ```
+
+### Bootstrap assistido
+
+Dry-run padrao:
+
+```cmd
+tests\scripts\env-bootstrap.cmd
+```
+
+Instalacao assistida das dependencias npm do projeto:
+
+```cmd
+tests\scripts\env-bootstrap.cmd -InstallDeps
+```
+
+Esse fluxo pode executar somente:
+
+- `npm.cmd install`
+- `npm.cmd --prefix frontend install`
 
 ### Smoke de autenticacao
 
