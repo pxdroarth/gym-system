@@ -1,5 +1,21 @@
 const { runExecute } = require('../dbHelper');
 
+function isLegacyOperatorHeaderFallbackAllowed() {
+  return process.env.NODE_ENV === 'test' || String(process.env.ALLOW_LEGACY_OPERATOR_HEADERS || '').trim().toLowerCase() === 'true';
+}
+
+function getLegacyActorFromHeaders(req) {
+  if (!isLegacyOperatorHeaderFallbackAllowed()) return null;
+
+  const actorId = req?.headers?.['x-operator-id'] || req?.headers?.['x-user-id'];
+  if (!actorId) return null;
+
+  return {
+    id: actorId,
+    name: req.headers?.['x-operator-name'] || req.headers?.['x-user-name'] || 'sistema',
+  };
+}
+
 function safeJson(value) {
   if (value === undefined || value === null) return null;
   try {
@@ -21,10 +37,7 @@ function getActorFromRequest(req) {
 
   if (!req) return { id: 'sistema', name: 'sistema' };
 
-  return {
-    id: req.headers?.['x-operator-id'] || req.headers?.['x-user-id'] || 'sistema',
-    name: req.headers?.['x-operator-name'] || req.headers?.['x-user-name'] || 'sistema',
-  };
+  return getLegacyActorFromHeaders(req) || { id: 'sistema', name: 'sistema' };
 }
 
 async function logAction(entry = {}, client = null) {
