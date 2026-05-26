@@ -4,8 +4,10 @@ const { runQuery } = require('../dbHelper');
 const MensalidadeService = require('../services/MensalidadeService');
 const AuditService = require('../services/AuditService');
 const { actorWithScope, requireScope } = require('../helpers/scope');
+const { PERMISSIONS } = require('../constants/userRoles');
+const { requirePermission } = require('../middlewares/requirePermission');
 
-router.post('/', async (req, res, next) => {
+router.post('/', requirePermission(PERMISSIONS.PAGAMENTOS_REGISTRAR), async (req, res, next) => {
   try {
     const scope = requireScope(req);
     const pagamento = await MensalidadeService.registrarPagamento(

@@ -21,6 +21,7 @@ const PERMISSIONS = Object.freeze({
   FECHAMENTO_FECHAR: 'fechamento:fechar',
   FECHAMENTO_REABRIR: 'fechamento:reabrir',
   FINANCEIRO_SINCRONIZAR: 'financeiro:sincronizar',
+  PAGAMENTOS_REGISTRAR: 'pagamentos:registrar',
   REVERSAO_EXECUTAR: 'reversao:executar',
   ACESSO_LIBERACAO_MANUAL: 'acesso:liberacao_manual',
   PLANOS_GERENCIAR: 'planos:gerenciar',

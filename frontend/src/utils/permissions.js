@@ -21,6 +21,7 @@ export const UI_PERMISSIONS = Object.freeze({
   NAV_PLATFORM_ONBOARDING: "nav:platform-onboarding",
   NAV_HISTORICO_ATIVIDADES: "nav:historico-atividades",
   PLANOS_GERENCIAR: "planos:gerenciar",
+  PAGAMENTOS_REGISTRAR: "pagamentos:registrar",
   FINANCEIRO_VISUALIZAR: "financeiro:visualizar",
   TENANT_OVERVIEW_VISUALIZAR: "tenant-overview:visualizar",
   USUARIOS_INTERNOS_GERENCIAR: "usuarios-internos:gerenciar",

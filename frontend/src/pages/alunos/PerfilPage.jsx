@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { Activity, CreditCard, Edit3, Phone, ShieldCheck, UserRound } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import ToastNotification from "../../components/ToastNotification";
+import useAuth from "../../hooks/useAuth";
 import ModalNovaMensalidade from "./ModalNovaMensalidade";
 import { fetchAcessos, simularAcesso } from "../../services/acessoService";
 import { fetchAlunoById } from "../../services/alunoService";
@@ -15,6 +16,7 @@ import EmptyState from "../../components/ui/EmptyState";
 import Pagination from "../../components/ui/Pagination";
 import Table from "../../components/ui/Table";
 import { TabButton, Tabs } from "../../components/ui/Tabs";
+import { UI_PERMISSIONS, userHasUiPermission } from "../../utils/permissions";
 import { getApiErrorMessage } from "../../utils/getApiErrorMessage";
 
 function formatarData(data) {
@@ -66,6 +68,7 @@ function InfoItem({ label, value }) {
 }
 
 export default function PerfilPage() {
+  const { user } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -135,6 +138,7 @@ export default function PerfilPage() {
   const planoAtual = useMemo(() => planos.find((plano) => plano.id === aluno?.plano_id), [planos, aluno]);
   const ultimoAcesso = acessos[0]?.data_hora ? new Date(acessos[0].data_hora).toLocaleString("pt-BR") : "Sem registros";
   const mensalidadesPendentes = mensalidades.filter((mensalidade) => mensalidade.status === "em_aberto" || mensalidade.status === "parcial").length;
+  const canRegistrarPagamento = userHasUiPermission(user, UI_PERMISSIONS.PAGAMENTOS_REGISTRAR);
 
   async function pagarMensalidade(mensalidade) {
     try {
@@ -326,7 +330,7 @@ export default function PerfilPage() {
                     <td>{badgeMensalidade(mensalidade.status)}</td>
                     <td>{mensalidade.observacoes || "-"}</td>
                     <td>
-                      {mensalidade.status === "em_aberto" ? (
+                      {mensalidade.status === "em_aberto" && canRegistrarPagamento ? (
                         <Button
                           size="sm"
                           variant="success"
@@ -335,6 +339,8 @@ export default function PerfilPage() {
                         >
                           <CreditCard size={14} /> {carregandoPagamentoId === mensalidade.id ? "Pagando..." : "Pagar"}
                         </Button>
+                      ) : mensalidade.status === "em_aberto" ? (
+                        <Badge tone="amber">Em aberto</Badge>
                       ) : (
                         <Badge tone="green">Quitada</Badge>
                       )}
