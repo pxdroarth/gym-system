@@ -803,7 +803,7 @@ Write-Section -Title "Portas esperadas"
 
 $portChecks = @(
   @{ Port = 3001; Label = "Backend"; SuggestedStart = "npm.cmd run backend" },
-  @{ Port = 5173; Label = "Frontend"; SuggestedStart = "npm.cmd --prefix frontend run dev" }
+  @{ Port = 3000; Label = "Frontend"; SuggestedStart = "npm.cmd --prefix frontend run dev" }
 )
 
 foreach ($portCheck in $portChecks) {
@@ -918,3 +918,4 @@ if ($script:CountFail -gt 0) {
 }
 
 exit 0
+
