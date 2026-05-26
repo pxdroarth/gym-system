@@ -15,7 +15,7 @@ router.get('/:ano/:mes/analisar', async (req, res, next) => {
   }
 });
 
-router.post('/:ano/:mes/fechar', async (req, res, next) => {
+router.post('/:ano/:mes/fechar', requirePermission(PERMISSIONS.FECHAMENTO_FECHAR), async (req, res, next) => {
   try {
     const scope = requireScope(req);
     res.json(await FechamentoMensalService.fecharPeriodo(
