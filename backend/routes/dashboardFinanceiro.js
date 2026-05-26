@@ -4,6 +4,8 @@ const db = require('../dbHelper');
 const { sincronizarFinanceiro } = require('../services/FinanceService');
 const { calcularKpisFinanceiros } = require('../services/FinanceiroKpiService');
 const { requireScope } = require('../helpers/scope');
+const { PERMISSIONS } = require('../constants/userRoles');
+const { requirePermission } = require('../middlewares/requirePermission');
 
 router.get('/', async (req, res) => {
   try {
@@ -31,7 +33,7 @@ router.get('/kpis', async (req, res) => {
   }
 });
 
-router.post('/sincronizar', async (req, res) => {
+router.post('/sincronizar', requirePermission(PERMISSIONS.FINANCEIRO_SINCRONIZAR), async (req, res) => {
   try {
     requireScope(req);
     await sincronizarFinanceiro();
