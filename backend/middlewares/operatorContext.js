@@ -2,8 +2,17 @@ const { runGet } = require('../dbHelper');
 const { USER_STATUS } = require('../constants/userRoles');
 const AuthService = require('../services/AuthService');
 
+// Fallback legado para local/teste; nao deve ficar aberto por padrao fora desses ambientes.
+function isLegacyOperatorHeaderFallbackAllowed() {
+  return process.env.NODE_ENV === 'test' || String(process.env.ALLOW_LEGACY_OPERATOR_HEADERS || '').trim().toLowerCase() === 'true';
+}
+
+function getLegacyOperatorHeaderId(req) {
+  return req.headers?.['x-operator-id'] || req.headers?.['x-user-id'] || null;
+}
+
 async function resolveLegacyOperator(req) {
-  const operatorId = req.headers?.['x-operator-id'] || req.headers?.['x-user-id'];
+  const operatorId = getLegacyOperatorHeaderId(req);
   if (!operatorId) return null;
 
   const user = await runGet(
@@ -50,6 +59,15 @@ async function operatorContext(req, _res, next) {
 
       req.operator = resolved.operator;
       req.authSession = resolved.session;
+      return next();
+    }
+
+    const legacyOperatorId = getLegacyOperatorHeaderId(req);
+    if (legacyOperatorId && !isLegacyOperatorHeaderFallbackAllowed()) {
+      req.authError = {
+        message: 'Headers legados de operador nao sao permitidos neste ambiente',
+        code: 'LEGACY_OPERATOR_HEADERS_DISABLED',
+      };
       return next();
     }
 
