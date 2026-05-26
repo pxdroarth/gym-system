@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const VinculoService = require('../services/VinculoService');
 const AuditService = require('../services/AuditService');
+const { PERMISSIONS } = require('../constants/userRoles');
+const { requirePermission } = require('../middlewares/requirePermission');
 const { actorWithScope, requireScope } = require('../helpers/scope');
 
 router.get('/', async (req, res, next) => {
@@ -37,7 +39,7 @@ router.get('/:responsavelId', async (req, res, next) => {
   }
 });
 
-router.post('/', async (req, res, next) => {
+router.post('/', requirePermission(PERMISSIONS.ALUNOS_ALTERAR_PLANO_COM_DEPENDENTES), async (req, res, next) => {
   try {
     const scope = requireScope(req);
     const vinculo = await VinculoService.criarVinculo(
@@ -51,7 +53,7 @@ router.post('/', async (req, res, next) => {
   }
 });
 
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requirePermission(PERMISSIONS.ALUNOS_ALTERAR_PLANO_COM_DEPENDENTES), async (req, res, next) => {
   try {
     const scope = requireScope(req);
     res.json(await VinculoService.encerrarVinculo(
