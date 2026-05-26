@@ -5,12 +5,25 @@ const { sincronizarFinanceiro } = require('../services/FinanceService');
 const AuditService = require('../services/AuditService');
 const ReversaoControladaService = require('../services/ReversaoControladaService');
 const { PERMISSIONS } = require('../constants/userRoles');
-const { requirePermission } = require('../middlewares/requirePermission');
+const { MENSALIDADE_STATUS } = require('../constants/domainStates');
+const { requirePermission, assertPermission } = require('../middlewares/requirePermission');
 const { actorWithScope, requireScope } = require('../helpers/scope');
+
+function isFinancialMensalidadeStatus(status) {
+  const normalized = String(status || '').trim().toLowerCase();
+  return [MENSALIDADE_STATUS.PAGO, MENSALIDADE_STATUS.PARCIAL].includes(normalized);
+}
+
+function assertPagamentoPermissionForFinancialStatus(req, status) {
+  if (isFinancialMensalidadeStatus(status)) {
+    assertPermission(req, PERMISSIONS.PAGAMENTOS_REGISTRAR);
+  }
+}
 
 router.post('/', async (req, res, next) => {
   try {
     const scope = requireScope(req);
+    assertPagamentoPermissionForFinancialStatus(req, req.body?.status);
     const criada = await MensalidadeService.criarMensalidade(req.body || {}, scope);
     await sincronizarFinanceiro();
     res.status(201).json(criada);
@@ -62,6 +75,7 @@ router.get('/aluno/:aluno_id', async (req, res, next) => {
 router.put('/:id', async (req, res, next) => {
   try {
     const scope = requireScope(req);
+    assertPagamentoPermissionForFinancialStatus(req, req.body?.status);
     const atualizada = await MensalidadeService.atualizarMensalidade(req.params.id, req.body || {}, scope);
     await sincronizarFinanceiro();
     res.json(atualizada);
@@ -73,6 +87,7 @@ router.put('/:id', async (req, res, next) => {
 router.patch('/:id/status', async (req, res, next) => {
   try {
     const scope = requireScope(req);
+    assertPagamentoPermissionForFinancialStatus(req, req.body?.status);
     const atualizada = await MensalidadeService.atualizarMensalidade(req.params.id, {
       status: req.body?.status,
     }, scope);
