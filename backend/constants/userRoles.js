@@ -21,6 +21,7 @@ const PERMISSIONS = Object.freeze({
   FECHAMENTO_REABRIR: 'fechamento:reabrir',
   REVERSAO_EXECUTAR: 'reversao:executar',
   ACESSO_LIBERACAO_MANUAL: 'acesso:liberacao_manual',
+  PLANOS_GERENCIAR: 'planos:gerenciar',
   ALUNOS_ALTERAR_PLANO_COM_DEPENDENTES: 'alunos:alterar_plano_com_dependentes',
   LOGS_VISUALIZAR_TOTAL: 'logs:visualizar_total',
   LOGS_VISUALIZAR_ESCOPO: 'logs:visualizar_escopo',

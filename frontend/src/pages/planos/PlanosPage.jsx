@@ -6,15 +6,19 @@ import Card from "../../components/ui/Card";
 import EmptyState from "../../components/ui/EmptyState";
 import PageHeader from "../../components/ui/PageHeader";
 import Table from "../../components/ui/Table";
+import useAuth from "../../hooks/useAuth";
 import { fetchPlanos } from "../../services/planoService";
 import getApiErrorMessage from "../../utils/getApiErrorMessage";
+import { UI_PERMISSIONS, userHasUiPermission } from "../../utils/permissions";
 import ModalPlanoForm from "./ModalPlanoForm";
 
 export default function PlanosPage() {
+  const { user } = useAuth();
   const [planos, setPlanos] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [mostrarModal, setMostrarModal] = useState(false);
   const [planoEditar, setPlanoEditar] = useState(null);
+  const canManagePlanos = userHasUiPermission(user, UI_PERMISSIONS.PLANOS_GERENCIAR);
 
   useEffect(() => {
     carregarPlanos();
@@ -52,7 +56,7 @@ export default function PlanosPage() {
       <PageHeader
         title="Planos"
         subtitle="Configure valores, duração e capacidade dos planos da academia."
-        actions={<Button onClick={abrirModalNovo}>+ Novo Plano</Button>}
+        actions={canManagePlanos ? <Button onClick={abrirModalNovo}>+ Novo Plano</Button> : null}
       />
 
       <Card>
@@ -77,7 +81,7 @@ export default function PlanosPage() {
                 <th>Duração</th>
                 <th>Capacidade</th>
                 <th>Tipo</th>
-                <th>Ações</th>
+                {canManagePlanos ? <th>Ações</th> : null}
               </tr>
             </thead>
             <tbody>
@@ -100,11 +104,13 @@ export default function PlanosPage() {
                       <Badge tone="gray">Individual</Badge>
                     )}
                   </td>
-                  <td>
-                    <Button size="sm" variant="secondary" onClick={() => abrirModalEdicao(plano)}>
-                      Editar
-                    </Button>
-                  </td>
+                  {canManagePlanos ? (
+                    <td>
+                      <Button size="sm" variant="secondary" onClick={() => abrirModalEdicao(plano)}>
+                        Editar
+                      </Button>
+                    </td>
+                  ) : null}
                 </tr>
               ))}
             </tbody>
@@ -112,15 +118,17 @@ export default function PlanosPage() {
         )}
       </Card>
 
-      <ModalPlanoForm
-        open={mostrarModal}
-        onClose={fecharModal}
-        planoEdicao={planoEditar}
-        onSalvar={async () => {
-          await carregarPlanos();
-          fecharModal();
-        }}
-      />
+      {canManagePlanos ? (
+        <ModalPlanoForm
+          open={mostrarModal}
+          onClose={fecharModal}
+          planoEdicao={planoEditar}
+          onSalvar={async () => {
+            await carregarPlanos();
+            fecharModal();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

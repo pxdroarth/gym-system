@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { runQuery, runGet, runExecute } = require('../dbHelper');
 const { requireScope } = require('../helpers/scope');
+const { requirePermission } = require('../middlewares/requirePermission');
+const { PERMISSIONS } = require('../constants/userRoles');
 
 function normalizePlanoPayload(body = {}) {
   const nome = String(body.nome || '').trim();
@@ -88,7 +90,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requirePermission(PERMISSIONS.PLANOS_GERENCIAR), async (req, res) => {
   const payload = normalizePlanoPayload(req.body);
   const erro = validarPlano(payload);
   if (erro) return res.status(400).json({ error: erro });
@@ -122,7 +124,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', requirePermission(PERMISSIONS.PLANOS_GERENCIAR), async (req, res) => {
   const id = parseInt(req.params.id);
   if (!id) return res.status(400).json({ error: 'ID inválido' });
 
@@ -169,7 +171,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requirePermission(PERMISSIONS.PLANOS_GERENCIAR), async (req, res) => {
   const id = parseInt(req.params.id);
   if (!id) return res.status(400).json({ error: 'ID inválido' });
 
