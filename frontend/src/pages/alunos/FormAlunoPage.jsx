@@ -7,14 +7,18 @@ import {
   fetchAlunosPesquisa,
   updateAluno,
 } from "../../services/alunoService";
+import useAuth from "../../hooks/useAuth";
 import { createPlanoAssociado } from "../../services/planoAssociadoService";
 import { fetchPlanos } from "../../services/planoService";
 import getApiErrorMessage from "../../utils/getApiErrorMessage";
+import { UI_PERMISSIONS, userHasUiPermission } from "../../utils/permissions";
 
 export default function FormAlunoPage() {
   const { id } = useParams();
   const navigate = useNavigate();
   const isNovo = !id || id === "novo";
+  const { user } = useAuth();
+  const canAlterarPlano = userHasUiPermission(user, UI_PERMISSIONS.ALUNOS_ALTERAR_PLANO_COM_DEPENDENTES);
 
   const [form, setForm] = useState({
     nome: "",
@@ -173,12 +177,22 @@ export default function FormAlunoPage() {
 
         <div>
           <label className="font-semibold">Plano:</label>
-          <select name="plano_id" value={form.plano_id} onChange={handleChange} required className="w-full border rounded px-4 py-2">
+          <select
+            name="plano_id"
+            value={form.plano_id}
+            onChange={handleChange}
+            required
+            disabled={!isNovo && !canAlterarPlano}
+            className="w-full border rounded px-4 py-2 disabled:bg-gray-100 disabled:text-gray-500"
+          >
             <option value="">Selecione o plano</option>
             {planos.map((plano) => (
               <option key={plano.id} value={plano.id}>{plano.nome}</option>
             ))}
           </select>
+          {!isNovo && !canAlterarPlano && (
+            <div className="mt-1 text-sm text-gray-500">A alteração de plano exige permissão específica.</div>
+          )}
         </div>
 
         <div className="flex items-center gap-2">

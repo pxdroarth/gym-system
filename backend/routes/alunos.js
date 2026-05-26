@@ -237,10 +237,14 @@ router.put('/:id', async (req, res, next) => {
            AND COALESCE(status, 'ativo') = 'ativo'`,
         [id, scope.tenant_id, scope.unit_id]
       );
-      const mudouPlanoComDependentes = Number(antes.plano_id) !== planoIdFinal && dependentes.length > 0;
+      const mudouPlano = Number(antes.plano_id) !== planoIdFinal;
+      const mudouPlanoComDependentes = mudouPlano && dependentes.length > 0;
+
+      if (mudouPlano) {
+        assertPermission(req, PERMISSIONS.ALUNOS_ALTERAR_PLANO_COM_DEPENDENTES);
+      }
 
       if (mudouPlanoComDependentes) {
-        assertPermission(req, PERMISSIONS.ALUNOS_ALTERAR_PLANO_COM_DEPENDENTES);
         await FechamentoMensalService.assertPeriodoEditavelPorData(
           new Date().toISOString().slice(0, 10),
           'mudanca de plano com dependentes',
