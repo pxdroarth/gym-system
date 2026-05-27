@@ -308,19 +308,6 @@ export async function createVendaProduto(dadosVenda) {
   return response.data;
 }
 
-// ============ MENSALIDADES LEGADAS ============
-export async function fetchMensalidadesAlunoStatus(alunoId, status) {
-  const response = await api.get(`/mensalidades/aluno/${alunoId}`, {
-    params: { status },
-  });
-  return response.data;
-}
-
-export async function registrarPagamentoAntecipado(payload) {
-  const response = await api.post('/mensalidades/pagamento-antecipado', payload);
-  return response.data;
-}
-
 export async function gerarMensalidadesFuturas(payload) {
   const response = await api.post('/mensalidades/gerar-futuras', payload);
   return response.data;

@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter as Router, Navigate, Route, Routes, useParams } from "react-router-dom";
+import { BrowserRouter as Router, Navigate, Route, Routes } from "react-router-dom";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import Layout from "./components/Layout";
 import ToastProvider from "./components/ui/ToastProvider";
@@ -14,7 +14,6 @@ import FinanceiroDashboard from "./pages/financeiro/FinanceiroDashboard";
 import ContasFinanceirasPage from "./pages/financeiro/ContasFinanceirasPage";
 import FinanceiroLayout from "./pages/financeiro/FinanceiroLayout";
 import PlanoContasPage from "./pages/financeiro/PlanoContasPage";
-import PagamentoAntecipado from "./pages/mensalidades/PagamentoAntecipado";
 import OnboardingTenantPage from "./pages/platform/OnboardingTenantPage";
 import PlanoAssociadosPage from "./pages/planos/associacoes/PlanoAssociadosPage";
 import PlanosPage from "./pages/planos/PlanosPage";
@@ -22,12 +21,6 @@ import ProdutosPage from "./pages/produtos/ProdutosPage";
 import TenantOverviewPage from "./pages/tenant/TenantOverviewPage";
 import UsuariosInternosPage from "./pages/usuarios/UsuariosInternosPage";
 import VendasProdutosPage from "./pages/vendasProdutos/VendasProdutosPage";
-
-function PagamentoAntecipadoWrapper() {
-  const params = useParams();
-  const alunoId = parseInt(params.alunoId, 10);
-  return <PagamentoAntecipado alunoId={alunoId} />;
-}
 
 function App() {
   return (
@@ -49,7 +42,6 @@ function App() {
               <Route path="/planos" element={<PlanosPage />} />
               <Route path="/produtos" element={<ProdutosPage />} />
               <Route path="/vendas-produtos" element={<VendasProdutosPage />} />
-              <Route path="/mensalidades/pagamento-antecipado/:alunoId" element={<PagamentoAntecipadoWrapper />} />
               <Route path="/planos/associacoes" element={<PlanoAssociadosPage />} />
               <Route path="/usuarios-internos" element={<UsuariosInternosPage />} />
               <Route path="/historico-atividades" element={<HistoricoAtividadesPage />} />
