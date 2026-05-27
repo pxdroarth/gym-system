@@ -115,7 +115,7 @@ export default function UsuariosInternosPage() {
 
   return (
     <RoleGate
-      permission={UI_PERMISSIONS.LOGS_VISUALIZAR_TOTAL}
+      permission={UI_PERMISSIONS.USUARIOS_VISUALIZAR}
       fallback={
         <EmptyState
           title="Area restrita a administradores."

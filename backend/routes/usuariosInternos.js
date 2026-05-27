@@ -28,7 +28,7 @@ router.get('/me', (req, res, next) => {
   }
 });
 
-router.get('/', requirePermission(PERMISSIONS.LOGS_VISUALIZAR_TOTAL), async (_req, res, next) => {
+router.get('/', requirePermission(PERMISSIONS.USUARIOS_VISUALIZAR), async (_req, res, next) => {
   try {
     res.json({ ok: true, data: await UserService.listarUsuarios() });
   } catch (error) {

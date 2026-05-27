@@ -15,6 +15,7 @@ const USER_STATUS = Object.freeze({
 });
 
 const PERMISSIONS = Object.freeze({
+  USUARIOS_VISUALIZAR: 'usuarios:visualizar',
   USUARIOS_CRIAR: 'usuarios:criar',
   USUARIOS_ALTERAR_PAPEL: 'usuarios:alterar_papel',
   USUARIOS_ALTERAR_STATUS: 'usuarios:alterar_status',
