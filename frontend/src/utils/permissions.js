@@ -23,6 +23,11 @@ export const UI_PERMISSIONS = Object.freeze({
   PLANOS_GERENCIAR: "planos:gerenciar",
   ALUNOS_ALTERAR_PLANO_COM_DEPENDENTES: "alunos:alterar_plano_com_dependentes",
   PAGAMENTOS_REGISTRAR: "pagamentos:registrar",
+  USUARIOS_CRIAR: "usuarios:criar",
+  USUARIOS_ALTERAR_PAPEL: "usuarios:alterar_papel",
+  USUARIOS_ALTERAR_STATUS: "usuarios:alterar_status",
+  LOGS_VISUALIZAR_TOTAL: "logs:visualizar_total",
+  LOGS_VISUALIZAR_ESCOPO: "logs:visualizar_escopo",
   FINANCEIRO_VISUALIZAR: "financeiro:visualizar",
   TENANT_OVERVIEW_VISUALIZAR: "tenant-overview:visualizar",
   USUARIOS_INTERNOS_GERENCIAR: "usuarios-internos:gerenciar",
@@ -35,10 +40,12 @@ const ROLE_UI_PERMISSIONS = Object.freeze({
   [ROLES.OWNER]: Object.values(UI_PERMISSIONS).filter((permission) => ![
     UI_PERMISSIONS.NAV_PLATFORM_ONBOARDING,
     UI_PERMISSIONS.PLATFORM_ONBOARDING_GERENCIAR,
+    UI_PERMISSIONS.LOGS_VISUALIZAR_TOTAL,
   ].includes(permission)),
   [ROLES.ADMIN]: Object.values(UI_PERMISSIONS).filter((permission) => ![
     UI_PERMISSIONS.NAV_PLATFORM_ONBOARDING,
     UI_PERMISSIONS.PLATFORM_ONBOARDING_GERENCIAR,
+    UI_PERMISSIONS.LOGS_VISUALIZAR_TOTAL,
   ].includes(permission)),
   [ROLES.GESTOR]: [
     UI_PERMISSIONS.NAV_DASHBOARD,

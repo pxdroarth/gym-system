@@ -197,10 +197,19 @@ export default function FormAlunoPage() {
 
         <div className="flex items-center gap-2">
           <label className="font-semibold">É responsável pelo plano?</label>
-          <input type="checkbox" checked={ehResponsavel} onChange={(e) => setEhResponsavel(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={ehResponsavel}
+            disabled={!canAlterarPlano}
+            onChange={(e) => setEhResponsavel(e.target.checked)}
+          />
         </div>
 
-        {!ehResponsavel && (
+        {!canAlterarPlano && (
+          <div className="text-sm text-gray-500">Vincular dependente a outro responsÃ¡vel exige permissÃ£o especÃ­fica.</div>
+        )}
+
+        {!ehResponsavel && canAlterarPlano && (
           <div className="space-y-2">
             <label className="font-semibold">Buscar Responsável:</label>
             <input

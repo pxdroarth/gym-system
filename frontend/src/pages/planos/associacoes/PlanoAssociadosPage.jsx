@@ -9,6 +9,7 @@ import Input from "../../../components/ui/Input";
 import KpiCard from "../../../components/ui/KpiCard";
 import Modal from "../../../components/ui/Modal";
 import PageHeader from "../../../components/ui/PageHeader";
+import useAuth from "../../../hooks/useAuth";
 import {
   fetchAlunosPesquisa,
 } from "../../../services/alunoService";
@@ -18,6 +19,7 @@ import {
   fetchPlanoAssociados,
 } from "../../../services/planoAssociadoService";
 import getApiErrorMessage from "../../../utils/getApiErrorMessage";
+import { UI_PERMISSIONS, userHasUiPermission } from "../../../utils/permissions";
 
 function AlunoLinha({ aluno, action, actionLabel, muted }) {
   return (
@@ -36,6 +38,8 @@ function AlunoLinha({ aluno, action, actionLabel, muted }) {
 }
 
 export default function PlanoAssociadosPage() {
+  const { user } = useAuth();
+  const canManageAssociacoes = userHasUiPermission(user, UI_PERMISSIONS.ALUNOS_ALTERAR_PLANO_COM_DEPENDENTES);
   const [modalAberto, setModalAberto] = useState(false);
   const [responsavelBusca, setResponsavelBusca] = useState("");
   const [responsavelResultados, setResponsavelResultados] = useState([]);
@@ -182,10 +186,12 @@ export default function PlanoAssociadosPage() {
         title="Associacoes"
         subtitle="Gestao de vinculos entre responsaveis e dependentes."
         actions={
-          <Button onClick={() => setModalAberto(true)}>
-            <UserPlus size={16} />
-            Gerenciar vinculos
-          </Button>
+          canManageAssociacoes ? (
+            <Button onClick={() => setModalAberto(true)}>
+              <UserPlus size={16} />
+              Gerenciar vinculos
+            </Button>
+          ) : null
         }
       />
 
@@ -218,13 +224,13 @@ export default function PlanoAssociadosPage() {
             <EmptyState
               title="Nenhum responsavel selecionado."
               description="Use Gerenciar vinculos para buscar um responsavel e administrar dependentes."
-              action={<Button onClick={() => setModalAberto(true)}>Gerenciar vinculos</Button>}
+              action={canManageAssociacoes ? <Button onClick={() => setModalAberto(true)}>Gerenciar vinculos</Button> : null}
             />
           )}
         </div>
       </Card>
 
-      {modalAberto && (
+      {modalAberto && canManageAssociacoes && (
         <Modal title="Gerenciar vinculos" onClose={() => setModalAberto(false)} className="ui-modal--full">
           <div className="association-modal-grid">
             <Card className="p-4">

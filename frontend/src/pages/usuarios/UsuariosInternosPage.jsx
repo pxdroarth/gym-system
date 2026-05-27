@@ -115,7 +115,7 @@ export default function UsuariosInternosPage() {
 
   return (
     <RoleGate
-      permission={UI_PERMISSIONS.USUARIOS_INTERNOS_GERENCIAR}
+      permission={UI_PERMISSIONS.LOGS_VISUALIZAR_TOTAL}
       fallback={
         <EmptyState
           title="Area restrita a administradores."
@@ -127,7 +127,11 @@ export default function UsuariosInternosPage() {
         <PageHeader
           title="Usuarios Internos"
           subtitle="Controle operacional de usuarios, papeis e status de acesso."
-          actions={<Button onClick={() => setModalAberto(true)}>+ Novo Usuario</Button>}
+          actions={(
+            <RoleGate permission={UI_PERMISSIONS.USUARIOS_CRIAR}>
+              <Button onClick={() => setModalAberto(true)}>+ Novo Usuario</Button>
+            </RoleGate>
+          )}
         />
 
         <RestrictedAreaNotice
@@ -219,7 +223,7 @@ export default function UsuariosInternosPage() {
                               <div className="text-xs text-slate-500">Gerido pela plataforma.</div>
                             </div>
                           ) : (
-                            <RoleGate permission={UI_PERMISSIONS.USUARIOS_INTERNOS_GERENCIAR}>
+                            <RoleGate permission={UI_PERMISSIONS.USUARIOS_ALTERAR_PAPEL}>
                               <div className="space-y-2">
                                 <div className="governance-role-badge">{roleBadge(usuario.papel)}</div>
                                 <Select
@@ -241,7 +245,7 @@ export default function UsuariosInternosPage() {
                               <div className="text-xs text-slate-500">Sem controle visual neste perfil.</div>
                             </div>
                           ) : (
-                            <RoleGate permission={UI_PERMISSIONS.USUARIOS_INTERNOS_GERENCIAR}>
+                            <RoleGate permission={UI_PERMISSIONS.USUARIOS_ALTERAR_STATUS}>
                               <div className="flex items-center gap-2">
                                 {statusBadge(usuario.status)}
                                 <Select
