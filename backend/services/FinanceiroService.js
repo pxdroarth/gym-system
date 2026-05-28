@@ -1,7 +1,44 @@
 const { runQuery, runGet, runExecute } = require('../dbHelper');
+const AppError = require('../errors/AppError');
+const FechamentoMensalService = require('./FechamentoMensalService');
 
 function clientOrDefault(client) {
   return client || { all: runQuery, get: runGet, run: runExecute };
+}
+
+function normalizeScope(scope) {
+  const tenantId = Number(scope?.tenant_id);
+  const unitId = Number(scope?.unit_id);
+
+  if (!tenantId || !unitId) {
+    throw new AppError('Escopo de tenant/unidade obrigatorio para sincronizar financeiro', 403, 'FINANCEIRO_SYNC_SCOPE_REQUIRED');
+  }
+
+  return { tenant_id: tenantId, unit_id: unitId };
+}
+
+function createSyncSummary() {
+  return {
+    mensalidadesProcessadas: 0,
+    vendasProcessadas: 0,
+    lancamentosCriadosOuAtualizados: 0,
+    ignoradosPorFechamento: 0,
+    ignoradosPorEscopo: 0,
+  };
+}
+
+function isPeriodoFechadoError(error) {
+  return error?.code === 'PERIODO_FECHADO' || error?.statusCode === 423;
+}
+
+async function isPeriodoEditavel(data, operacao, db, scope) {
+  try {
+    await FechamentoMensalService.assertPeriodoEditavelPorData(data, operacao, db, scope);
+    return true;
+  } catch (error) {
+    if (isPeriodoFechadoError(error)) return false;
+    throw error;
+  }
 }
 
 async function upsertLancamentoFinanceiro(lancamento, client = null) {
@@ -58,32 +95,51 @@ async function upsertLancamentoFinanceiro(lancamento, client = null) {
   return result.lastID;
 }
 
-async function sincronizarLancamentosMensalidades(client = null) {
+async function sincronizarLancamentosMensalidades(scope, client = null, summary = createSyncSummary()) {
   const db = clientOrDefault(client);
+  const resolvedScope = normalizeScope(scope);
   const mensalidades = await db.all(`
     SELECT m.*,
            (
              SELECT MAX(p.data_pagamento)
              FROM pagamento p
              WHERE p.mensalidade_id = m.id
+               AND p.tenant_id = m.tenant_id
+               AND p.unit_id = m.unit_id
            ) AS data_pagamento,
            (
              SELECT MAX(p.valor_pago)
              FROM pagamento p
              WHERE p.mensalidade_id = m.id
+               AND p.tenant_id = m.tenant_id
+               AND p.unit_id = m.unit_id
            ) AS valor_pago
     FROM mensalidade m
     WHERE m.vencimento IS NOT NULL
       AND m.vencimento != '0000-00-00'
       AND m.deleted_at IS NULL
       AND COALESCE(m.status, '') != 'cancelado'
-  `);
+      AND m.tenant_id = ?
+      AND m.unit_id = ?
+  `, [resolvedScope.tenant_id, resolvedScope.unit_id]);
 
   for (const m of mensalidades) {
+    summary.mensalidadesProcessadas += 1;
     const pago = m.status === 'pago' || m.status === 'parcial';
     const dataLancamento = pago
       ? (m.data_pagamento || (m.updated_at ? String(m.updated_at).slice(0, 10) : null) || m.vencimento)
       : m.vencimento;
+
+    const canSync = await isPeriodoEditavel(
+      dataLancamento,
+      'sincronizacao financeira de mensalidade',
+      db,
+      resolvedScope
+    );
+    if (!canSync) {
+      summary.ignoradosPorFechamento += 1;
+      continue;
+    }
 
     await upsertLancamentoFinanceiro({
       descricao: `Mensalidade ${m.id}`,
@@ -97,14 +153,33 @@ async function sincronizarLancamentosMensalidades(client = null) {
       tenant_id: m.tenant_id,
       unit_id: m.unit_id,
     }, db);
+    summary.lancamentosCriadosOuAtualizados += 1;
   }
+
+  return summary;
 }
 
-async function sincronizarLancamentosVendas(client = null) {
+async function sincronizarLancamentosVendas(scope, client = null, summary = createSyncSummary()) {
   const db = clientOrDefault(client);
-  const vendas = await db.all('SELECT * FROM venda_produto WHERE deleted_at IS NULL');
+  const resolvedScope = normalizeScope(scope);
+  const vendas = await db.all(
+    'SELECT * FROM venda_produto WHERE deleted_at IS NULL AND tenant_id = ? AND unit_id = ?',
+    [resolvedScope.tenant_id, resolvedScope.unit_id]
+  );
   for (const v of vendas) {
+    summary.vendasProcessadas += 1;
     const dataLancamento = v.data_venda || new Date().toISOString().slice(0, 10);
+    const canSync = await isPeriodoEditavel(
+      dataLancamento,
+      'sincronizacao financeira de venda',
+      db,
+      resolvedScope
+    );
+    if (!canSync) {
+      summary.ignoradosPorFechamento += 1;
+      continue;
+    }
+
     await upsertLancamentoFinanceiro({
       descricao: `Venda ${v.id}`,
       tipo: 'receita',
@@ -117,13 +192,18 @@ async function sincronizarLancamentosVendas(client = null) {
       tenant_id: v.tenant_id,
       unit_id: v.unit_id,
     }, db);
+    summary.lancamentosCriadosOuAtualizados += 1;
   }
+
+  return summary;
 }
 
-async function sincronizarFinanceiro(client = null) {
-  await sincronizarLancamentosMensalidades(client);
-  await sincronizarLancamentosVendas(client);
-  return true;
+async function sincronizarFinanceiro(scope, client = null) {
+  const resolvedScope = normalizeScope(scope);
+  const summary = createSyncSummary();
+  await sincronizarLancamentosMensalidades(resolvedScope, client, summary);
+  await sincronizarLancamentosVendas(resolvedScope, client, summary);
+  return summary;
 }
 
 module.exports = {

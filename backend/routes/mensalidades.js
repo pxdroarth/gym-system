@@ -34,7 +34,7 @@ router.post('/', async (req, res, next) => {
     const scope = requireScope(req);
     assertGenericStatusChangeAllowed(req.body?.status);
     const criada = await MensalidadeService.criarMensalidade(req.body || {}, scope);
-    await sincronizarFinanceiro();
+    await sincronizarFinanceiro(scope);
     res.status(201).json(criada);
   } catch (error) {
     next(error);
@@ -86,7 +86,7 @@ router.put('/:id', async (req, res, next) => {
     const scope = requireScope(req);
     assertGenericStatusChangeAllowed(req.body?.status);
     const atualizada = await MensalidadeService.atualizarMensalidade(req.params.id, req.body || {}, scope);
-    await sincronizarFinanceiro();
+    await sincronizarFinanceiro(scope);
     res.json(atualizada);
   } catch (error) {
     next(error);
@@ -100,7 +100,7 @@ router.patch('/:id/status', async (req, res, next) => {
     const atualizada = await MensalidadeService.atualizarMensalidade(req.params.id, {
       status: req.body?.status,
     }, scope);
-    await sincronizarFinanceiro();
+    await sincronizarFinanceiro(scope);
     res.json(atualizada);
   } catch (error) {
     next(error);
@@ -131,7 +131,7 @@ router.delete('/:id', async (req, res, next) => {
       req.body?.motivo,
       scope
     );
-    await sincronizarFinanceiro();
+    await sincronizarFinanceiro(scope);
     res.json({ message: 'Mensalidade removida logicamente com sucesso' });
   } catch (error) {
     next(error);

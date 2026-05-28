@@ -35,9 +35,9 @@ router.get('/kpis', async (req, res) => {
 
 router.post('/sincronizar', requirePermission(PERMISSIONS.FINANCEIRO_SINCRONIZAR), async (req, res) => {
   try {
-    requireScope(req);
-    await sincronizarFinanceiro();
-    res.json({ ok: true, message: 'Sincronizacao executada com sucesso!' });
+    const scope = requireScope(req);
+    const resumo = await sincronizarFinanceiro(scope);
+    res.json({ ok: true, message: 'Sincronizacao executada com sucesso!', resumo });
   } catch (e) {
     console.error('Erro ao sincronizar financeiro:', e);
     res.status(500).json({ ok: false, error: e.message });
