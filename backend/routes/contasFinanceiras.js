@@ -16,6 +16,16 @@ function validarCamposObrigatorios(body, campos) {
   return null;
 }
 
+function assertContaFinanceiraManual(conta) {
+  if (String(conta?.origem || '').trim() === 'conta_financeira') return;
+
+  throw new AppError(
+    'Lancamento financeiro derivado deve ser alterado pelo fluxo de origem ou reversao apropriada.',
+    409,
+    'CONTA_FINANCEIRA_DERIVADA_PROTEGIDA'
+  );
+}
+
 router.get('/', async (req, res, next) => {
   const { tipo, status, data_inicial, data_final, descricao = '', page = 1, perPage = 10 } = req.query;
   const scope = requireScope(req);
@@ -123,6 +133,7 @@ router.put('/:id', async (req, res, next) => {
     const updated = await runTransaction(async (tx) => {
       const before = await tx.get('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
       if (!before || before.deleted_at) throw new AppError('Conta nao encontrada', 404, 'CONTA_NAO_ENCONTRADA');
+      assertContaFinanceiraManual(before);
 
       await FechamentoMensalService.assertPeriodoEditavelPorData(
         data_lancamento || before.data_lancamento,
@@ -171,6 +182,7 @@ router.patch('/:id/status', async (req, res, next) => {
     await runTransaction(async (tx) => {
       const before = await tx.get('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
       if (!before || before.deleted_at) throw new AppError('Conta nao encontrada', 404, 'CONTA_NAO_ENCONTRADA');
+      assertContaFinanceiraManual(before);
 
       await FechamentoMensalService.assertPeriodoEditavelPorData(before.data_lancamento, 'alteracao de status de conta financeira', tx, scope);
 
@@ -202,6 +214,10 @@ router.patch('/:id/status', async (req, res, next) => {
 router.post('/:id/reverter', requirePermission(PERMISSIONS.REVERSAO_EXECUTAR), async (req, res, next) => {
   try {
     const scope = requireScope(req);
+    const before = await runGet('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [req.params.id, scope.tenant_id, scope.unit_id]);
+    if (!before || before.deleted_at) throw new AppError('Conta nao encontrada', 404, 'CONTA_NAO_ENCONTRADA');
+    assertContaFinanceiraManual(before);
+
     const data = await ReversaoControladaService.reverterContaFinanceira(
       req.params.id,
       req.body || {},
@@ -222,6 +238,7 @@ router.delete('/:id', async (req, res, next) => {
     const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
     const before = await runGet('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
     if (!before || before.deleted_at) throw new AppError('Conta nao encontrada para excluir', 404, 'CONTA_NAO_ENCONTRADA');
+    assertContaFinanceiraManual(before);
 
     if (before.status === 'pago') {
       const data = await ReversaoControladaService.reverterContaFinanceira(id, req.body || {}, actor, scope);
