@@ -13,7 +13,7 @@ import Table from "../../components/ui/Table";
 import useAuth from "../../hooks/useAuth";
 import { fetchAuditLogById, fetchAuditLogs } from "../../services/auditLogService";
 import { getApiErrorMessage } from "../../utils/getApiErrorMessage";
-import { UI_PERMISSIONS } from "../../utils/permissions";
+import { UI_PERMISSIONS, userHasUiPermission } from "../../utils/permissions";
 
 const initialFilters = {
   data_inicio: "",
@@ -91,6 +91,10 @@ export default function HistoricoAtividadesPage() {
 
   const allowedUnits = user?.allowedUnits || [];
   const totalPages = Math.max(1, Math.ceil((pagination.total || 0) / pagination.limite));
+  const canViewHistorico = (
+    userHasUiPermission(user, UI_PERMISSIONS.LOGS_VISUALIZAR_TOTAL)
+    || userHasUiPermission(user, UI_PERMISSIONS.LOGS_VISUALIZAR_ESCOPO)
+  );
 
   const activeParams = useMemo(() => {
     const params = {
@@ -161,16 +165,17 @@ export default function HistoricoAtividadesPage() {
     }
   }
 
+  if (!canViewHistorico) {
+    return (
+      <EmptyState
+        title="Area restrita."
+        description="Historico de Atividades fica disponivel apenas para administradores autorizados."
+      />
+    );
+  }
+
   return (
-    <RoleGate
-      permission={UI_PERMISSIONS.HISTORICO_ATIVIDADES_VISUALIZAR}
-      fallback={
-        <EmptyState
-          title="Area restrita."
-          description="Historico de Atividades fica disponivel apenas para administradores autorizados."
-        />
-      }
-    >
+    <RoleGate permission={UI_PERMISSIONS.LOGS_VISUALIZAR_ESCOPO}>
       <div className="governance-shell">
         <PageHeader
           title="Historico de Atividades"

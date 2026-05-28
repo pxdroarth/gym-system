@@ -30,10 +30,8 @@ export const UI_PERMISSIONS = Object.freeze({
   LOGS_VISUALIZAR_TOTAL: "logs:visualizar_total",
   LOGS_VISUALIZAR_ESCOPO: "logs:visualizar_escopo",
   FINANCEIRO_VISUALIZAR: "financeiro:visualizar",
-  TENANT_OVERVIEW_VISUALIZAR: "tenant-overview:visualizar",
-  USUARIOS_INTERNOS_GERENCIAR: "usuarios-internos:gerenciar",
+  TENANT_CONSOLIDADO_VISUALIZAR: "tenant:consolidado_visualizar",
   PLATFORM_ONBOARDING_GERENCIAR: "platform-onboarding:gerenciar",
-  HISTORICO_ATIVIDADES_VISUALIZAR: "historico-atividades:visualizar",
 });
 
 const ROLE_UI_PERMISSIONS = Object.freeze({

@@ -53,7 +53,7 @@ export default function TenantOverviewPage() {
 
   return (
     <RoleGate
-      permission={UI_PERMISSIONS.TENANT_OVERVIEW_VISUALIZAR}
+      permission={UI_PERMISSIONS.TENANT_CONSOLIDADO_VISUALIZAR}
       fallback={
         <EmptyState
           title="Area restrita"
