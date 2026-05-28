@@ -4,9 +4,10 @@ const MensalidadeService = require('../services/MensalidadeService');
 const { sincronizarFinanceiro } = require('../services/FinanceService');
 const AuditService = require('../services/AuditService');
 const ReversaoControladaService = require('../services/ReversaoControladaService');
+const AppError = require('../errors/AppError');
 const { PERMISSIONS } = require('../constants/userRoles');
 const { MENSALIDADE_STATUS } = require('../constants/domainStates');
-const { requirePermission, assertPermission } = require('../middlewares/requirePermission');
+const { requirePermission } = require('../middlewares/requirePermission');
 const { actorWithScope, requireScope } = require('../helpers/scope');
 
 function isFinancialMensalidadeStatus(status) {
@@ -14,19 +15,24 @@ function isFinancialMensalidadeStatus(status) {
   return [MENSALIDADE_STATUS.PAGO, MENSALIDADE_STATUS.PARCIAL].includes(normalized);
 }
 
-function assertPagamentoPermissionForFinancialStatus(req, status) {
+function assertGenericStatusChangeAllowed(status) {
   // "pago" e "parcial" produzem efeito financeiro real. A rota generica de
-  // mensalidade nao pode virar atalho para registrar recebimento sem passar
-  // pela mesma autorizacao exigida em pagamentos.
+  // mensalidade nao pode virar atalho para registrar recebimento; use o fluxo
+  // canonico de pagamento para manter pagamento, mensalidade e financeiro juntos.
   if (isFinancialMensalidadeStatus(status)) {
-    assertPermission(req, PERMISSIONS.PAGAMENTOS_REGISTRAR);
+    throw new AppError(
+      'Status financeiro deve ser alterado pelo fluxo de pagamento.',
+      400,
+      'MENSALIDADE_STATUS_FINANCEIRO_CANONICO',
+      { status }
+    );
   }
 }
 
 router.post('/', async (req, res, next) => {
   try {
     const scope = requireScope(req);
-    assertPagamentoPermissionForFinancialStatus(req, req.body?.status);
+    assertGenericStatusChangeAllowed(req.body?.status);
     const criada = await MensalidadeService.criarMensalidade(req.body || {}, scope);
     await sincronizarFinanceiro();
     res.status(201).json(criada);
@@ -78,7 +84,7 @@ router.get('/aluno/:aluno_id', async (req, res, next) => {
 router.put('/:id', async (req, res, next) => {
   try {
     const scope = requireScope(req);
-    assertPagamentoPermissionForFinancialStatus(req, req.body?.status);
+    assertGenericStatusChangeAllowed(req.body?.status);
     const atualizada = await MensalidadeService.atualizarMensalidade(req.params.id, req.body || {}, scope);
     await sincronizarFinanceiro();
     res.json(atualizada);
@@ -90,7 +96,7 @@ router.put('/:id', async (req, res, next) => {
 router.patch('/:id/status', async (req, res, next) => {
   try {
     const scope = requireScope(req);
-    assertPagamentoPermissionForFinancialStatus(req, req.body?.status);
+    assertGenericStatusChangeAllowed(req.body?.status);
     const atualizada = await MensalidadeService.atualizarMensalidade(req.params.id, {
       status: req.body?.status,
     }, scope);
