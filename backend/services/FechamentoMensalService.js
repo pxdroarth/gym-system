@@ -46,6 +46,9 @@ async function assertPeriodoEditavelPorData(data, operacao, client = null, scope
   const { ano, mes } = periodoDeData(data);
   const fechamento = await obterFechamento(ano, mes, client, scope);
 
+  // Fechamento mensal funciona como trava transversal contra escrita
+  // retroativa; qualquer modulo com efeito operacional/financeiro datado
+  // precisa respeitar esse guard antes de persistir mudancas.
   if (
     fechamento &&
     [FECHAMENTO_STATUS.FECHADO, FECHAMENTO_STATUS.FECHADO_COM_INCONSISTENCIAS].includes(fechamento.status)

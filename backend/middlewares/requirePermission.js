@@ -2,6 +2,9 @@ const AppError = require('../errors/AppError');
 const { roleHasPermission, USER_STATUS } = require('../constants/userRoles');
 
 function assertActiveOperator(req) {
+  // A validacao de permissao parte de um operador autenticado e ativo.
+  // Nao basta "ter o papel": sessao invalida, operador inativo ou bloqueado
+  // devem falhar antes de qualquer check nominal de permissao.
   if (req?.authError) {
     throw new AppError(req.authError.message, 401, req.authError.code);
   }

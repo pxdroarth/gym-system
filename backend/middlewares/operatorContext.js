@@ -2,7 +2,8 @@ const { runGet } = require('../dbHelper');
 const { USER_STATUS } = require('../constants/userRoles');
 const AuthService = require('../services/AuthService');
 
-// Fallback legado para local/teste; nao deve ficar aberto por padrao fora desses ambientes.
+// Fallback legado para smoke/local antigo. Headers x-operator-id/x-user-id
+// so podem atuar como identidade em ambiente controlado ou opt-in explicito.
 function isLegacyOperatorHeaderFallbackAllowed() {
   return process.env.NODE_ENV === 'test' || String(process.env.ALLOW_LEGACY_OPERATOR_HEADERS || '').trim().toLowerCase() === 'true';
 }

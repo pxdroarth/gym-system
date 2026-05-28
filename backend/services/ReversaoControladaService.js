@@ -51,6 +51,8 @@ async function criarRegistroReversao(tx, { modulo, tipo, registroId, motivo, act
 async function criarLancamentoInverso(tx, { reversao, lancamento, descricao }) {
   if (!lancamento) return null;
 
+  // Reversao controlada nao apaga efeito financeiro anterior: ela cria a
+  // contrapartida auditavel que preserva rastreabilidade contabil.
   const result = await tx.run(
     `INSERT INTO conta_financeira
       (descricao, tipo, valor, data_lancamento, status, plano_contas_id, observacao, origem, origem_id, tenant_id, unit_id, created_at, updated_at)

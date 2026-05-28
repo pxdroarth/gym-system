@@ -35,6 +35,8 @@ function addExactFilter(where, params, column, value) {
 
 function resolveAuditAccess(req) {
   const operator = assertActiveOperator(req);
+  // Leitura total e reservada a administracao de plataforma; leitura por
+  // escopo continua limitada a tenant/unidades efetivamente autorizadas.
   const canViewTotal = roleHasPermission(operator.papel, PERMISSIONS.LOGS_VISUALIZAR_TOTAL);
   const canViewScope = roleHasPermission(operator.papel, PERMISSIONS.LOGS_VISUALIZAR_ESCOPO);
 

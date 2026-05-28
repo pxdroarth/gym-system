@@ -15,6 +15,9 @@ function isFinancialMensalidadeStatus(status) {
 }
 
 function assertPagamentoPermissionForFinancialStatus(req, status) {
+  // "pago" e "parcial" produzem efeito financeiro real. A rota generica de
+  // mensalidade nao pode virar atalho para registrar recebimento sem passar
+  // pela mesma autorizacao exigida em pagamentos.
   if (isFinancialMensalidadeStatus(status)) {
     assertPermission(req, PERMISSIONS.PAGAMENTOS_REGISTRAR);
   }

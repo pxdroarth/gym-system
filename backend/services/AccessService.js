@@ -286,6 +286,11 @@ async function registrarAcesso(payload = {}, scope = null) {
   };
 }
 
+/**
+ * Registra a tentativa de acesso na mesma ordem usada pela decisao de dominio:
+ * aluno e status operacional, vinculo/responsavel financeiro, mensalidade
+ * vigente, bloqueios e, por fim, auditoria de excecoes manuais.
+ */
 async function registrarTentativaAcesso(alunoId, options = {}) {
   const avaliacao = await avaliarAcessoAluno(alunoId, { ...options, liberacaoManual: false });
 

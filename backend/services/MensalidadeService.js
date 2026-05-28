@@ -348,6 +348,9 @@ async function registrarPagamento(payload = {}, actor, scope = null) {
     const pagamentoAntes = await tx.get('SELECT * FROM pagamento WHERE mensalidade_id = ?', [mensalidade_id]);
     let pagamentoId;
 
+    // O registro de pagamento precisa permanecer idempotente no dominio:
+    // atualiza ou cria o pagamento, reflete o status da mensalidade, faz
+    // upsert do lancamento financeiro e audita tudo no mesmo contexto.
     if (pagamentoAntes) {
       await tx.run(
         'UPDATE pagamento SET data_pagamento = ?, valor_pago = ?, valor_previsto = ?, tenant_id = COALESCE(tenant_id, ?), unit_id = COALESCE(unit_id, ?) WHERE id = ?',

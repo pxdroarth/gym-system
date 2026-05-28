@@ -70,6 +70,8 @@ router.post('/', async (req, res, next) => {
   try {
     const scope = requireScope(req);
     if (req.body?.liberacao_manual) {
+      // Liberacao manual e excecao operacional auditada para override de um
+      // bloqueio real; nao substitui a avaliacao normal de acesso.
       assertPermission(req, PERMISSIONS.ACESSO_LIBERACAO_MANUAL);
       const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
       const resultado = await AccessService.registrarTentativaAcesso(req.body.aluno_id, {
@@ -128,6 +130,8 @@ router.post('/mock-hikvision', async (req, res, next) => {
     const scope = requireScope(req);
     const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
     if (liberacao_manual) {
+      // O mock preserva o mesmo contrato de seguranca da liberacao manual real
+      // para nao criar caminho "de teste" mais permissivo do que producao.
       assertPermission(req, PERMISSIONS.ACESSO_LIBERACAO_MANUAL);
     }
 
