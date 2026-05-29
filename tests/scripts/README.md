@@ -90,10 +90,10 @@ node tests\scripts\smoke-acesso.js
 - aluno ativo sem mensalidade bloqueado.
 - mensalidade vencida bloqueada.
 - mensalidade parcial vencida bloqueada.
+- mensalidade parcial dentro do prazo bloqueada por ausencia de cobertura paga vigente.
 - mensalidade em aberto dentro do prazo bloqueada por ausencia de cobertura paga vigente.
 - vencimento no dia atual com mensalidade em aberto bloqueado por ausencia de cobertura paga vigente.
 - mensalidade paga liberada.
-- mensalidade parcial permanece conforme a regra atual coberta pelo smoke.
 - `POST /acessos` comum nao burla a regra.
 - liberacao manual sem motivo bloqueada.
 - liberacao manual com motivo/operador auditada em `audit_log`.

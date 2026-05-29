@@ -219,17 +219,6 @@ async function avaliarAcessoAluno(alunoId, options = {}) {
     );
   }
 
-  if (mensalidadeVigente.status === MENSALIDADE_STATUS.PARCIAL) {
-    return {
-      ok: true,
-      status: ACESSO_STATUS.LIBERADO_COM_RESTRICAO,
-      resultado: ACESSO_RESULTADO.PERMITIDO,
-      motivo: 'mensalidade_parcial_no_prazo',
-      aluno,
-      responsavel_id,
-    };
-  }
-
   if (mensalidadeVigente.status !== MENSALIDADE_STATUS.PAGO) {
     return respostaBloqueada(
       ACESSO_STATUS.BLOQUEADO_INADIMPLENCIA,

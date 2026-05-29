@@ -121,6 +121,7 @@ async function createFixtures() {
     'SEM_MENSALIDADE',
     'MENSALIDADE_VENCIDA',
     'PARCIAL_VENCIDA',
+    'PARCIAL_NO_PRAZO',
     'EM_ABERTO_NO_PRAZO',
     'VENCIMENTO_HOJE',
     'PAGO_REGULAR',
@@ -150,6 +151,7 @@ async function createFixtures() {
 
   await createMensalidade('MENSALIDADE_VENCIDA', MENSALIDADE_STATUS.VENCIDO, isoDate(-1));
   await createMensalidade('PARCIAL_VENCIDA', MENSALIDADE_STATUS.PARCIAL, isoDate(-1));
+  await createMensalidade('PARCIAL_NO_PRAZO', MENSALIDADE_STATUS.PARCIAL, isoDate(5));
   await createMensalidade('EM_ABERTO_NO_PRAZO', MENSALIDADE_STATUS.EM_ABERTO, isoDate(5));
   await createMensalidade('VENCIMENTO_HOJE', MENSALIDADE_STATUS.EM_ABERTO, isoDate(0));
   await createMensalidade('PAGO_REGULAR', MENSALIDADE_STATUS.PAGO, isoDate(5));
@@ -269,6 +271,9 @@ async function run() {
       throw new Error(`resultado=${result.resultado}, ok=${result.ok}`);
     }
   });
+
+  await runCase('parcial dentro do prazo bloqueada', () =>
+    expectAccessCase('parcial dentro do prazo bloqueada', 'PARCIAL_NO_PRAZO', false, 'sem_cobertura_paga_vigente'));
 
   await runCase('em aberto dentro do prazo bloqueado', () =>
     expectAccessCase('em aberto dentro do prazo bloqueado', 'EM_ABERTO_NO_PRAZO', false, 'sem_cobertura_paga_vigente'));
