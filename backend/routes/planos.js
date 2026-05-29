@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { runQuery, runGet, runExecute } = require('../dbHelper');
+const AppError = require('../errors/AppError');
 const { requireScope } = require('../helpers/scope');
 const { requirePermission } = require('../middlewares/requirePermission');
 const { PERMISSIONS } = require('../constants/userRoles');
+const { calcularPreviewContratacaoRenovacao } = require('../services/CoberturaService');
 const {
   POLICY_FIELDS,
   normalizarPoliticaPlano,
@@ -66,6 +68,51 @@ function validarPlano(payload) {
   if (erroPolitica) return erroPolitica;
   return null;
 }
+
+router.post('/preview-cobertura', async (req, res, next) => {
+  try {
+    const scope = requireScope(req);
+    const alunoId = Number(req.body?.aluno_id);
+    const planoId = Number(req.body?.plano_id);
+
+    if (!alunoId) {
+      throw new AppError('aluno_id e obrigatorio', 400, 'COBERTURA_PREVIEW_ALUNO_ID_OBRIGATORIO');
+    }
+
+    if (!planoId) {
+      throw new AppError('plano_id e obrigatorio', 400, 'COBERTURA_PREVIEW_PLANO_ID_OBRIGATORIO');
+    }
+
+    const aluno = await runGet(
+      'SELECT * FROM aluno WHERE id = ? AND tenant_id = ? AND unit_id = ?',
+      [alunoId, scope.tenant_id, scope.unit_id]
+    );
+    if (!aluno) {
+      throw new AppError('Aluno nao encontrado no escopo atual', 404, 'ALUNO_NAO_ENCONTRADO_NO_ESCOPO');
+    }
+
+    const plano = await runGet(
+      'SELECT * FROM plano WHERE id = ? AND tenant_id = ?',
+      [planoId, scope.tenant_id]
+    );
+    if (!plano) {
+      throw new AppError('Plano nao encontrado no escopo atual', 404, 'PLANO_NAO_ENCONTRADO_NO_ESCOPO');
+    }
+
+    const preview = calcularPreviewContratacaoRenovacao({
+      aluno,
+      plano,
+      data_inicio: req.body?.data_inicio,
+      data_referencia: req.body?.data_referencia,
+      valor_manual: req.body?.valor_manual,
+      desconto_manual: req.body?.desconto_manual,
+    });
+
+    res.json(preview);
+  } catch (error) {
+    next(error);
+  }
+});
 
 router.get('/', async (req, res) => {
   try {
