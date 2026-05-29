@@ -5,13 +5,53 @@ const { requireScope } = require('../helpers/scope');
 const { requirePermission } = require('../middlewares/requirePermission');
 const { PERMISSIONS } = require('../constants/userRoles');
 
-function normalizePlanoPayload(body = {}) {
+const TIPO_COBRANCA_VALUES = Object.freeze([
+  'AVULSO_MENSAL',
+  'PACOTE_PRE_PAGO',
+  'RECORRENTE_CONTRATUAL',
+  'CORTESIA_ISENTO',
+]);
+
+const DEFAULT_PLANO_POLICY = Object.freeze({
+  tipo_cobranca: 'AVULSO_MENSAL',
+  exige_pagamento_ato: 1,
+  gera_divida_automatica: 0,
+  gera_cobertura_apos_pagamento: 1,
+  permite_renovacao_avulsa: 1,
+  desconto_percentual: 0,
+});
+
+function normalizeFlag(value, fallback) {
+  if (value === undefined || value === null || value === '') return Number(fallback);
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  if (typeof value === 'number') return value;
+
+  const normalized = String(value).trim().toLowerCase();
+  if (['1', 'true', 'sim', 'yes', 'on'].includes(normalized)) return 1;
+  if (['0', 'false', 'nao', 'não', 'no', 'off'].includes(normalized)) return 0;
+  return value;
+}
+
+function normalizeTipoCobranca(value, fallback) {
+  return String(value || fallback || DEFAULT_PLANO_POLICY.tipo_cobranca).trim().toUpperCase();
+}
+
+function normalizePlanoPayload(body = {}, current = {}) {
   const nome = String(body.nome || '').trim();
   const valor_base = Number(body.valor_base);
   const descricao = body.descricao ? String(body.descricao).trim() : null;
   const duracao_em_dias = Number(body.duracao_em_dias || 30);
   const compartilhado = Number(body.compartilhado ? 1 : 0);
   const quantidade_max_pessoas = Number(body.quantidade_max_pessoas || 1);
+  const tipo_cobranca = normalizeTipoCobranca(body.tipo_cobranca, current.tipo_cobranca);
+  const exige_pagamento_ato = normalizeFlag(body.exige_pagamento_ato, current.exige_pagamento_ato ?? DEFAULT_PLANO_POLICY.exige_pagamento_ato);
+  const gera_divida_automatica = normalizeFlag(body.gera_divida_automatica, current.gera_divida_automatica ?? DEFAULT_PLANO_POLICY.gera_divida_automatica);
+  const gera_cobertura_apos_pagamento = normalizeFlag(
+    body.gera_cobertura_apos_pagamento,
+    current.gera_cobertura_apos_pagamento ?? DEFAULT_PLANO_POLICY.gera_cobertura_apos_pagamento
+  );
+  const permite_renovacao_avulsa = normalizeFlag(body.permite_renovacao_avulsa, current.permite_renovacao_avulsa ?? DEFAULT_PLANO_POLICY.permite_renovacao_avulsa);
+  const desconto_percentual = Number(body.desconto_percentual ?? current.desconto_percentual ?? DEFAULT_PLANO_POLICY.desconto_percentual);
 
   return {
     nome,
@@ -20,6 +60,12 @@ function normalizePlanoPayload(body = {}) {
     duracao_em_dias,
     compartilhado,
     quantidade_max_pessoas,
+    tipo_cobranca,
+    exige_pagamento_ato,
+    gera_divida_automatica,
+    gera_cobertura_apos_pagamento,
+    permite_renovacao_avulsa,
+    desconto_percentual,
   };
 }
 
@@ -30,6 +76,11 @@ function validarPlano(payload) {
   if (!Number.isInteger(payload.quantidade_max_pessoas) || payload.quantidade_max_pessoas <= 0) return 'quantidade_max_pessoas inválida';
   if (payload.quantidade_max_pessoas > 1 && payload.compartilhado !== 1) return 'Planos com mais de 1 pessoa devem ser compartilhados';
   if (payload.quantidade_max_pessoas === 1 && payload.compartilhado !== 0) return 'Plano individual deve ter compartilhado = 0';
+  if (!TIPO_COBRANCA_VALUES.includes(payload.tipo_cobranca)) return `tipo_cobranca inválido. Use: ${TIPO_COBRANCA_VALUES.join(', ')}`;
+  for (const field of ['exige_pagamento_ato', 'gera_divida_automatica', 'gera_cobertura_apos_pagamento', 'permite_renovacao_avulsa']) {
+    if (![0, 1].includes(payload[field])) return `${field} deve ser 0 ou 1`;
+  }
+  if (!Number.isFinite(payload.desconto_percentual) || payload.desconto_percentual < 0) return 'desconto_percentual inválido';
   return null;
 }
 
@@ -104,8 +155,12 @@ router.post('/', requirePermission(PERMISSIONS.PLANOS_GERENCIAR), async (req, re
     if (existente) return res.status(409).json({ error: 'Já existe um plano com esse nome' });
 
     const result = await runExecute(
-      `INSERT INTO plano (nome, valor_base, descricao, duracao_em_dias, compartilhado, quantidade_max_pessoas, tenant_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO plano (
+        nome, valor_base, descricao, duracao_em_dias, compartilhado, quantidade_max_pessoas, tenant_id,
+        tipo_cobranca, exige_pagamento_ato, gera_divida_automatica, gera_cobertura_apos_pagamento,
+        permite_renovacao_avulsa, desconto_percentual
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         payload.nome,
         payload.valor_base,
@@ -114,6 +169,12 @@ router.post('/', requirePermission(PERMISSIONS.PLANOS_GERENCIAR), async (req, re
         payload.compartilhado,
         payload.quantidade_max_pessoas,
         scope.tenant_id,
+        payload.tipo_cobranca,
+        payload.exige_pagamento_ato,
+        payload.gera_divida_automatica,
+        payload.gera_cobertura_apos_pagamento,
+        payload.permite_renovacao_avulsa,
+        payload.desconto_percentual,
       ]
     );
 
@@ -128,14 +189,14 @@ router.put('/:id', requirePermission(PERMISSIONS.PLANOS_GERENCIAR), async (req, 
   const id = parseInt(req.params.id);
   if (!id) return res.status(400).json({ error: 'ID inválido' });
 
-  const payload = normalizePlanoPayload(req.body);
-  const erro = validarPlano(payload);
-  if (erro) return res.status(400).json({ error: erro });
-
   try {
     const scope = requireScope(req);
     const atual = await runGet('SELECT * FROM plano WHERE id = ? AND tenant_id = ?', [id, scope.tenant_id]);
     if (!atual) return res.status(404).json({ error: 'Plano não encontrado para atualizar' });
+
+    const payload = normalizePlanoPayload(req.body, atual);
+    const erro = validarPlano(payload);
+    if (erro) return res.status(400).json({ error: erro });
 
     const ocupacao = await runGet(
       `SELECT COUNT(*) AS total FROM aluno WHERE plano_id = ? AND status = 'ativo' AND tenant_id = ? AND unit_id = ?`,
@@ -150,7 +211,9 @@ router.put('/:id', requirePermission(PERMISSIONS.PLANOS_GERENCIAR), async (req, 
 
     await runExecute(
       `UPDATE plano
-       SET nome = ?, valor_base = ?, descricao = ?, duracao_em_dias = ?, compartilhado = ?, quantidade_max_pessoas = ?
+       SET nome = ?, valor_base = ?, descricao = ?, duracao_em_dias = ?, compartilhado = ?, quantidade_max_pessoas = ?,
+           tipo_cobranca = ?, exige_pagamento_ato = ?, gera_divida_automatica = ?,
+           gera_cobertura_apos_pagamento = ?, permite_renovacao_avulsa = ?, desconto_percentual = ?
        WHERE id = ? AND tenant_id = ?`,
       [
         payload.nome,
@@ -159,6 +222,12 @@ router.put('/:id', requirePermission(PERMISSIONS.PLANOS_GERENCIAR), async (req, 
         payload.duracao_em_dias,
         payload.compartilhado,
         payload.quantidade_max_pessoas,
+        payload.tipo_cobranca,
+        payload.exige_pagamento_ato,
+        payload.gera_divida_automatica,
+        payload.gera_cobertura_apos_pagamento,
+        payload.permite_renovacao_avulsa,
+        payload.desconto_percentual,
         id,
         scope.tenant_id,
       ]

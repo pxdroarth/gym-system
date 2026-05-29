@@ -440,6 +440,15 @@ async function ensurePlanoContasTable() {
   `);
 }
 
+async function ensurePlanoPolicyColumns() {
+  await addColumnIfTableExists('plano', "tipo_cobranca TEXT DEFAULT 'AVULSO_MENSAL'");
+  await addColumnIfTableExists('plano', 'exige_pagamento_ato INTEGER DEFAULT 1');
+  await addColumnIfTableExists('plano', 'gera_divida_automatica INTEGER DEFAULT 0');
+  await addColumnIfTableExists('plano', 'gera_cobertura_apos_pagamento INTEGER DEFAULT 1');
+  await addColumnIfTableExists('plano', 'permite_renovacao_avulsa INTEGER DEFAULT 1');
+  await addColumnIfTableExists('plano', 'desconto_percentual REAL DEFAULT 0');
+}
+
 async function ensureReversaoSoftDeleteColumns() {
   await addColumnIfMissing('mensalidade', 'deleted_at TEXT');
   await addColumnIfMissing('mensalidade', 'reversao_controlada_id INTEGER');
@@ -622,6 +631,7 @@ async function ensureSchema() {
   await ensureLegacyAdministrativeTables();
   await ensurePlanoAssociadoTable();
   await ensurePlanoContasTable();
+  await ensurePlanoPolicyColumns();
   await ensurePlanoAssociadoColumns();
   await ensureReversaoSoftDeleteColumns();
   await ensureScopeColumns();
