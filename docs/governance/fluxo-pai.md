@@ -573,6 +573,26 @@ Automatizar resposta depois
 ## STATUS
 ⏳ FUTURA
 
+## Regra comercial consolidada de cobertura e cobrança
+
+- acesso depende de cobertura paga vigente
+- sem cobertura paga vigente, o acesso deve ser bloqueado
+- plano avulso/mensal sem contrato nao gera divida automatica se o aluno faltar, parar ou nao renovar
+- mensalidade `em_aberto` em plano avulso representa pendencia operacional ou ciclo nao confirmado, nao inadimplencia universal
+- quando o aluno avulso voltar, paga novo ciclo e recebe nova cobertura; a pendencia antiga nao deve ser assumida automaticamente como divida real
+- planos trimestral, semestral e anual sao pacotes pre-pagos; o pagamento ocorre no ato e a cobertura/vigencia nasce para todo o periodo contratado
+- pacote pre-pago nao deve gerar 3/6/12 mensalidades em aberto como divida duplicada
+- cobranca/pagamento e cobertura/vigencia de acesso sao conceitos relacionados, mas distintos; inadimplencia real exige contrato, pacote, consumo autorizado, recorrencia assumida ou regra comercial explicita
+- dashboards futuros devem separar receita recebida, cobertura ativa, pendencias operacionais e inadimplencia real
+- `em_aberto` de plano avulso nao deve inflar automaticamente inadimplencia nem receita a receber real
+- cron/scheduler futuro nao deve criar mensalidade automaticamente para todo aluno ativo
+- cron futuro deve ser apenas de diagnostico/reconciliacao idempotente, chamando service transacional e idempotente que continue sendo o dono da regra
+- em monolito local, scheduler futuro pode usar `node-cron`, mas deve nascer desativavel por configuracao e preparado para lock/idempotencia pensando em nuvem e multiplas instancias
+- a implementacao futura nao deve depender de hardcode por nome de plano, texto livre, duracao fixa ou `ifs` espalhados em `AccessService`, `MensalidadeService`, `FinanceiroService` ou cron
+- a politica deve ser parametrizada por campos/configuracao do plano e interpretada por camada central de dominio, com atributos como `tipo_cobranca`, `duracao_meses` ou `duracao_dias`, `exige_pagamento_ato`, `gera_divida_automatica`, `gera_cobertura_apos_pagamento`, `permite_renovacao_avulsa` e politica de desconto
+- a decisao de cobranca e acesso deve consultar um service central de politica de plano/cobertura para evitar duplicacao de regra e divergencia entre modulos
+- exemplo conceitual: `AVULSO_MENSAL` exige pagamento no ato, gera cobertura apos pagamento e nao gera divida automatica; `PACOTE_PRE_PAGO` exige pagamento no ato, gera cobertura pela vigencia contratada e nao gera mensalidades em aberto duplicadas; `RECORRENTE_CONTRATUAL` fica para futuro, apenas quando existir contrato ou regra comercial explicita, podendo gerar divida automatica
+
 ## Objetivo
 
 Transformar o dashboard em BI operacional real.
