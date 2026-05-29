@@ -270,11 +270,11 @@ async function run() {
     }
   });
 
-  await runCase('em aberto dentro do prazo liberado', () =>
-    expectAccessCase('em aberto dentro do prazo liberado', 'EM_ABERTO_NO_PRAZO', true));
+  await runCase('em aberto dentro do prazo bloqueado', () =>
+    expectAccessCase('em aberto dentro do prazo bloqueado', 'EM_ABERTO_NO_PRAZO', false, 'sem_cobertura_paga_vigente'));
 
-  await runCase('vencimento hoje liberado', () =>
-    expectAccessCase('vencimento hoje liberado', 'VENCIMENTO_HOJE', true));
+  await runCase('vencimento hoje bloqueado', () =>
+    expectAccessCase('vencimento hoje bloqueado', 'VENCIMENTO_HOJE', false, 'sem_cobertura_paga_vigente'));
 
   await runCase('mensalidade paga liberada', () =>
     expectAccessCase('mensalidade paga liberada', 'PAGO_REGULAR', true));

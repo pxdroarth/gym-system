@@ -230,10 +230,10 @@ async function avaliarAcessoAluno(alunoId, options = {}) {
     };
   }
 
-  if (![MENSALIDADE_STATUS.PAGO, MENSALIDADE_STATUS.EM_ABERTO].includes(mensalidadeVigente.status)) {
+  if (mensalidadeVigente.status !== MENSALIDADE_STATUS.PAGO) {
     return respostaBloqueada(
       ACESSO_STATUS.BLOQUEADO_INADIMPLENCIA,
-      'sem_mensalidade_vigente',
+      'sem_cobertura_paga_vigente',
       aluno,
       responsavel_id
     );
