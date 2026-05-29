@@ -46,11 +46,11 @@ async function upsertLancamentoFinanceiro(lancamento, client = null) {
   const hasScope = Boolean(lancamento.tenant_id && lancamento.unit_id);
   const existente = hasScope
     ? await db.get(
-      'SELECT id FROM conta_financeira WHERE origem = ? AND origem_id = ? AND tenant_id = ? AND unit_id = ?',
+      'SELECT id FROM conta_financeira WHERE origem = ? AND origem_id = ? AND tenant_id = ? AND unit_id = ? AND deleted_at IS NULL',
       [lancamento.origem, lancamento.origem_id, lancamento.tenant_id, lancamento.unit_id]
     )
     : await db.get(
-      'SELECT id FROM conta_financeira WHERE origem = ? AND origem_id = ?',
+      'SELECT id FROM conta_financeira WHERE origem = ? AND origem_id = ? AND deleted_at IS NULL',
       [lancamento.origem, lancamento.origem_id]
     );
 
@@ -119,6 +119,7 @@ async function sincronizarLancamentosMensalidades(scope, client = null, summary 
       AND m.vencimento != '0000-00-00'
       AND m.deleted_at IS NULL
       AND COALESCE(m.status, '') != 'cancelado'
+      AND COALESCE(m.status, '') != 'em_reversao_controlada'
       AND m.tenant_id = ?
       AND m.unit_id = ?
   `, [resolvedScope.tenant_id, resolvedScope.unit_id]);

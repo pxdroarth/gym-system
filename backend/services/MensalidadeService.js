@@ -59,6 +59,62 @@ function validarStatusMensalidade(status) {
   return statusNormalizado;
 }
 
+function isMensalidadeComEfeitoPago(status) {
+  return [MENSALIDADE_STATUS.PAGO, MENSALIDADE_STATUS.PARCIAL].includes(String(status || '').toLowerCase());
+}
+
+function isLancamentoPago(lancamento) {
+  return String(lancamento?.status || '').toLowerCase() === 'pago';
+}
+
+async function listarLancamentosDerivadosAtivos(tx, mensalidade, scope = null) {
+  const tenantId = scope?.tenant_id || mensalidade.tenant_id || null;
+  const unitId = scope?.unit_id || mensalidade.unit_id || null;
+  const scoped = tenantId && unitId;
+  const params = ['mensalidade', mensalidade.id];
+
+  let sql = `
+    SELECT *
+    FROM conta_financeira
+    WHERE origem = ?
+      AND origem_id = ?
+      AND deleted_at IS NULL`;
+
+  if (scoped) {
+    sql += ' AND tenant_id = ? AND unit_id = ?';
+    params.push(tenantId, unitId);
+  }
+
+  sql += ' ORDER BY id ASC';
+  return tx.all(sql, params);
+}
+
+async function neutralizarLancamentosDerivadosCancelaveis(tx, mensalidade, scope = null) {
+  const lancamentos = await listarLancamentosDerivadosAtivos(tx, mensalidade, scope);
+
+  if (isMensalidadeComEfeitoPago(mensalidade.status) || lancamentos.some(isLancamentoPago)) {
+    throw new AppError(
+      'Mensalidade com efeito financeiro pago deve ser revertida pelo fluxo de reversão controlada.',
+      409,
+      'MENSALIDADE_REQUER_REVERSAO_CONTROLADA'
+    );
+  }
+
+  for (const lancamento of lancamentos) {
+    await FechamentoMensalService.assertPeriodoEditavelPorData(
+      lancamento.data_lancamento || mensalidade.vencimento || mensalidade.updated_at,
+      'neutralizacao de lancamento financeiro derivado de mensalidade',
+      tx,
+      scope
+    );
+
+    await tx.run(
+      'UPDATE conta_financeira SET deleted_at = datetime(\'now\'), updated_at = datetime(\'now\') WHERE id = ?',
+      [lancamento.id]
+    );
+  }
+}
+
 async function criarMensalidade(payload = {}, scope = null) {
   const {
     aluno_id,
@@ -250,16 +306,23 @@ async function atualizarMensalidade(id, payload = {}, scope = null) {
     : await runGet('SELECT * FROM plano WHERE id = ?', [atual.plano_id]);
   const inicioCiclo = startOfCycle(venc);
   const dataFim = addDays(inicioCiclo, Math.max(0, Number(plano?.duracao_em_dias || 30) - 1));
-  await FechamentoMensalService.assertPeriodoEditavelPorData(venc, 'edicao de mensalidade', null, scope);
 
-  await runExecute(
-    `UPDATE mensalidade
-     SET valor_cobrado = ?, desconto_aplicado = ?, data_inicio = ?, data_fim = ?, vencimento = ?, observacoes = ?, status = ?, updated_at = CURRENT_TIMESTAMP
-     WHERE id = ?`,
-    [valor, desconto, inicioCiclo, dataFim, venc, payload.observacoes || '', statusNormalizado, mensalidadeId]
-  );
+  return runTransaction(async (tx) => {
+    await FechamentoMensalService.assertPeriodoEditavelPorData(venc, 'edicao de mensalidade', tx, scope);
 
-  return runGet('SELECT * FROM mensalidade WHERE id = ?', [mensalidadeId]);
+    if (payload.status && statusNormalizado === MENSALIDADE_STATUS.CANCELADO) {
+      await neutralizarLancamentosDerivadosCancelaveis(tx, atual, scope);
+    }
+
+    await tx.run(
+      `UPDATE mensalidade
+       SET valor_cobrado = ?, desconto_aplicado = ?, data_inicio = ?, data_fim = ?, vencimento = ?, observacoes = ?, status = ?, updated_at = CURRENT_TIMESTAMP
+       WHERE id = ?`,
+      [valor, desconto, inicioCiclo, dataFim, venc, payload.observacoes || '', statusNormalizado, mensalidadeId]
+    );
+
+    return tx.get('SELECT * FROM mensalidade WHERE id = ?', [mensalidadeId]);
+  });
 }
 
 async function removerMensalidade(id, actor, motivo = null, scope = null) {
@@ -275,6 +338,8 @@ async function removerMensalidade(id, actor, motivo = null, scope = null) {
     }
 
     await FechamentoMensalService.assertPeriodoEditavelPorData(before.vencimento || before.updated_at, 'remocao logica de mensalidade', tx, scope);
+    await neutralizarLancamentosDerivadosCancelaveis(tx, before, scope);
+
     await tx.run(
       'UPDATE mensalidade SET deleted_at = datetime(\'now\'), updated_at = CURRENT_TIMESTAMP WHERE id = ?',
       [mensalidadeId]
