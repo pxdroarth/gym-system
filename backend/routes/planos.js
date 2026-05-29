@@ -4,36 +4,28 @@ const { runQuery, runGet, runExecute } = require('../dbHelper');
 const { requireScope } = require('../helpers/scope');
 const { requirePermission } = require('../middlewares/requirePermission');
 const { PERMISSIONS } = require('../constants/userRoles');
+const {
+  POLICY_FIELDS,
+  normalizarPoliticaPlano,
+  validarPoliticaPlanoInput,
+} = require('../services/PlanoPolicyService');
 
-const TIPO_COBRANCA_VALUES = Object.freeze([
-  'AVULSO_MENSAL',
-  'PACOTE_PRE_PAGO',
-  'RECORRENTE_CONTRATUAL',
-  'CORTESIA_ISENTO',
-]);
-
-const DEFAULT_PLANO_POLICY = Object.freeze({
-  tipo_cobranca: 'AVULSO_MENSAL',
-  exige_pagamento_ato: 1,
-  gera_divida_automatica: 0,
-  gera_cobertura_apos_pagamento: 1,
-  permite_renovacao_avulsa: 1,
-  desconto_percentual: 0,
-});
-
-function normalizeFlag(value, fallback) {
-  if (value === undefined || value === null || value === '') return Number(fallback);
-  if (typeof value === 'boolean') return value ? 1 : 0;
-  if (typeof value === 'number') return value;
-
-  const normalized = String(value).trim().toLowerCase();
-  if (['1', 'true', 'sim', 'yes', 'on'].includes(normalized)) return 1;
-  if (['0', 'false', 'nao', 'não', 'no', 'off'].includes(normalized)) return 0;
-  return value;
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj || {}, key);
 }
 
-function normalizeTipoCobranca(value, fallback) {
-  return String(value || fallback || DEFAULT_PLANO_POLICY.tipo_cobranca).trim().toUpperCase();
+function toDbFlag(value) {
+  return value ? 1 : 0;
+}
+
+function buildPolicyInput(body = {}, current = {}) {
+  const policyInput = { ...current };
+  for (const field of POLICY_FIELDS) {
+    if (hasOwn(body, field)) {
+      policyInput[field] = body[field];
+    }
+  }
+  return policyInput;
 }
 
 function normalizePlanoPayload(body = {}, current = {}) {
@@ -43,15 +35,8 @@ function normalizePlanoPayload(body = {}, current = {}) {
   const duracao_em_dias = Number(body.duracao_em_dias || 30);
   const compartilhado = Number(body.compartilhado ? 1 : 0);
   const quantidade_max_pessoas = Number(body.quantidade_max_pessoas || 1);
-  const tipo_cobranca = normalizeTipoCobranca(body.tipo_cobranca, current.tipo_cobranca);
-  const exige_pagamento_ato = normalizeFlag(body.exige_pagamento_ato, current.exige_pagamento_ato ?? DEFAULT_PLANO_POLICY.exige_pagamento_ato);
-  const gera_divida_automatica = normalizeFlag(body.gera_divida_automatica, current.gera_divida_automatica ?? DEFAULT_PLANO_POLICY.gera_divida_automatica);
-  const gera_cobertura_apos_pagamento = normalizeFlag(
-    body.gera_cobertura_apos_pagamento,
-    current.gera_cobertura_apos_pagamento ?? DEFAULT_PLANO_POLICY.gera_cobertura_apos_pagamento
-  );
-  const permite_renovacao_avulsa = normalizeFlag(body.permite_renovacao_avulsa, current.permite_renovacao_avulsa ?? DEFAULT_PLANO_POLICY.permite_renovacao_avulsa);
-  const desconto_percentual = Number(body.desconto_percentual ?? current.desconto_percentual ?? DEFAULT_PLANO_POLICY.desconto_percentual);
+  const policyInput = buildPolicyInput(body, current);
+  const policy = normalizarPoliticaPlano(policyInput);
 
   return {
     nome,
@@ -60,12 +45,13 @@ function normalizePlanoPayload(body = {}, current = {}) {
     duracao_em_dias,
     compartilhado,
     quantidade_max_pessoas,
-    tipo_cobranca,
-    exige_pagamento_ato,
-    gera_divida_automatica,
-    gera_cobertura_apos_pagamento,
-    permite_renovacao_avulsa,
-    desconto_percentual,
+    tipo_cobranca: policy.tipo_cobranca,
+    exige_pagamento_ato: toDbFlag(policy.exige_pagamento_ato),
+    gera_divida_automatica: toDbFlag(policy.gera_divida_automatica),
+    gera_cobertura_apos_pagamento: toDbFlag(policy.gera_cobertura_apos_pagamento),
+    permite_renovacao_avulsa: toDbFlag(policy.permite_renovacao_avulsa),
+    desconto_percentual: policy.desconto_percentual,
+    _policyInput: policyInput,
   };
 }
 
@@ -76,11 +62,8 @@ function validarPlano(payload) {
   if (!Number.isInteger(payload.quantidade_max_pessoas) || payload.quantidade_max_pessoas <= 0) return 'quantidade_max_pessoas inválida';
   if (payload.quantidade_max_pessoas > 1 && payload.compartilhado !== 1) return 'Planos com mais de 1 pessoa devem ser compartilhados';
   if (payload.quantidade_max_pessoas === 1 && payload.compartilhado !== 0) return 'Plano individual deve ter compartilhado = 0';
-  if (!TIPO_COBRANCA_VALUES.includes(payload.tipo_cobranca)) return `tipo_cobranca inválido. Use: ${TIPO_COBRANCA_VALUES.join(', ')}`;
-  for (const field of ['exige_pagamento_ato', 'gera_divida_automatica', 'gera_cobertura_apos_pagamento', 'permite_renovacao_avulsa']) {
-    if (![0, 1].includes(payload[field])) return `${field} deve ser 0 ou 1`;
-  }
-  if (!Number.isFinite(payload.desconto_percentual) || payload.desconto_percentual < 0) return 'desconto_percentual inválido';
+  const erroPolitica = validarPoliticaPlanoInput(payload._policyInput);
+  if (erroPolitica) return erroPolitica;
   return null;
 }
 

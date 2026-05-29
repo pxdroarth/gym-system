@@ -16,6 +16,23 @@ const DEFAULT_POLICY = Object.freeze({
   desconto_percentual: 0,
 });
 
+const POLICY_FLAG_FIELDS = Object.freeze([
+  'exige_pagamento_ato',
+  'gera_divida_automatica',
+  'gera_cobertura_apos_pagamento',
+  'permite_renovacao_avulsa',
+]);
+
+const POLICY_FIELDS = Object.freeze([
+  'tipo_cobranca',
+  ...POLICY_FLAG_FIELDS,
+  'desconto_percentual',
+]);
+
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj || {}, key);
+}
+
 function normalizarTipoCobranca(value) {
   const normalized = String(value || DEFAULT_POLICY.tipo_cobranca).trim().toUpperCase();
   return TIPO_COBRANCA_VALUES.includes(normalized) ? normalized : DEFAULT_POLICY.tipo_cobranca;
@@ -28,7 +45,7 @@ function normalizarBoolean(value, fallback) {
 
   const normalized = String(value).trim().toLowerCase();
   if (['1', 'true', 'sim', 'yes', 'on'].includes(normalized)) return true;
-  if (['0', 'false', 'nao', 'no', 'off'].includes(normalized)) return false;
+  if (['0', 'false', 'nao', 'não', 'no', 'off'].includes(normalized)) return false;
   return Boolean(fallback);
 }
 
@@ -36,6 +53,44 @@ function normalizarNumeroNaoNegativo(value, fallback) {
   const number = Number(value);
   if (!Number.isFinite(number) || number < 0) return fallback;
   return number;
+}
+
+function isBlank(value) {
+  return value === undefined || value === null || value === '';
+}
+
+function isBooleanLike(value) {
+  if (isBlank(value)) return true;
+  if (typeof value === 'boolean') return true;
+  if (typeof value === 'number') return value === 0 || value === 1;
+  if (typeof value !== 'string') return false;
+
+  const normalized = value.trim().toLowerCase();
+  return ['1', 'true', 'sim', 'yes', 'on', '0', 'false', 'nao', 'não', 'no', 'off'].includes(normalized);
+}
+
+function validarPoliticaPlanoInput(plano = {}) {
+  if (hasOwn(plano, 'tipo_cobranca') && !isBlank(plano.tipo_cobranca)) {
+    const normalized = String(plano.tipo_cobranca).trim().toUpperCase();
+    if (!TIPO_COBRANCA_VALUES.includes(normalized)) {
+      return `tipo_cobranca inválido. Use: ${TIPO_COBRANCA_VALUES.join(', ')}`;
+    }
+  }
+
+  for (const field of POLICY_FLAG_FIELDS) {
+    if (hasOwn(plano, field) && !isBooleanLike(plano[field])) {
+      return `${field} deve ser 0 ou 1`;
+    }
+  }
+
+  if (hasOwn(plano, 'desconto_percentual') && !isBlank(plano.desconto_percentual)) {
+    const desconto = Number(plano.desconto_percentual);
+    if (!Number.isFinite(desconto) || desconto < 0) {
+      return 'desconto_percentual inválido';
+    }
+  }
+
+  return null;
 }
 
 function normalizarPoliticaPlano(plano = {}) {
@@ -97,7 +152,10 @@ module.exports = {
   TIPO_COBRANCA,
   TIPO_COBRANCA_VALUES,
   DEFAULT_POLICY,
+  POLICY_FIELDS,
+  POLICY_FLAG_FIELDS,
   normalizarPoliticaPlano,
+  validarPoliticaPlanoInput,
   isPlanoAvulso,
   isPacotePrePago,
   isRecorrenteContratual,
