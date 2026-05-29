@@ -593,6 +593,27 @@ Automatizar resposta depois
 - a decisao de cobranca e acesso deve consultar um service central de politica de plano/cobertura para evitar duplicacao de regra e divergencia entre modulos
 - exemplo conceitual: `AVULSO_MENSAL` exige pagamento no ato, gera cobertura apos pagamento e nao gera divida automatica; `PACOTE_PRE_PAGO` exige pagamento no ato, gera cobertura pela vigencia contratada e nao gera mensalidades em aberto duplicadas; `RECORRENTE_CONTRATUAL` fica para futuro, apenas quando existir contrato ou regra comercial explicita, podendo gerar divida automatica
 
+### Especificacao minima de politica de plano e cobertura
+
+- plano e o cadastro comercial base ofertado ao aluno
+- politica do plano e a regra parametrizada que define como esse plano cobra, gera cobertura e trata renovacao, desconto e inadimplencia
+- cobranca e o evento ou titulo operacional que registra o ciclo ou obrigacao comercial
+- pagamento confirmado e o fato financeiro que pode habilitar cobertura conforme a politica do plano
+- cobertura ou vigencia de acesso e o periodo em que o aluno pode entrar porque existe autorizacao comercial valida
+- mensalidade e a representacao operacional de cobranca por ciclo; nao deve ser tratada universalmente como cobertura paga nem como divida real
+- pendencia operacional e um ciclo, cobranca ou inconsistencia que exige tratamento, sem implicar inadimplencia real por padrao
+- inadimplencia real exige contrato, recorrencia assumida, consumo autorizado, pacote contratado ou regra comercial explicita
+- `AVULSO_MENSAL`: exige pagamento no ato, pagamento gera cobertura pelo ciclo, nao gera divida automatica se nao renovar, `em_aberto` nao libera acesso e `em_aberto` antigo nao e inadimplencia real por padrao
+- `PACOTE_PRE_PAGO`: exige pagamento no ato, pagamento gera cobertura por toda a vigencia, nao gera mensalidades futuras em aberto como divida duplicada e desconto depende do pagamento do pacote
+- `RECORRENTE_CONTRATUAL`: fica para fase futura, so existe com contrato ou regra explicita e pode gerar divida automatica conforme a politica
+- `CORTESIA` ou `ISENTO`: ficam para fase futura e devem ser explicitos, auditaveis e tratados como politica formal de cobertura
+- `AccessService` nao deve tratar `em_aberto` como cobertura paga; cobertura valida deve derivar de pagamento confirmado, pacote pago, cortesia explicita ou politica equivalente
+- ausencia de cobertura deve bloquear acesso, mas nao deve ser interpretada automaticamente como divida
+- receita recebida deve nascer de pagamento confirmado; `em_aberto` de avulso e pendencia operacional, nao inadimplencia real
+- KPI de inadimplencia real so deve considerar contrato, recorrencia, consumo autorizado ou regra comercial explicita
+- scheduler futuro nao cria mensalidade para todo aluno ativo; ele chama service idempotente de diagnostico e reconciliacao
+- scheduler futuro deve nascer desativavel por configuracao e preparado para lock/idempotencia em monolito local hoje e multiplas instancias no futuro
+
 ## Objetivo
 
 Transformar o dashboard em BI operacional real.
