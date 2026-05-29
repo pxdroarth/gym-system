@@ -1,16 +1,24 @@
 const express = require('express');
 const router = express.Router();
-const { runQuery, runGet, runExecute } = require('../dbHelper');
+const { runQuery, runGet, runExecute, runTransaction } = require('../dbHelper');
 const AppError = require('../errors/AppError');
-const { requireScope } = require('../helpers/scope');
+const AuditService = require('../services/AuditService');
+const { actorWithScope, requireScope } = require('../helpers/scope');
 const { requirePermission } = require('../middlewares/requirePermission');
 const { PERMISSIONS } = require('../constants/userRoles');
 const { calcularPreviewContratacaoRenovacao } = require('../services/CoberturaService');
+const MensalidadeService = require('../services/MensalidadeService');
 const {
+  TIPO_COBRANCA,
   POLICY_FIELDS,
   normalizarPoliticaPlano,
   validarPoliticaPlanoInput,
 } = require('../services/PlanoPolicyService');
+
+const TIPOS_CONTRATACAO_RENOVACAO_SUPORTADOS = Object.freeze([
+  TIPO_COBRANCA.AVULSO_MENSAL,
+  TIPO_COBRANCA.PACOTE_PRE_PAGO,
+]);
 
 function hasOwn(obj, key) {
   return Object.prototype.hasOwnProperty.call(obj || {}, key);
@@ -69,6 +77,29 @@ function validarPlano(payload) {
   return null;
 }
 
+function isISODate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T12:00:00`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function toCents(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return null;
+  return Math.round(number * 100);
+}
+
+function hojeISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function buildObservacoesContratacao(body = {}) {
+  const partes = ['contratacao/renovacao assistida'];
+  if (body.observacao) partes.push(String(body.observacao).trim());
+  if (body.forma_pagamento) partes.push(`forma_pagamento: ${String(body.forma_pagamento).trim()}`);
+  return partes.filter(Boolean).join(' | ');
+}
+
 router.post('/preview-cobertura', async (req, res, next) => {
   try {
     const scope = requireScope(req);
@@ -109,6 +140,135 @@ router.post('/preview-cobertura', async (req, res, next) => {
     });
 
     res.json(preview);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post(
+  '/contratar-renovar',
+  requirePermission(PERMISSIONS.PLANOS_GERENCIAR),
+  requirePermission(PERMISSIONS.PAGAMENTOS_REGISTRAR),
+  async (req, res, next) => {
+  try {
+    const scope = requireScope(req);
+    const alunoId = Number(req.body?.aluno_id);
+    const planoId = Number(req.body?.plano_id);
+    const dataInicio = req.body?.data_inicio;
+    const valorPago = Number(req.body?.valor_pago);
+
+    if (!alunoId) {
+      throw new AppError('aluno_id e obrigatorio', 400, 'COBERTURA_CONTRATACAO_ALUNO_ID_OBRIGATORIO');
+    }
+
+    if (!planoId) {
+      throw new AppError('plano_id e obrigatorio', 400, 'COBERTURA_CONTRATACAO_PLANO_ID_OBRIGATORIO');
+    }
+
+    if (!isISODate(dataInicio)) {
+      throw new AppError('data_inicio deve estar no formato YYYY-MM-DD', 400, 'COBERTURA_CONTRATACAO_DATA_INICIO_INVALIDA');
+    }
+
+    if (!Number.isFinite(valorPago) || valorPago <= 0) {
+      throw new AppError('valor_pago deve ser um numero positivo', 400, 'COBERTURA_CONTRATACAO_VALOR_PAGO_INVALIDO');
+    }
+
+    const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
+
+    const resultado = await runTransaction(async (tx) => {
+      const aluno = await tx.get(
+        'SELECT * FROM aluno WHERE id = ? AND tenant_id = ? AND unit_id = ?',
+        [alunoId, scope.tenant_id, scope.unit_id]
+      );
+      if (!aluno) {
+        throw new AppError('Aluno nao encontrado no escopo atual', 404, 'ALUNO_NAO_ENCONTRADO_NO_ESCOPO');
+      }
+
+      if (!aluno.plano_id) {
+        throw new AppError(
+          'Aluno sem plano cadastral nao pode contratar/renovar por este fluxo.',
+          409,
+          'COBERTURA_CONTRATACAO_ALUNO_SEM_PLANO'
+        );
+      }
+
+      if (Number(aluno.plano_id) !== planoId) {
+        throw new AppError(
+          'Troca de plano nao e suportada neste fluxo. Atualize o cadastro do aluno em fluxo proprio.',
+          409,
+          'COBERTURA_CONTRATACAO_TROCA_PLANO_NAO_SUPORTADA'
+        );
+      }
+
+      const plano = await tx.get(
+        'SELECT * FROM plano WHERE id = ? AND tenant_id = ?',
+        [planoId, scope.tenant_id]
+      );
+      if (!plano) {
+        throw new AppError('Plano nao encontrado no escopo atual', 404, 'PLANO_NAO_ENCONTRADO_NO_ESCOPO');
+      }
+
+      const preview = calcularPreviewContratacaoRenovacao({
+        aluno,
+        plano,
+        data_inicio: dataInicio,
+        valor_manual: req.body?.valor_manual,
+        desconto_manual: req.body?.desconto_manual,
+      });
+
+      if (!TIPOS_CONTRATACAO_RENOVACAO_SUPORTADOS.includes(preview.tipo_cobranca)) {
+        throw new AppError(
+          'Tipo de cobranca ainda nao suportado para contratacao/renovacao transacional.',
+          400,
+          'COBERTURA_CONTRATACAO_TIPO_NAO_SUPORTADO',
+          { tipo_cobranca: preview.tipo_cobranca }
+        );
+      }
+
+      const valorPagoCents = toCents(valorPago);
+      const valorCobradoCents = toCents(preview.valor_cobrado);
+      if (valorPagoCents === null || valorPagoCents !== valorCobradoCents) {
+        throw new AppError(
+          'valor_pago deve ser igual ao valor_cobrado do preview.',
+          400,
+          'COBERTURA_CONTRATACAO_PAGAMENTO_INTEGRAL_OBRIGATORIO',
+          { valor_pago: valorPago, valor_cobrado: preview.valor_cobrado }
+        );
+      }
+
+      const mensalidade = await MensalidadeService.criarMensalidade({
+        aluno_id: aluno.id,
+        plano_id: plano.id,
+        valor_cobrado: preview.valor_cobrado,
+        valor_referencia_desconto: preview.valor_base,
+        desconto_aplicado: preview.desconto_aplicado,
+        data_inicio: preview.data_inicio,
+        vencimento: preview.data_inicio,
+        observacoes: buildObservacoesContratacao(req.body),
+      }, scope, tx);
+
+      const pagamento = await MensalidadeService.registrarPagamento({
+        mensalidade_id: mensalidade.id,
+        data_pagamento: hojeISO(),
+        valor_pago: valorPago,
+      }, actor, scope, tx);
+
+      const mensalidadeAtualizada = await tx.get(
+        'SELECT * FROM mensalidade WHERE id = ? AND tenant_id = ? AND unit_id = ?',
+        [mensalidade.id, scope.tenant_id, scope.unit_id]
+      );
+
+      return {
+        preview,
+        mensalidade: mensalidadeAtualizada,
+        pagamento,
+      };
+    });
+
+    res.status(201).json({
+      ok: true,
+      data: resultado,
+    });
   } catch (error) {
     next(error);
   }

@@ -5,6 +5,10 @@ const AuditService = require('./AuditService');
 const FechamentoMensalService = require('./FechamentoMensalService');
 const FinanceiroService = require('./FinanceiroService');
 
+function clientOrDefault(client) {
+  return client || { get: runGet, all: runQuery, run: runExecute };
+}
+
 function isISODate(v) {
   return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
 }
@@ -34,10 +38,11 @@ function buildDueDate(day, baseDateStr) {
   return new Date(year, month, safeDay).toISOString().slice(0, 10);
 }
 
-async function validarAlunoCobravel(alunoId, scope = null) {
+async function validarAlunoCobravel(alunoId, scope = null, client = null) {
+  const db = clientOrDefault(client);
   const vinculo = scope?.tenant_id && scope?.unit_id
-    ? await runGet('SELECT responsavel_id FROM plano_associado WHERE aluno_id = ? AND tenant_id = ? AND unit_id = ? LIMIT 1', [alunoId, scope.tenant_id, scope.unit_id])
-    : await runGet('SELECT responsavel_id FROM plano_associado WHERE aluno_id = ? LIMIT 1', [alunoId]);
+    ? await db.get('SELECT responsavel_id FROM plano_associado WHERE aluno_id = ? AND tenant_id = ? AND unit_id = ? LIMIT 1', [alunoId, scope.tenant_id, scope.unit_id])
+    : await db.get('SELECT responsavel_id FROM plano_associado WHERE aluno_id = ? LIMIT 1', [alunoId]);
   if (vinculo) {
     throw new AppError(
       'Aluno vinculado nao pode possuir mensalidade propria. A cobranca deve ser feita no responsavel.',
@@ -115,7 +120,8 @@ async function neutralizarLancamentosDerivadosCancelaveis(tx, mensalidade, scope
   }
 }
 
-async function criarMensalidade(payload = {}, scope = null) {
+async function criarMensalidade(payload = {}, scope = null, client = null) {
+  const db = clientOrDefault(client);
   const {
     aluno_id,
     plano_id,
@@ -130,18 +136,18 @@ async function criarMensalidade(payload = {}, scope = null) {
   if (!aluno_id) throw new AppError('aluno_id e obrigatorio', 400, 'ALUNO_ID_OBRIGATORIO');
 
   const aluno = scope?.tenant_id && scope?.unit_id
-    ? await runGet('SELECT * FROM aluno WHERE id = ? AND tenant_id = ? AND unit_id = ?', [aluno_id, scope.tenant_id, scope.unit_id])
-    : await runGet('SELECT * FROM aluno WHERE id = ?', [aluno_id]);
+    ? await db.get('SELECT * FROM aluno WHERE id = ? AND tenant_id = ? AND unit_id = ?', [aluno_id, scope.tenant_id, scope.unit_id])
+    : await db.get('SELECT * FROM aluno WHERE id = ?', [aluno_id]);
   if (!aluno) throw new AppError('Aluno nao encontrado', 404, 'ALUNO_NAO_ENCONTRADO');
 
-  await validarAlunoCobravel(aluno_id, scope);
+  await validarAlunoCobravel(aluno_id, scope, db);
 
   const planoIdFinal = Number(plano_id || aluno.plano_id);
   if (!planoIdFinal) throw new AppError('plano_id e obrigatorio', 400, 'PLANO_ID_OBRIGATORIO');
 
   const plano = scope?.tenant_id
-    ? await runGet('SELECT * FROM plano WHERE id = ? AND tenant_id = ?', [planoIdFinal, scope.tenant_id])
-    : await runGet('SELECT * FROM plano WHERE id = ?', [planoIdFinal]);
+    ? await db.get('SELECT * FROM plano WHERE id = ? AND tenant_id = ?', [planoIdFinal, scope.tenant_id])
+    : await db.get('SELECT * FROM plano WHERE id = ?', [planoIdFinal]);
   if (!plano) throw new AppError('Plano nao encontrado', 400, 'PLANO_NAO_ENCONTRADO');
 
   const hoje = new Date().toISOString().slice(0, 10);
@@ -156,17 +162,21 @@ async function criarMensalidade(payload = {}, scope = null) {
 
   const desconto = toMoney(desconto_aplicado) ?? 0;
   if (desconto < 0) throw new AppError('desconto_aplicado invalido', 400, 'DESCONTO_INVALIDO');
-  if (desconto >= valorBase) {
+  const valorReferenciaDesconto = toMoney(payload.valor_referencia_desconto ?? valorBase);
+  if (valorReferenciaDesconto === null || valorReferenciaDesconto <= 0) {
+    throw new AppError('valor_referencia_desconto invalido', 400, 'VALOR_REFERENCIA_DESCONTO_INVALIDO');
+  }
+  if (desconto >= valorReferenciaDesconto) {
     throw new AppError(
-      'desconto_aplicado nao pode ser maior ou igual ao valor cobrado',
+      'desconto_aplicado nao pode ser maior ou igual ao valor de referencia',
       400,
       'DESCONTO_MAIOR_QUE_VALOR'
     );
   }
 
   const statusNormalizado = validarStatusMensalidade(status);
-  await FechamentoMensalService.assertPeriodoEditavelPorData(venc, 'criacao de mensalidade', null, scope);
-  const duplicada = await runGet(
+  await FechamentoMensalService.assertPeriodoEditavelPorData(venc, 'criacao de mensalidade', db, scope);
+  const duplicada = await db.get(
     `SELECT id FROM mensalidade
      WHERE aluno_id = ?
        ${scope?.tenant_id && scope?.unit_id ? 'AND tenant_id = ? AND unit_id = ?' : ''}
@@ -180,14 +190,14 @@ async function criarMensalidade(payload = {}, scope = null) {
     throw new AppError('Ja existe mensalidade para este aluno neste ciclo', 409, 'MENSALIDADE_DUPLICADA');
   }
 
-  const result = await runExecute(
+  const result = await db.run(
     `INSERT INTO mensalidade
       (aluno_id, plano_id, valor_cobrado, desconto_aplicado, status, data_inicio, data_fim, vencimento, observacoes, tenant_id, unit_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [aluno_id, planoIdFinal, valorBase, desconto, statusNormalizado, inicioCiclo, dataFim, venc, observacoes || '', scope?.tenant_id || aluno.tenant_id || null, scope?.unit_id || aluno.unit_id || null]
   );
 
-  return runGet('SELECT * FROM mensalidade WHERE id = ?', [result.lastID]);
+  return db.get('SELECT * FROM mensalidade WHERE id = ?', [result.lastID]);
 }
 
 async function listarMensalidades(filtros = {}, scope = null) {
@@ -383,7 +393,7 @@ async function listarVigentes(scope = null) {
   `, params);
 }
 
-async function registrarPagamento(payload = {}, actor, scope = null) {
+async function registrarPagamentoNoContexto(payload = {}, actor, scope = null, tx) {
   const { mensalidade_id, data_pagamento, valor_pago } = payload;
   const dataPagamentoFinal = data_pagamento || new Date().toISOString().slice(0, 10);
 
@@ -391,86 +401,92 @@ async function registrarPagamento(payload = {}, actor, scope = null) {
     throw new AppError('Campos obrigatorios faltando', 400, 'PAGAMENTO_PAYLOAD_INVALIDO');
   }
 
-  return runTransaction(async (tx) => {
-    await FechamentoMensalService.assertPeriodoEditavelPorData(dataPagamentoFinal, 'pagamento de mensalidade', tx, scope);
+  await FechamentoMensalService.assertPeriodoEditavelPorData(dataPagamentoFinal, 'pagamento de mensalidade', tx, scope);
 
-    const mensalidade = scope?.tenant_id && scope?.unit_id
-      ? await tx.get('SELECT * FROM mensalidade WHERE id = ? AND tenant_id = ? AND unit_id = ?', [mensalidade_id, scope.tenant_id, scope.unit_id])
-      : await tx.get('SELECT * FROM mensalidade WHERE id = ?', [mensalidade_id]);
-    if (!mensalidade || mensalidade.deleted_at) throw new AppError('Mensalidade nao encontrada', 404, 'MENSALIDADE_NAO_ENCONTRADA');
+  const mensalidade = scope?.tenant_id && scope?.unit_id
+    ? await tx.get('SELECT * FROM mensalidade WHERE id = ? AND tenant_id = ? AND unit_id = ?', [mensalidade_id, scope.tenant_id, scope.unit_id])
+    : await tx.get('SELECT * FROM mensalidade WHERE id = ?', [mensalidade_id]);
+  if (!mensalidade || mensalidade.deleted_at) throw new AppError('Mensalidade nao encontrada', 404, 'MENSALIDADE_NAO_ENCONTRADA');
 
-    if (mensalidade.status === MENSALIDADE_STATUS.CANCELADO) {
-      throw new AppError('Mensalidade cancelada nao pode ser paga', 400, 'MENSALIDADE_CANCELADA');
-    }
+  if (mensalidade.status === MENSALIDADE_STATUS.CANCELADO) {
+    throw new AppError('Mensalidade cancelada nao pode ser paga', 400, 'MENSALIDADE_CANCELADA');
+  }
 
-    const valor = Number(valor_pago);
-    if (!Number.isFinite(valor) || valor <= 0) {
-      throw new AppError('valor_pago invalido', 400, 'VALOR_PAGO_INVALIDO');
-    }
+  const valor = Number(valor_pago);
+  if (!Number.isFinite(valor) || valor <= 0) {
+    throw new AppError('valor_pago invalido', 400, 'VALOR_PAGO_INVALIDO');
+  }
 
-    const valorPrevisto = Number(mensalidade.valor_cobrado || 0);
-    const novoStatus = valor < valorPrevisto ? MENSALIDADE_STATUS.PARCIAL : MENSALIDADE_STATUS.PAGO;
-    const pagamentoAntes = await tx.get('SELECT * FROM pagamento WHERE mensalidade_id = ?', [mensalidade_id]);
-    let pagamentoId;
+  const valorPrevisto = Number(mensalidade.valor_cobrado || 0);
+  const novoStatus = valor < valorPrevisto ? MENSALIDADE_STATUS.PARCIAL : MENSALIDADE_STATUS.PAGO;
+  const pagamentoAntes = await tx.get('SELECT * FROM pagamento WHERE mensalidade_id = ?', [mensalidade_id]);
+  let pagamentoId;
 
-    // O registro de pagamento precisa permanecer idempotente no dominio:
-    // atualiza ou cria o pagamento, reflete o status da mensalidade, faz
-    // upsert do lancamento financeiro e audita tudo no mesmo contexto.
-    if (pagamentoAntes) {
-      await tx.run(
-        'UPDATE pagamento SET data_pagamento = ?, valor_pago = ?, valor_previsto = ?, tenant_id = COALESCE(tenant_id, ?), unit_id = COALESCE(unit_id, ?) WHERE id = ?',
-        [dataPagamentoFinal, valor, valorPrevisto, scope?.tenant_id || mensalidade.tenant_id || null, scope?.unit_id || mensalidade.unit_id || null, pagamentoAntes.id]
-      );
-      pagamentoId = pagamentoAntes.id;
-    } else {
-      const result = await tx.run(
-        'INSERT INTO pagamento (mensalidade_id, data_pagamento, valor_pago, valor_previsto, tenant_id, unit_id) VALUES (?, ?, ?, ?, ?, ?)',
-        [mensalidade_id, dataPagamentoFinal, valor, valorPrevisto, scope?.tenant_id || mensalidade.tenant_id || null, scope?.unit_id || mensalidade.unit_id || null]
-      );
-      pagamentoId = result.lastID;
-    }
-
+  // O registro de pagamento precisa permanecer idempotente no dominio:
+  // atualiza ou cria o pagamento, reflete o status da mensalidade, faz
+  // upsert do lancamento financeiro e audita tudo no mesmo contexto.
+  if (pagamentoAntes) {
     await tx.run(
-      'UPDATE mensalidade SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [novoStatus, mensalidade_id]
+      'UPDATE pagamento SET data_pagamento = ?, valor_pago = ?, valor_previsto = ?, tenant_id = COALESCE(tenant_id, ?), unit_id = COALESCE(unit_id, ?) WHERE id = ?',
+      [dataPagamentoFinal, valor, valorPrevisto, scope?.tenant_id || mensalidade.tenant_id || null, scope?.unit_id || mensalidade.unit_id || null, pagamentoAntes.id]
     );
+    pagamentoId = pagamentoAntes.id;
+  } else {
+    const result = await tx.run(
+      'INSERT INTO pagamento (mensalidade_id, data_pagamento, valor_pago, valor_previsto, tenant_id, unit_id) VALUES (?, ?, ?, ?, ?, ?)',
+      [mensalidade_id, dataPagamentoFinal, valor, valorPrevisto, scope?.tenant_id || mensalidade.tenant_id || null, scope?.unit_id || mensalidade.unit_id || null]
+    );
+    pagamentoId = result.lastID;
+  }
 
-    await FinanceiroService.upsertLancamentoFinanceiro({
-      descricao: `Mensalidade ${mensalidade_id}`,
-      tipo: 'receita',
-      valor,
-      data_lancamento: dataPagamentoFinal,
-      status: 'pago',
-      plano_contas_id: 1,
-      origem: 'mensalidade',
-      origem_id: mensalidade_id,
-      tenant_id: scope?.tenant_id || mensalidade.tenant_id || null,
-      unit_id: scope?.unit_id || mensalidade.unit_id || null,
-    }, tx);
+  await tx.run(
+    'UPDATE mensalidade SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    [novoStatus, mensalidade_id]
+  );
 
-    const pagamentoDepois = await tx.get('SELECT * FROM pagamento WHERE id = ?', [pagamentoId]);
-    const mensalidadeDepois = await tx.get('SELECT * FROM mensalidade WHERE id = ?', [mensalidade_id]);
+  await FinanceiroService.upsertLancamentoFinanceiro({
+    descricao: `Mensalidade ${mensalidade_id}`,
+    tipo: 'receita',
+    valor,
+    data_lancamento: dataPagamentoFinal,
+    status: 'pago',
+    plano_contas_id: 1,
+    origem: 'mensalidade',
+    origem_id: mensalidade_id,
+    tenant_id: scope?.tenant_id || mensalidade.tenant_id || null,
+    unit_id: scope?.unit_id || mensalidade.unit_id || null,
+  }, tx);
 
-    await AuditService.logAction({
-      actor,
-      action: 'registrar_pagamento_mensalidade',
-      module: 'mensalidades',
-      recordType: 'mensalidade',
-      recordId: mensalidade_id,
-      before: { mensalidade, pagamento: pagamentoAntes || null },
-      after: { mensalidade: mensalidadeDepois, pagamento: pagamentoDepois },
-      tenant_id: scope?.tenant_id || mensalidade.tenant_id || null,
-      unit_id: scope?.unit_id || mensalidade.unit_id || null,
-    }, tx);
+  const pagamentoDepois = await tx.get('SELECT * FROM pagamento WHERE id = ?', [pagamentoId]);
+  const mensalidadeDepois = await tx.get('SELECT * FROM mensalidade WHERE id = ?', [mensalidade_id]);
 
-    return {
-      id: pagamentoId,
-      mensalidade_id,
-      data_pagamento: dataPagamentoFinal,
-      valor_pago: valor,
-      status_mensalidade: novoStatus,
-    };
-  });
+  await AuditService.logAction({
+    actor,
+    action: 'registrar_pagamento_mensalidade',
+    module: 'mensalidades',
+    recordType: 'mensalidade',
+    recordId: mensalidade_id,
+    before: { mensalidade, pagamento: pagamentoAntes || null },
+    after: { mensalidade: mensalidadeDepois, pagamento: pagamentoDepois },
+    tenant_id: scope?.tenant_id || mensalidade.tenant_id || null,
+    unit_id: scope?.unit_id || mensalidade.unit_id || null,
+  }, tx);
+
+  return {
+    id: pagamentoId,
+    mensalidade_id,
+    data_pagamento: dataPagamentoFinal,
+    valor_pago: valor,
+    status_mensalidade: novoStatus,
+  };
+}
+
+async function registrarPagamento(payload = {}, actor, scope = null, client = null) {
+  if (client) {
+    return registrarPagamentoNoContexto(payload, actor, scope, client);
+  }
+
+  return runTransaction((tx) => registrarPagamentoNoContexto(payload, actor, scope, tx));
 }
 
 module.exports = {
