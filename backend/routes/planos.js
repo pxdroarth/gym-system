@@ -6,7 +6,10 @@ const AuditService = require('../services/AuditService');
 const { actorWithScope, requireScope } = require('../helpers/scope');
 const { requirePermission } = require('../middlewares/requirePermission');
 const { PERMISSIONS } = require('../constants/userRoles');
-const { calcularPreviewContratacaoRenovacao } = require('../services/CoberturaService');
+const {
+  calcularPreviewContratacaoRenovacao,
+  buscarCoberturaPagaSobreposta,
+} = require('../services/CoberturaService');
 const MensalidadeService = require('../services/MensalidadeService');
 const {
   TIPO_COBRANCA,
@@ -222,6 +225,25 @@ router.post(
           400,
           'COBERTURA_CONTRATACAO_TIPO_NAO_SUPORTADO',
           { tipo_cobranca: preview.tipo_cobranca }
+        );
+      }
+
+      const coberturaSobreposta = await buscarCoberturaPagaSobreposta({
+        aluno_id: aluno.id,
+        scope,
+        data_inicio: preview.data_inicio,
+        data_fim: preview.data_fim,
+      }, tx);
+      if (coberturaSobreposta) {
+        throw new AppError(
+          'Aluno ja possui cobertura paga vigente ou futura no periodo informado.',
+          409,
+          'COBERTURA_SOBREPOSTA',
+          {
+            mensalidade_id: coberturaSobreposta.id,
+            data_inicio: coberturaSobreposta.data_inicio || coberturaSobreposta.vencimento || null,
+            data_fim: coberturaSobreposta.data_fim || coberturaSobreposta.vencimento || null,
+          }
         );
       }
 

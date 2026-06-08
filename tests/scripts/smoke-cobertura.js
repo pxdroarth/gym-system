@@ -48,6 +48,12 @@ function isoDate(offsetDays = 0) {
   return date.toISOString().slice(0, 10);
 }
 
+function addDays(dateStr, days) {
+  const date = new Date(`${dateStr}T12:00:00`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
 function addMonths(dateStr, months) {
   const date = new Date(`${dateStr}T12:00:00`);
   date.setUTCMonth(date.getUTCMonth() + months);
@@ -341,6 +347,14 @@ async function assertNoFinancialRecords(alunoKey) {
   }
 }
 
+function assertCountsEqual(before, after) {
+  for (const key of Object.keys(before)) {
+    if (before[key] !== after[key]) {
+      throw new Error(`contagem ${key}: antes=${before[key]}, depois=${after[key]}`);
+    }
+  }
+}
+
 async function assertSuccessPersistence(response, preview) {
   if (response.status !== 201 || response.data?.ok !== true) {
     throw new Error(`status=${response.status}, code=${response.data?.code || 'ausente'}`);
@@ -426,6 +440,35 @@ async function run() {
     await runCase('contratar/renovar com admin autorizado', async () => {
       const preview = await previewContratacao(baseUrl, 'SUCESSO', created.planoAvulsoId);
       const response = await contratarRenovar(baseUrl, 'SUCESSO', created.planoAvulsoId, preview.valor_cobrado);
+      await assertSuccessPersistence(response, preview);
+    });
+
+    await runCase('bloquear cobertura paga sobreposta', async () => {
+      const before = await countFinancialRecords('SUCESSO');
+      const preview = await previewContratacao(baseUrl, 'SUCESSO', created.planoAvulsoId);
+      const response = await contratarRenovar(baseUrl, 'SUCESSO', created.planoAvulsoId, preview.valor_cobrado);
+
+      if (response.status !== 409 || response.data?.code !== 'COBERTURA_SOBREPOSTA') {
+        throw new Error(`status=${response.status}, code=${response.data?.code || 'ausente'}`);
+      }
+
+      const after = await countFinancialRecords('SUCESSO');
+      assertCountsEqual(before, after);
+    });
+
+    await runCase('permitir renovacao apos fim da cobertura atual', async () => {
+      const atual = await runGet(
+        `SELECT data_fim
+         FROM mensalidade
+         WHERE aluno_id = ? AND tenant_id = ? AND unit_id = ? AND status = ?
+         ORDER BY DATE(data_fim) DESC, id DESC LIMIT 1`,
+        [created.alunos.SUCESSO, created.tenantId, created.unitId, MENSALIDADE_STATUS.PAGO]
+      );
+      if (!atual?.data_fim) throw new Error('data_fim da cobertura atual ausente');
+
+      const dataInicio = addDays(atual.data_fim, 1);
+      const preview = await previewContratacao(baseUrl, 'SUCESSO', created.planoAvulsoId, dataInicio);
+      const response = await contratarRenovar(baseUrl, 'SUCESSO', created.planoAvulsoId, preview.valor_cobrado, dataInicio);
       await assertSuccessPersistence(response, preview);
     });
 

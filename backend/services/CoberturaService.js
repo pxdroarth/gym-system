@@ -1,4 +1,6 @@
 const AppError = require('../errors/AppError');
+const { runGet } = require('../dbHelper');
+const { MENSALIDADE_STATUS } = require('../constants/domainStates');
 const {
   TIPO_COBRANCA,
   normalizarPoliticaPlano,
@@ -24,6 +26,10 @@ function addDays(dateStr, days) {
   const date = new Date(`${dateStr}T12:00:00`);
   date.setDate(date.getDate() + days);
   return date.toISOString().slice(0, 10);
+}
+
+function clientOrDefault(client) {
+  return client || { get: runGet };
 }
 
 function toMoney(value, fieldName) {
@@ -171,8 +177,50 @@ function calcularPreviewContratacaoRenovacao(payload = {}) {
   };
 }
 
+async function buscarCoberturaPagaSobreposta(payload = {}, client = null) {
+  const alunoId = Number(payload.aluno_id);
+  const tenantId = Number(payload.scope?.tenant_id);
+  const unitId = Number(payload.scope?.unit_id);
+
+  if (!alunoId || !tenantId || !unitId || !isISODate(payload.data_inicio) || !isISODate(payload.data_fim)) {
+    return null;
+  }
+
+  const db = clientOrDefault(client);
+  const dataInicioExpr = `
+    COALESCE(
+      NULLIF(NULLIF(data_inicio, ''), '0000-00-00'),
+      NULLIF(NULLIF(vencimento, ''), '0000-00-00')
+    )
+  `;
+  const dataFimExpr = `
+    COALESCE(
+      NULLIF(NULLIF(data_fim, ''), '0000-00-00'),
+      NULLIF(NULLIF(vencimento, ''), '0000-00-00')
+    )
+  `;
+
+  return db.get(
+    `SELECT *
+     FROM mensalidade
+     WHERE aluno_id = ?
+       AND tenant_id = ?
+       AND unit_id = ?
+       AND status = ?
+       AND deleted_at IS NULL
+       AND ${dataInicioExpr} IS NOT NULL
+       AND ${dataFimExpr} IS NOT NULL
+       AND DATE(${dataInicioExpr}) <= DATE(?)
+       AND DATE(${dataFimExpr}) >= DATE(?)
+     ORDER BY DATE(${dataInicioExpr}) ASC, id ASC
+     LIMIT 1`,
+    [alunoId, tenantId, unitId, MENSALIDADE_STATUS.PAGO, payload.data_fim, payload.data_inicio]
+  );
+}
+
 module.exports = {
   calcularPreviewContratacaoRenovacao,
   calcularPreviewContratacaoPlano: calcularPreviewContratacaoRenovacao,
   calcularPreviewRenovacaoPlano: calcularPreviewContratacaoRenovacao,
+  buscarCoberturaPagaSobreposta,
 };
