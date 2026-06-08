@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Activity, CreditCard, Edit3, Phone, ShieldCheck, UserRound } from "lucide-react";
+import { Activity, CalendarPlus, CreditCard, Edit3, Phone, ShieldCheck, UserRound } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import ToastNotification from "../../components/ToastNotification";
 import useAuth from "../../hooks/useAuth";
+import ModalContratarRenovarPlano from "./ModalContratarRenovarPlano";
 import ModalNovaMensalidade from "./ModalNovaMensalidade";
 import { fetchAcessos, simularAcesso } from "../../services/acessoService";
 import { fetchAlunoById } from "../../services/alunoService";
@@ -79,6 +80,7 @@ export default function PerfilPage() {
   const [totalMensalidades, setTotalMensalidades] = useState(0);
   const [paginaMensalidade, setPaginaMensalidade] = useState(1);
   const [showModal, setShowModal] = useState(false);
+  const [showModalContratarRenovar, setShowModalContratarRenovar] = useState(false);
   const [planos, setPlanos] = useState([]);
   const [acessos, setAcessos] = useState([]);
   const [paginaAcesso, setPaginaAcesso] = useState(1);
@@ -139,6 +141,8 @@ export default function PerfilPage() {
   const ultimoAcesso = acessos[0]?.data_hora ? new Date(acessos[0].data_hora).toLocaleString("pt-BR") : "Sem registros";
   const mensalidadesPendentes = mensalidades.filter((mensalidade) => mensalidade.status === "em_aberto" || mensalidade.status === "parcial").length;
   const canRegistrarPagamento = userHasUiPermission(user, UI_PERMISSIONS.PAGAMENTOS_REGISTRAR);
+  const canGerenciarPlanos = userHasUiPermission(user, UI_PERMISSIONS.PLANOS_GERENCIAR);
+  const canContratarRenovar = canGerenciarPlanos && canRegistrarPagamento;
 
   async function pagarMensalidade(mensalidade) {
     try {
@@ -169,6 +173,12 @@ export default function PerfilPage() {
     } finally {
       setSimulandoAcesso(false);
     }
+  }
+
+  async function finalizarContratacaoRenovacao() {
+    setToastMsg("Contratacao/renovacao registrada com sucesso.");
+    setPaginaMensalidade(1);
+    await Promise.all([carregarAluno(), carregarMensalidades(), carregarAcessos()]);
   }
 
   if (erro) return <Card className="p-4 text-red-700 font-bold">Erro: {erro}</Card>;
@@ -303,7 +313,19 @@ export default function PerfilPage() {
               </div>
             </div>
             <div className="entity-toolbar__actions">
-              <Button onClick={() => setShowModal(true)}>+ Registrar Mensalidade</Button>
+              {canContratarRenovar ? (
+                <Button
+                  onClick={() => setShowModalContratarRenovar(true)}
+                  disabled={!aluno.plano_id}
+                  title={!aluno.plano_id ? "Selecione um plano no cadastro do aluno antes de contratar/renovar." : undefined}
+                >
+                  <CalendarPlus size={15} /> Contratar/Renovar plano
+                </Button>
+              ) : null}
+              {!aluno.plano_id && canContratarRenovar ? <Badge tone="amber">Aluno sem plano</Badge> : null}
+              <Button variant="secondary" onClick={() => setShowModal(true)}>
+                Registrar mensalidade manual
+              </Button>
             </div>
           </div>
 
@@ -370,6 +392,16 @@ export default function PerfilPage() {
                 setPaginaMensalidade(1);
                 await Promise.all([carregarAluno(), carregarMensalidades()]);
               }}
+            />
+          )}
+
+          {showModalContratarRenovar && (
+            <ModalContratarRenovarPlano
+              open={showModalContratarRenovar}
+              aluno={aluno}
+              plano={planoAtual}
+              onClose={() => setShowModalContratarRenovar(false)}
+              onSuccess={finalizarContratacaoRenovacao}
             />
           )}
         </Card>

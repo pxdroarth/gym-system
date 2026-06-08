@@ -248,6 +248,16 @@ export async function updatePlano(id, dadosPlano) {
   return response.data;
 }
 
+export async function previewCoberturaPlano(payload) {
+  const response = await api.post('/planos/preview-cobertura', payload);
+  return response.data;
+}
+
+export async function contratarRenovarPlano(payload) {
+  const response = await api.post('/planos/contratar-renovar', payload);
+  return response.data;
+}
+
 // ============ VINCULOS ============
 export async function fetchPlanoAssociados(responsavelId) {
   const response = await api.get(`/plano-associado/${responsavelId}`);
