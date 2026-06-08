@@ -17,6 +17,34 @@ function toISODate(d) {
 }
 
 const responsavelIdExpr = 'COALESCE(pa.responsavel_id, a.id)';
+const coberturaInicioExpr = `
+  COALESCE(
+    NULLIF(NULLIF(m.data_inicio, ''), '0000-00-00'),
+    NULLIF(NULLIF(m.vencimento, ''), '0000-00-00')
+  )
+`;
+const coberturaFimExpr = `
+  COALESCE(
+    NULLIF(NULLIF(m.data_fim, ''), '0000-00-00'),
+    NULLIF(NULLIF(m.vencimento, ''), '0000-00-00')
+  )
+`;
+
+const coberturaPagaVigenteWhere = `
+  m.aluno_id = ${responsavelIdExpr}
+  AND m.tenant_id = a.tenant_id
+  AND m.unit_id = a.unit_id
+  AND m.status = 'pago'
+  AND m.deleted_at IS NULL
+  AND ${coberturaInicioExpr} IS NOT NULL
+  AND ${coberturaFimExpr} IS NOT NULL
+  AND DATE(${coberturaInicioExpr}) <= DATE('now')
+  AND DATE(${coberturaFimExpr}) >= DATE('now')
+`;
+
+const coberturaPagaVigenteOrder = `
+  ORDER BY DATE(${coberturaFimExpr}) DESC, DATE(${coberturaInicioExpr}) DESC, m.id DESC
+`;
 
 const statusMensalidadeExpr = `
   CASE
@@ -73,6 +101,51 @@ const baseSelect = `
          CASE WHEN pa.responsavel_id IS NOT NULL THEN 1 ELSE 0 END AS eh_vinculado,
          ${statusMensalidadeExpr} AS mensalidade_status,
          ${statusOperacionalExpr} AS status_ativo,
+         CASE
+           WHEN EXISTS (
+             SELECT 1
+             FROM mensalidade m
+             WHERE ${coberturaPagaVigenteWhere}
+           ) THEN 1
+           ELSE 0
+         END AS cobertura_paga_vigente,
+         CASE
+           WHEN EXISTS (
+             SELECT 1
+             FROM mensalidade m
+             WHERE ${coberturaPagaVigenteWhere}
+           ) THEN 'cobertura_paga_vigente'
+           ELSE 'sem_cobertura_paga_vigente'
+         END AS cobertura_status,
+         (
+           SELECT m.id
+           FROM mensalidade m
+           WHERE ${coberturaPagaVigenteWhere}
+           ${coberturaPagaVigenteOrder}
+           LIMIT 1
+         ) AS cobertura_mensalidade_id,
+         (
+           SELECT ${coberturaInicioExpr}
+           FROM mensalidade m
+           WHERE ${coberturaPagaVigenteWhere}
+           ${coberturaPagaVigenteOrder}
+           LIMIT 1
+         ) AS cobertura_data_inicio,
+         (
+           SELECT ${coberturaFimExpr}
+           FROM mensalidade m
+           WHERE ${coberturaPagaVigenteWhere}
+           ${coberturaPagaVigenteOrder}
+           LIMIT 1
+         ) AS cobertura_data_fim,
+         CASE
+           WHEN EXISTS (
+             SELECT 1
+             FROM mensalidade m
+             WHERE ${coberturaPagaVigenteWhere}
+           ) THEN 'mensalidade_paga_vigente'
+           ELSE 'sem_mensalidade_paga_vigente'
+         END AS cobertura_motivo,
          COALESCE(p.nome, 'Sem plano') AS plano_nome
   FROM aluno a
   LEFT JOIN plano_associado pa ON pa.aluno_id = a.id AND pa.tenant_id = a.tenant_id AND pa.unit_id = a.unit_id AND COALESCE(pa.status, 'ativo') != 'encerrado'
