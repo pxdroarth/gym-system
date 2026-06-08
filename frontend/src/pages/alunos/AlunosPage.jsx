@@ -16,17 +16,27 @@ import getApiErrorMessage from "../../utils/getApiErrorMessage";
 
 const ORDER = (import.meta.env?.VITE_ALUNOS_ORDER || "asc").toLowerCase();
 
-function obterBadgeMensalidade(status) {
-  switch (status) {
-    case "em_dia":
-      return <Badge tone="green">Em dia</Badge>;
-    case "atrasado":
-      return <Badge tone="red">Atrasado</Badge>;
-    case "sem_mensalidade":
-      return <Badge tone="gray">Sem mensalidade</Badge>;
-    default:
-      return <Badge tone="gray">{status || "-"}</Badge>;
+function temCampoCobertura(aluno) {
+  return Object.prototype.hasOwnProperty.call(aluno || {}, "cobertura_paga_vigente")
+    || Object.prototype.hasOwnProperty.call(aluno || {}, "cobertura_status");
+}
+
+function possuiCoberturaPaga(aluno) {
+  return aluno?.cobertura_paga_vigente === true
+    || aluno?.cobertura_paga_vigente === 1
+    || aluno?.cobertura_status === "cobertura_paga_vigente";
+}
+
+function obterBadgeCobertura(aluno) {
+  if (possuiCoberturaPaga(aluno)) {
+    return <Badge tone="green">Cobertura vigente</Badge>;
   }
+
+  if (!temCampoCobertura(aluno)) {
+    return <Badge tone="gray">Cobertura nao informada</Badge>;
+  }
+
+  return <Badge tone="amber">Sem cobertura paga</Badge>;
 }
 
 function obterBadgeStatus(status) {
@@ -70,9 +80,9 @@ export default function AlunosPage() {
   }
 
   const totalAlunos = alunos.length;
-  const totalEmDia = alunos.filter((aluno) => aluno.mensalidade_status === "em_dia").length;
-  const totalAtrasados = alunos.filter((aluno) => aluno.mensalidade_status === "atrasado").length;
-  const totalSemMensalidade = alunos.filter((aluno) => aluno.mensalidade_status === "sem_mensalidade").length;
+  const totalCoberturaVigente = alunos.filter(possuiCoberturaPaga).length;
+  const totalSemCobertura = alunos.filter((aluno) => !possuiCoberturaPaga(aluno)).length;
+  const totalCoberturaNaoInformada = alunos.filter((aluno) => !temCampoCobertura(aluno)).length;
 
   const termo = busca.toLowerCase();
   const alunosFiltrados = alunos.filter(
@@ -93,19 +103,19 @@ export default function AlunosPage() {
         copy: "Resultados no recorte atual de busca.",
       },
       {
-        id: "emdia",
-        label: "Mensalidade em dia",
-        value: totalEmDia,
-        copy: "Base operacional regularizada.",
+        id: "cobertura",
+        label: "Cobertura vigente",
+        value: totalCoberturaVigente,
+        copy: "Alunos com cobertura paga vigente.",
       },
       {
-        id: "atrasados",
-        label: "Atenção imediata",
-        value: totalAtrasados,
-        copy: "Alunos com atraso no recorte atual.",
+        id: "sem-cobertura",
+        label: "Sem cobertura paga",
+        value: totalSemCobertura,
+        copy: "Sem assumir divida automaticamente.",
       },
     ],
-    [alunosFiltrados.length, totalEmDia, totalAtrasados]
+    [alunosFiltrados.length, totalCoberturaVigente, totalSemCobertura]
   );
 
   return (
@@ -122,9 +132,9 @@ export default function AlunosPage() {
 
       <div className="ui-status-grid">
         <KpiCard label="Total de Alunos" value={totalAlunos} icon={<Users size={20} />} tone="blue" />
-        <KpiCard label="Em Dia" value={totalEmDia} icon={<CheckCircle2 size={20} />} tone="green" />
-        <KpiCard label="Atrasados" value={totalAtrasados} icon={<CircleSlash size={20} />} tone="red" />
-        <KpiCard label="Sem Mensalidade" value={totalSemMensalidade} icon={<WalletCards size={20} />} tone="gray" />
+        <KpiCard label="Cobertura vigente" value={totalCoberturaVigente} icon={<CheckCircle2 size={20} />} tone="green" />
+        <KpiCard label="Sem cobertura paga" value={totalSemCobertura} icon={<CircleSlash size={20} />} tone="amber" />
+        <KpiCard label="Cobertura nao informada" value={totalCoberturaNaoInformada} icon={<WalletCards size={20} />} tone="gray" />
       </div>
 
       <Card>
@@ -171,7 +181,7 @@ export default function AlunosPage() {
                   <th>Matrícula</th>
                   <th>Aluno</th>
                   <th>Status</th>
-                  <th>Mensalidade</th>
+                  <th>Cobertura</th>
                   <th>Ações</th>
                 </tr>
               </thead>
@@ -189,7 +199,7 @@ export default function AlunosPage() {
                       </div>
                     </td>
                     <td>{obterBadgeStatus(aluno.status_ativo)}</td>
-                    <td>{obterBadgeMensalidade(aluno.mensalidade_status)}</td>
+                    <td>{obterBadgeCobertura(aluno)}</td>
                     <td>
                       <Button size="sm" onClick={() => navigate(`/alunos/${aluno.id}`)}>
                         Perfil

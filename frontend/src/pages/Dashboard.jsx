@@ -19,6 +19,12 @@ function badgeAcesso(resultado) {
   return <Badge tone={permitido ? "green" : "red"}>{permitido ? "Permitido" : "Negado"}</Badge>;
 }
 
+function possuiCoberturaPaga(aluno) {
+  return aluno?.cobertura_paga_vigente === true
+    || aluno?.cobertura_paga_vigente === 1
+    || aluno?.cobertura_status === "cobertura_paga_vigente";
+}
+
 export default function Dashboard() {
   const [alunos, setAlunos] = useState([]);
   const [acessos, setAcessos] = useState([]);
@@ -49,21 +55,21 @@ export default function Dashboard() {
   }
 
   const totalAlunos = alunos.length;
-  const alunosAtivos = alunos.filter((aluno) => aluno.status_ativo === "ativo").length;
-  const alunosInativos = alunos.filter((aluno) => aluno.status_ativo !== "ativo").length;
+  const alunosComCobertura = alunos.filter(possuiCoberturaPaga).length;
+  const alunosSemCobertura = alunos.filter((aluno) => !possuiCoberturaPaga(aluno)).length;
   const ultimosAcessos = acessos.slice(0, 20);
   const acessosPermitidos = acessos.filter((acesso) => {
     const status = String(acesso.resultado || "").toLowerCase();
     return status === "permitido" || status === "liberado";
   }).length;
-  const percentualAtivo = totalAlunos > 0 ? Math.round((alunosAtivos / totalAlunos) * 100) : 0;
+  const percentualCobertura = totalAlunos > 0 ? Math.round((alunosComCobertura / totalAlunos) * 100) : 0;
 
   const pontosAtencao = useMemo(
     () => [
       {
-        id: "alunos",
-        titulo: "Cadastro operacional",
-        texto: `${alunosInativos} aluno(s) exigem atenção cadastral ou regularização de status.`,
+        id: "cobertura",
+        titulo: "Cobertura de acesso",
+        texto: `${alunosSemCobertura} aluno(s) sem cobertura paga vigente no retorno atual.`,
       },
       {
         id: "acessos",
@@ -76,7 +82,7 @@ export default function Dashboard() {
         texto: "A operação permanece por unidade, com autenticação, permissões e escopo preservados.",
       },
     ],
-    [alunosInativos, ultimosAcessos.length]
+    [alunosSemCobertura, ultimosAcessos.length]
   );
 
   return (
@@ -117,9 +123,9 @@ export default function Dashboard() {
               <div className="dashboard-hero__meta-copy">Acessos liberados nos registros carregados.</div>
             </div>
             <div className="dashboard-hero__meta-card">
-              <div className="dashboard-hero__meta-label">Base ativa</div>
-              <div className="dashboard-hero__meta-value">{percentualAtivo}%</div>
-              <div className="dashboard-hero__meta-copy">Percentual operacional de alunos ativos na unidade atual.</div>
+              <div className="dashboard-hero__meta-label">Cobertura vigente</div>
+              <div className="dashboard-hero__meta-value">{percentualCobertura}%</div>
+              <div className="dashboard-hero__meta-copy">Percentual com cobertura paga vigente no retorno atual.</div>
             </div>
           </div>
         </div>
@@ -137,18 +143,18 @@ export default function Dashboard() {
           onClick={() => navigate("/alunos")}
         />
         <KpiCard
-          label="Operacionais ativos"
-          value={alunosAtivos}
-          subtitle="Liberados para rotina"
+          label="Cobertura vigente"
+          value={alunosComCobertura}
+          subtitle="Cobertura paga vigente"
           icon={<UserCheck size={20} />}
           tone="green"
         />
         <KpiCard
-          label="Operacionais inativos"
-          value={alunosInativos}
-          subtitle="Exigem atenção cadastral"
+          label="Sem cobertura paga"
+          value={alunosSemCobertura}
+          subtitle="Nao assume divida automaticamente"
           icon={<UserX size={20} />}
-          tone="red"
+          tone="amber"
         />
         <KpiCard
           label="Acessos recentes"

@@ -53,6 +53,43 @@ function badgeMensalidade(status) {
   return <Badge tone="gray">{status || "-"}</Badge>;
 }
 
+function temCampoCobertura(aluno) {
+  return Object.prototype.hasOwnProperty.call(aluno || {}, "cobertura_paga_vigente")
+    || Object.prototype.hasOwnProperty.call(aluno || {}, "cobertura_status");
+}
+
+function possuiCoberturaPaga(aluno) {
+  return aluno?.cobertura_paga_vigente === true
+    || aluno?.cobertura_paga_vigente === 1
+    || aluno?.cobertura_status === "cobertura_paga_vigente";
+}
+
+function textoCobertura(aluno) {
+  if (possuiCoberturaPaga(aluno)) return "Cobertura paga vigente";
+  if (!temCampoCobertura(aluno)) return "Cobertura nao informada";
+  return "Sem cobertura paga vigente";
+}
+
+function periodoCobertura(aluno) {
+  if (!possuiCoberturaPaga(aluno)) return null;
+  if (!aluno.cobertura_data_inicio && !aluno.cobertura_data_fim) return null;
+  return `${formatarData(aluno.cobertura_data_inicio)} a ${formatarData(aluno.cobertura_data_fim)}`;
+}
+
+function badgeCobertura(aluno) {
+  if (possuiCoberturaPaga(aluno)) return <Badge tone="green">Cobertura paga vigente</Badge>;
+  if (!temCampoCobertura(aluno)) return <Badge tone="gray">Cobertura nao informada</Badge>;
+  return <Badge tone="amber">Sem cobertura paga vigente</Badge>;
+}
+
+function badgeAcaoMensalidade(mensalidade) {
+  const status = String(mensalidade?.status || "").toLowerCase();
+  if (status === "pago") return <Badge tone="green">Quitada</Badge>;
+  if (status === "parcial") return <Badge tone="amber">Parcial</Badge>;
+  if (status === "cancelado" || status === "vencido") return <Badge tone="red">{mensalidade.status}</Badge>;
+  return <Badge tone="gray">{mensalidade?.status || "-"}</Badge>;
+}
+
 function badgeAcesso(resultado) {
   const normalized = String(resultado || "").toLowerCase();
   const permitido = normalized === "permitido" || normalized === "liberado";
@@ -201,7 +238,7 @@ export default function PerfilPage() {
                 <div className="profile-hero__badges">
                   <Badge tone="blue">Matrícula {aluno.matricula || "-"}</Badge>
                   {badgeStatusAluno(aluno.status_ativo)}
-                  {badgeMensalidade(aluno.mensalidade_status)}
+                  {badgeCobertura(aluno)}
                   <Badge tone="gray">{planoAtual?.nome || "Sem plano"}</Badge>
                 </div>
               </div>
@@ -227,7 +264,7 @@ export default function PerfilPage() {
               <div className="profile-hero__stat-value text-base leading-snug">{ultimoAcesso}</div>
             </div>
             <div className="profile-hero__stat">
-              <div className="profile-hero__stat-label">Pendências</div>
+              <div className="profile-hero__stat-label">Pendencias admin.</div>
               <div className="profile-hero__stat-value">{mensalidadesPendentes}</div>
             </div>
             <div className="profile-hero__stat">
@@ -266,7 +303,8 @@ export default function PerfilPage() {
               <InfoItem label="Data de Nascimento" value={aluno.data_nascimento?.slice(0, 10)} />
               <InfoItem label="Status Cadastral" value={aluno.status} />
               <InfoItem label="Status Operacional" value={aluno.status_ativo} />
-              <InfoItem label="Situação da Mensalidade" value={aluno.mensalidade_status} />
+              <InfoItem label="Cobertura" value={periodoCobertura(aluno) || textoCobertura(aluno)} />
+              <InfoItem label="Mensalidade (admin)" value={aluno.mensalidade_status} />
               <InfoItem label="Plano Atual" value={planoAtual?.nome || "Sem plano"} />
             </div>
           </Card>
@@ -364,7 +402,7 @@ export default function PerfilPage() {
                       ) : mensalidade.status === "em_aberto" ? (
                         <Badge tone="amber">Em aberto</Badge>
                       ) : (
-                        <Badge tone="green">Quitada</Badge>
+                        badgeAcaoMensalidade(mensalidade)
                       )}
                     </td>
                   </tr>
