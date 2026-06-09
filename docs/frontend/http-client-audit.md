@@ -65,7 +65,7 @@ Esta auditoria nao altera codigo funcional. O backend usa token opaco server-sid
 | `frontend/src/services/tenantService.js` | `atualizarTenant` | `/tenants/{id}` | PATCH | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Tenant/unidade. |
 | `frontend/src/services/tenantService.js` | `listarUnitsPorTenant` | `/units/tenant/{tenantId}` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Unidade. |
 | `frontend/src/services/tenantService.js` | `atualizarUnit` | `/units/{id}` | PATCH | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Unidade. |
-| `frontend/src/services/contasFinanceiras.js` | `getContasFinanceiras` | `/contas-financeiras` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. |
+| `frontend/src/services/contasFinanceiras.js` | `getContasFinanceiras` | `/contas-financeiras` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. Leitura canonica atual das contas financeiras manuais; nao usar as rotas legadas `/financeiro/*`. |
 | `frontend/src/services/contasFinanceiras.js` | `criarContaFinanceira` | `/contas-financeiras` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. |
 | `frontend/src/services/contasFinanceiras.js` | `atualizarContaFinanceira` | `/contas-financeiras/{id}` | PUT | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. |
 | `frontend/src/services/contasFinanceiras.js` | `marcarComoPago` | `/contas-financeiras/{id}/status` | PATCH | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro/pagamento. |
@@ -203,6 +203,15 @@ Confinar uso de `localStorage` ao minimo necessario, preparar access token em me
 - `PATCH /mensalidades/{id}/status` foi documentado como rota de compatibilidade nao financeira.
 - `pago` e `parcial` nao devem ser enviados por rotas genericas de mensalidade; o backend bloqueia esses status.
 - Pagamento canonico continua em `POST /pagamentos` e contratacao/renovacao assistida continua em `POST /planos/contratar-renovar`.
+
+## Atualizacao LEGACY-04D
+
+- As rotas legadas de `backend/routes/financeiro.js` em `/financeiro/*` nao devem ser usadas como fonte canonica.
+- Dashboard financeiro atual: `GET /dashboard/financeiro/kpis`.
+- Contas financeiras manuais: `/contas-financeiras`.
+- Pagamento canonico: `POST /pagamentos`.
+- Contratacao/renovacao canonica: `POST /planos/contratar-renovar`.
+- Diagnostico operacional read-only: `tests/scripts/diagnostico-consistencia.cmd`.
 
 ## Atualizacao 3C-K
 
