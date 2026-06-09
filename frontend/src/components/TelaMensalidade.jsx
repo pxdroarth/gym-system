@@ -7,6 +7,7 @@ import Table from "./ui/Table";
 import { updateMensalidadeStatus } from "../services/mensalidadeService";
 import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
+// LEGADO: nao reutilizar para pagamento/cobertura; fluxo canonico e POST /pagamentos ou contratacao/renovacao assistida.
 function formatValor(valor) {
   const num = Number(valor);
   return Number.isNaN(num) ? "R$ 0,00" : num.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });

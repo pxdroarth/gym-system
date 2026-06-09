@@ -180,6 +180,7 @@ export default function PerfilPage() {
   const canRegistrarPagamento = userHasUiPermission(user, UI_PERMISSIONS.PAGAMENTOS_REGISTRAR);
   const canGerenciarPlanos = userHasUiPermission(user, UI_PERMISSIONS.PLANOS_GERENCIAR);
   const canContratarRenovar = canGerenciarPlanos && canRegistrarPagamento;
+  const canLancamentoManualMensalidade = canRegistrarPagamento;
 
   async function pagarMensalidade(mensalidade) {
     try {
@@ -361,9 +362,16 @@ export default function PerfilPage() {
                 </Button>
               ) : null}
               {!aluno.plano_id && canContratarRenovar ? <Badge tone="amber">Aluno sem plano</Badge> : null}
-              <Button variant="secondary" onClick={() => setShowModal(true)}>
-                Registrar mensalidade manual
-              </Button>
+              {canLancamentoManualMensalidade ? (
+                <div className="max-w-xs text-right">
+                  <Button variant="ghost" onClick={() => setShowModal(true)}>
+                    Lancamento manual de mensalidade
+                  </Button>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Uso administrativo. Cria mensalidade sem pagamento acoplado e nao gera cobertura paga automaticamente.
+                  </p>
+                </div>
+              ) : null}
             </div>
           </div>
 

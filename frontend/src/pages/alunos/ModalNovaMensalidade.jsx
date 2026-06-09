@@ -61,8 +61,11 @@ export default function ModalNovaMensalidade({ open, aluno, onClose, onSuccess }
   }
 
   return (
-    <Modal title={`Registrar Mensalidade de ${aluno.nome}`} onClose={onClose}>
+    <Modal title={`Lancamento manual de mensalidade de ${aluno.nome}`} onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          Este e um lancamento manual administrativo. Para contratar/renovar com cobertura paga, use o fluxo Contratar/Renovar plano.
+        </div>
         <Input
           label="Vencimento"
           type="date"
