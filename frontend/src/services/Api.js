@@ -317,8 +317,3 @@ export async function createVendaProduto(dadosVenda) {
   const response = await api.post('/vendas-produtos', dadosVenda);
   return response.data;
 }
-
-export async function updateMensalidadeStatus(id, status) {
-  const response = await api.patch(`/mensalidades/${id}/status`, { status });
-  return response.data;
-}
