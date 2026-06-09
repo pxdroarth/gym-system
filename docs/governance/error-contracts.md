@@ -90,7 +90,6 @@ Exemplos representativos:
 - `backend/routes/alunos.js`
 - `backend/routes/planos.js`
 - `backend/routes/produtos.js`
-- `backend/routes/financeiro.js`
 - `backend/routes/planoContas.js`
 - `backend/routes/ativos.js`
 - `backend/routes/orcamento.js`

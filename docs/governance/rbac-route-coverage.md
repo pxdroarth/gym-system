@@ -151,7 +151,6 @@ Impacto atual:
 
 ### Financeiro
 
-- `financeiro.js` depende de escopo
 - `contasFinanceiras.js` depende de escopo, com permissão explícita só em reversão
 - [backend/routes/dashboardFinanceiro.js](/C:/sistema-academia-main/backend/routes/dashboardFinanceiro.js):
   - `GET /dashboard/financeiro` e `GET /dashboard/financeiro/kpis` dependem de escopo

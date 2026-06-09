@@ -65,13 +65,13 @@ Esta auditoria nao altera codigo funcional. O backend usa token opaco server-sid
 | `frontend/src/services/tenantService.js` | `atualizarTenant` | `/tenants/{id}` | PATCH | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Tenant/unidade. |
 | `frontend/src/services/tenantService.js` | `listarUnitsPorTenant` | `/units/tenant/{tenantId}` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Unidade. |
 | `frontend/src/services/tenantService.js` | `atualizarUnit` | `/units/{id}` | PATCH | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Unidade. |
-| `frontend/src/services/contasFinanceiras.js` | `getContasFinanceiras` | `/contas-financeiras` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. Leitura canonica atual das contas financeiras manuais; nao usar as rotas legadas `/financeiro/*`. |
+| `frontend/src/services/contasFinanceiras.js` | `getContasFinanceiras` | `/contas-financeiras` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. Leitura canonica atual das contas financeiras manuais. |
 | `frontend/src/services/contasFinanceiras.js` | `criarContaFinanceira` | `/contas-financeiras` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. |
 | `frontend/src/services/contasFinanceiras.js` | `atualizarContaFinanceira` | `/contas-financeiras/{id}` | PUT | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. |
 | `frontend/src/services/contasFinanceiras.js` | `marcarComoPago` | `/contas-financeiras/{id}/status` | PATCH | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro/pagamento. |
 | `frontend/src/services/contasFinanceiras.js` | `deletarContaFinanceira` | `/contas-financeiras/{id}` | DELETE | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. |
 | `frontend/src/services/onboardingService.js` | `criarTenantOnboarding` | `/onboarding/tenants` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Onboarding/tenant. |
-| `frontend/src/services/dashboardService.js` | `getDashboardKPIs` | `/dashboard/financeiro/kpis` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller; normaliza arrays | Alto | Financeiro. Endpoint canonico atual para dashboard; nao usar `/financeiro/fluxo`, que permanece apenas como legado com risco de dupla contagem. |
+| `frontend/src/services/dashboardService.js` | `getDashboardKPIs` | `/dashboard/financeiro/kpis` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller; normaliza arrays | Alto | Financeiro. Endpoint canonico atual para dashboard. |
 | `frontend/src/services/planoContasService.js` | `getPlanoContas` | `/plano-contas` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. |
 | `frontend/src/services/planoContasService.js` | `createPlanoConta` | `/plano-contas` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. |
 | `frontend/src/services/planoContasService.js` | `updatePlanoConta` | `/plano-contas/{id}` | PUT | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Financeiro. |
@@ -206,7 +206,7 @@ Confinar uso de `localStorage` ao minimo necessario, preparar access token em me
 
 ## Atualizacao LEGACY-04D
 
-- As rotas legadas de `backend/routes/financeiro.js` em `/financeiro/*` nao devem ser usadas como fonte canonica.
+- As rotas financeiras legadas em `/financeiro/*` foram removidas do backend e do OpenAPI/Insomnia.
 - Dashboard financeiro atual: `GET /dashboard/financeiro/kpis`.
 - Contas financeiras manuais: `/contas-financeiras`.
 - Pagamento canonico: `POST /pagamentos`.

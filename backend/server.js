@@ -98,7 +98,6 @@ async function start() {
   app.use('/vendasProdutos', require('./routes/vendasProdutos'));
   app.use('/vendas-produtos', require('./routes/vendasProdutos'));
 
-  app.use('/financeiro', require('./routes/financeiro'));
   app.use('/dashboard/financeiro', require('./routes/dashboardFinanceiro'));
   app.use('/tenant-dashboard', require('./routes/tenantDashboard'));
   app.use('/financeiro/ativos', require('./routes/ativos'));
