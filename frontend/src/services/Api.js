@@ -318,11 +318,6 @@ export async function createVendaProduto(dadosVenda) {
   return response.data;
 }
 
-export async function gerarMensalidadesFuturas(payload) {
-  const response = await api.post('/mensalidades/gerar-futuras', payload);
-  return response.data;
-}
-
 export async function updateMensalidadeStatus(id, status) {
   const response = await api.patch(`/mensalidades/${id}/status`, { status });
   return response.data;
