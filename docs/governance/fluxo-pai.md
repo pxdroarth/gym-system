@@ -638,6 +638,95 @@ FIN-KPI-01 — Contrato formal de KPIs financeiros
 
 ---
 
+# POLÍTICA FUTURA — SANEAMENTO CONTROLADO DE LEGADO
+
+## Status
+⏳ FUTURA
+
+## Princípio de saneamento
+
+- remover lixo legado melhora a saúde do produto
+- reduz contexto desnecessário para IA/Codex
+- reduz risco de reutilização de fluxo antigo
+- reduz ambiguidade operacional
+- reduz superfície de bugs e manutenção
+
+Legado pode e deve ser removido quando for comprovadamente morto, perigoso ou incompatível com a arquitetura atual, mas nunca por varredura cega apenas porque não aparece no fluxo-pai.
+
+## Critério para remover
+
+Um artefato pode ser removido quando:
+
+- não está importado ou montado
+- não é usado pelo frontend
+- não é chamado por backend, scripts, testes ou smokes
+- não é necessário para migration ou schema histórico
+- não é fallback operacional documentado
+- não é compatibilidade temporária
+- existe substituto atual mais seguro
+- buscas e validações confirmam ausência de uso
+
+## Critério para manter temporariamente
+
+Manter ou deprecar em vez de remover quando:
+
+- ainda há uso ativo
+- há dúvida sobre dependência indireta
+- é compatibilidade temporária
+- é fallback operacional conhecido
+- é necessário para migração de bancos antigos
+- ainda não existe substituto seguro
+- a remoção exigiria refactor amplo
+
+## Classificação futura de legado
+
+Todo item suspeito deve ser classificado como:
+
+- morto comprovado: remover
+- perigoso e sem uso: remover ou deprecar forte
+- perigoso, mas ainda usado: substituir primeiro, remover depois
+- compatibilidade: manter temporariamente e documentar
+- desconhecido: investigar, não remover ainda
+
+## Processo obrigatório
+
+A limpeza futura deve ocorrer em blocos pequenos:
+
+- `LEGACY-01`: inventário de legados mortos ou perigosos
+- `LEGACY-02`: remoção de arquivos mortos comprovados
+- `LEGACY-03`: depreciação de fluxos legados ainda preservados
+- `LEGACY-04`: limpeza de services e wrappers frontend sem uso
+- `LEGACY-05`: checkpoint de build, smokes e docs
+
+## O que não remover sem cuidado
+
+- `ensureSchema` e migrations antigas
+- campos preservados por compatibilidade, como status antigos ainda consumidos
+- smokes e testes úteis
+- permissões antigas sem varredura completa
+- fluxos administrativos ainda preservados
+- arquivos cujo uso não foi comprovadamente descartado
+
+## Regra de validação
+
+Antes de remover legado:
+
+- buscar referências com `rg`
+- checar imports e montagem
+- checar rotas ativas
+- checar frontend
+- checar scripts e testes
+- rodar build e smokes relevantes
+- manter commits pequenos e reversíveis
+
+## Relação com scheduler e jobs
+
+A limpeza de legado deve ocorrer antes de criar automações recorrentes perigosas.
+
+Scheduler ou `node-cron` futuro não deve depender de código legado, scripts antigos ou fluxos herdados sem revisão.
+
+---
+
 # FASE 9 — ACCESS DEVICE PLATFORM
 
 ## STATUS
