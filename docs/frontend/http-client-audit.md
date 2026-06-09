@@ -53,7 +53,6 @@ Esta auditoria nao altera codigo funcional. O backend usa token opaco server-sid
 | `frontend/src/services/Api.js` | `createVendaProduto` | `/vendas-produtos` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Venda. |
 | `frontend/src/services/Api.js` | `fetchMensalidadesAlunoStatus` | `/mensalidades/aluno/{alunoId}` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | Funcao marcada como legado no proprio arquivo. |
 | `frontend/src/services/Api.js` | `registrarPagamentoAntecipado` | `/mensalidades/pagamento-antecipado` | POST | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Contrato deve ser reconferido antes da migracao. |
-| `frontend/src/services/Api.js` | `updateMensalidadeStatus` | `/mensalidades/{id}/status` | PATCH | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Medio | Atualizacao de status. |
 | `frontend/src/services/auditLogService.js` | `fetchAuditLogs` | `/audit-logs` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Auditoria. |
 | `frontend/src/services/auditLogService.js` | `fetchAuditLogById` | `/audit-logs/{id}` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Auditoria. |
 | `frontend/src/services/usuariosInternosService.js` | `listarUsuariosInternos` | `/usuarios-internos` | GET | Sim | Central via interceptor | Sim | Rejeicao axios para caller | Alto | Usuarios/permissoes. |
@@ -100,6 +99,7 @@ Esta auditoria nao altera codigo funcional. O backend usa token opaco server-sid
 - `authService.loginRequest` usa o cliente central sem explicitar `_skipAuthHeader`; se houver token antigo no storage, o interceptor pode enviar bearer tambem no login.
 - Existem endpoints legados em `Api.js` ligados a mensalidades que devem ser reconferidos contra as rotas reais antes de qualquer migracao automatica.
 - O fluxo legado `gerarMensalidadesFuturas` e o endpoint `/mensalidades/gerar-futuras` foram removidos do frontend por serem incompatíveis com a regra atual: nao existe geracao automatica cega de mensalidades para alunos ativos.
+- O wrapper frontend `updateMensalidadeStatus` foi removido. `PATCH /mensalidades/{id}/status` permanece apenas como compatibilidade para status nao financeiros e nao deve ser tratado como fluxo de pagamento/quitacao.
 - A base `http://localhost:3001` aparece tambem em `ProdutosPage.jsx` para imagens; nao e chamada HTTP, mas e duplicacao de base URL.
 - Dominios de alto risco estao no mesmo padrao generico de erro/retry: auth, auditoria, financeiro, pagamentos, vendas, acessos, usuarios/permissoes, tenant/onboarding e upload de produtos.
 - Nao foram encontrados `fetch` sem credentials, chamadas axios diretas fora do cliente central ou montagem manual de bearer fora de `Api.js`.
@@ -197,6 +197,12 @@ Confinar uso de `localStorage` ao minimo necessario, preparar access token em me
 - A referencia documental a `gerarMensalidadesFuturas` e ao endpoint `/mensalidades/gerar-futuras` foi marcada como removida.
 - O frontend nao promove mais esse fluxo como endpoint ativo.
 - A regra vigente e contratacao/renovacao assistida; geracao automatica cega de mensalidades permanece incompatível com o produto atual.
+
+## Atualizacao LEGACY-03E
+
+- `PATCH /mensalidades/{id}/status` foi documentado como rota de compatibilidade nao financeira.
+- `pago` e `parcial` nao devem ser enviados por rotas genericas de mensalidade; o backend bloqueia esses status.
+- Pagamento canonico continua em `POST /pagamentos` e contratacao/renovacao assistida continua em `POST /planos/contratar-renovar`.
 
 ## Atualizacao 3C-K
 

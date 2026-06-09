@@ -40,7 +40,7 @@ Auth core e refresh devem migrar por ultimo, ou permanecer no `Api.js` ate o Blo
 | Alunos | `fetchAlunos`, `fetchAlunoById`, `createAluno`, `updateAluno`, `fetchAlunosPesquisa` | `Dashboard.jsx`, `ModalAcessosHoje.jsx`, `AlunosPage.jsx`, `FormAlunoPage.jsx`, `PerfilPage.jsx`, `PlanoAssociadosPage.jsx` | Medio | `alunoService.js` | Muito usado; migrar com wrappers e aliases temporarios. |
 | Planos | `fetchPlanos`, `createPlano`, `updatePlano` | `PlanosPage.jsx`, `ModalPlanoForm.jsx`, `FormAlunoPage.jsx`, `PerfilPage.jsx` | Medio | `planoService.js` | Dominio simples, bom candidato para fase inicial apos wrappers. |
 | Vinculos/associacoes | `fetchPlanoAssociados`, `createPlanoAssociado`, `deletePlanoAssociado` | `FormAlunoPage.jsx`, `PlanoAssociadosPage.jsx` | Medio | `planoAssociadoService.js` ou `vinculoService.js` | Impacta responsavel/dependente; validar regra de acesso por vinculo apos migrar. |
-| Mensalidades | `cadastrarMensalidade`, `fetchMensalidadesPorAluno`, `fetchMensalidades`, `fetchMensalidadesAlunoStatus`, `updateMensalidadeStatus` | `ModalNovaMensalidade.jsx`, `PerfilPage.jsx`, `PagamentoAntecipado.jsx`, `TelaMensalidade.jsx` | Alto | `mensalidadeService.js` | Tem aliases legados e endpoints sensiveis para acesso/financeiro. Migrar depois de dominos simples. |
+| Mensalidades | `cadastrarMensalidade`, `fetchMensalidadesPorAluno`, `fetchMensalidades`, `fetchMensalidadesAlunoStatus` | `ModalNovaMensalidade.jsx`, `PerfilPage.jsx`, `PagamentoAntecipado.jsx` | Alto | `mensalidadeService.js` | Tem aliases legados e endpoints sensiveis para acesso/financeiro. Migrar depois de dominos simples. |
 | Pagamentos | `registrarPagamento`, `registrarPagamentoAntecipado` | `PerfilPage.jsx`, `PagamentoAntecipado.jsx` | Alto | `pagamentoService.js` | Pagamento e snapshot historico devem ser validados em smoke manual. |
 | Acessos | `fetchAcessos`, `fetchTodosAcessos`, `simularAcesso` | `PerfilPage.jsx`, `Dashboard.jsx`, `ModalAcessosHoje.jsx` | Alto | `acessoService.js` | Critico depois do DOM-ACESSO-01; migrar com smoke `smoke-acesso.cmd`. |
 | Produtos | `fetchProdutos`, `createProduto`, `updateProduto`, `deleteProduto` | `ProdutosPage.jsx`, `ProdutoForm.jsx`, `VendasProdutosPage.jsx` | Medio/Alto | `produtoService.js` | Upload usa `FormData` e `multipart/form-data`; tambem ha URL de imagem duplicada em `ProdutosPage.jsx`. |
@@ -55,7 +55,7 @@ Auth core e refresh devem migrar por ultimo, ou permanecer no `Api.js` ate o Blo
 
 - `fetchMensalidadesAlunoStatus(alunoId, status)`: alias sobre `GET /mensalidades/aluno/{alunoId}` com query `status`; nao remover sem revisar usos em `PagamentoAntecipado.jsx`.
 - `registrarPagamentoAntecipado(payload)`: usa `POST /mensalidades/pagamento-antecipado`; contrato deve ser reconferido antes de renomear ou mover.
-- `updateMensalidadeStatus(id, status)`: usa `PATCH /mensalidades/{id}/status`; usado por `TelaMensalidade.jsx`, que deve ser revisado contra os status reais antes de qualquer limpeza.
+- `PATCH /mensalidades/{id}/status`: rota backend preservada por compatibilidade para status nao financeiros. Nao e fluxo de pagamento; `pago` e `parcial` sao bloqueados por rota generica e o frontend nao expoe mais wrapper para esse endpoint.
 - `simularAcesso(aluno_id)`: usa `/acessos/mock-hikvision`; nome e endpoint refletem simulacao atual, nao integracao Hikvision real.
 - `fetchVendasProdutos(params)`: aceita tanto string de query quanto objeto; comportamento deve ser preservado no wrapper futuro.
 - `ProdutosPage.jsx` monta URL de imagem com `VITE_API_URL || http://localhost:3001`; isso nao e chamada HTTP, mas e duplicacao de base URL para midia.
@@ -133,14 +133,14 @@ Depois que os dominios estiverem em services separados e os imports antigos fore
 - Consumidores migrados nesta etapa: `frontend/src/pages/vendasProdutos/VendasProdutosPage.jsx` e migracao parcial de `frontend/src/pages/alunos/PerfilPage.jsx`.
 - Em `VendasProdutosPage.jsx`, os imports de produtos e vendas sairam de `Api.js` e passaram para `produtoService.js` e `vendaProdutoService.js`, mantendo chamadas, filtros, payloads e retorno exatamente iguais.
 - Em `PerfilPage.jsx`, apenas chamadas simples de aluno/plano foram migradas para `alunoService.js` e `planoService.js`; mensalidades, pagamentos e acessos continuam importados de `Api.js` por serem mais sensiveis e pedirem bloco proprio.
-- Consumidores mantidos em `Api.js` por risco: `Dashboard.jsx`, `ModalAcessosHoje.jsx`, `ModalNovaMensalidade.jsx`, `PagamentoAntecipado.jsx` e `TelaMensalidade.jsx`.
+- Consumidores mantidos em `Api.js` por risco: `Dashboard.jsx`, `ModalAcessosHoje.jsx`, `ModalNovaMensalidade.jsx` e `PagamentoAntecipado.jsx`.
 - Dominios ainda pendentes para blocos proprios: mensalidades, pagamentos, acessos/liberacao e financeiro mais sensivel, para evitar migracao em lote de fluxos com regra critica e necessidade de smoke especifico.
 - `Api.js` continua compativel e preserva todos os exports legados durante a migracao incremental dos consumidores.
 
 ## Atualizacao 3C-J
 
-- Consumidores migrados para `mensalidadeService.js` e `pagamentoService.js`: `frontend/src/pages/alunos/PerfilPage.jsx` nos trechos de mensalidades/pagamento, `frontend/src/pages/alunos/ModalNovaMensalidade.jsx`, `frontend/src/pages/mensalidades/PagamentoAntecipado.jsx` e `frontend/src/components/TelaMensalidade.jsx`.
-- As funcoes migradas mantiveram nomes, parametros, retornos, payloads e endpoints: `cadastrarMensalidade`, `fetchMensalidadesPorAluno`, `fetchMensalidadesAlunoStatus`, `updateMensalidadeStatus`, `registrarPagamentoAntecipado` e `registrarPagamento`.
+- Consumidores migrados para `mensalidadeService.js` e `pagamentoService.js`: `frontend/src/pages/alunos/PerfilPage.jsx` nos trechos de mensalidades/pagamento, `frontend/src/pages/alunos/ModalNovaMensalidade.jsx` e `frontend/src/pages/mensalidades/PagamentoAntecipado.jsx`.
+- As funcoes migradas mantiveram nomes, parametros, retornos, payloads e endpoints: `cadastrarMensalidade`, `fetchMensalidadesPorAluno`, `fetchMensalidadesAlunoStatus`, `registrarPagamentoAntecipado` e `registrarPagamento`.
 - `PerfilPage.jsx` permanece parcialmente em `Api.js` apenas para acessos (`fetchAcessos`, `simularAcesso`), preservando a separacao entre mensalidades/pagamentos e o bloco futuro de acessos/liberacao.
 - Continuam para blocos proprios os dominios de acessos/liberacao e financeiro mais amplo, para evitar migracao em lote de fluxos com regra critica e necessidade de smoke dedicado.
 
@@ -149,6 +149,12 @@ Depois que os dominios estiverem em services separados e os imports antigos fore
 - `GerarMensalidadesFuturas.jsx`, o wrapper `gerarMensalidadesFuturas` e a referencia a `POST /mensalidades/gerar-futuras` foram removidos como legado.
 - O documento deixa de tratar esse endpoint como ativo ou compativel.
 - Geracao automatica cega de mensalidades para alunos ativos permanece fora da regra atual do produto.
+
+## Atualizacao LEGACY-03E
+
+- `TelaMensalidade.jsx` e o wrapper frontend `updateMensalidadeStatus` foram removidos como legado.
+- `PATCH /mensalidades/{id}/status` continua existindo apenas para compatibilidade nao financeira no backend.
+- Pagamento deve usar `POST /pagamentos`; contratacao/renovacao assistida deve usar `POST /planos/contratar-renovar`.
 
 ## Atualizacao 3C-K
 
