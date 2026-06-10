@@ -440,6 +440,155 @@ async function ensurePlanoContasTable() {
   `);
 }
 
+async function ensureAccessDeviceTables() {
+  await runExecute(`
+    CREATE TABLE IF NOT EXISTS access_devices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id INTEGER NOT NULL,
+      unit_id INTEGER NOT NULL,
+      nome TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      tipo TEXT NOT NULL,
+      external_device_id TEXT,
+      serial TEXT,
+      status TEXT NOT NULL DEFAULT 'ativo',
+      last_seen_at TEXT,
+      metadata_json TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      deleted_at TEXT,
+      FOREIGN KEY (tenant_id) REFERENCES tenant(id),
+      FOREIGN KEY (unit_id) REFERENCES unit(id)
+    )
+  `);
+
+  await addColumnIfTableExists('access_devices', 'tenant_id INTEGER');
+  await addColumnIfTableExists('access_devices', 'unit_id INTEGER');
+  await addColumnIfTableExists('access_devices', 'nome TEXT');
+  await addColumnIfTableExists('access_devices', 'provider TEXT');
+  await addColumnIfTableExists('access_devices', 'tipo TEXT');
+  await addColumnIfTableExists('access_devices', 'external_device_id TEXT');
+  await addColumnIfTableExists('access_devices', 'serial TEXT');
+  await addColumnIfTableExists('access_devices', "status TEXT NOT NULL DEFAULT 'ativo'");
+  await addColumnIfTableExists('access_devices', 'last_seen_at TEXT');
+  await addColumnIfTableExists('access_devices', 'metadata_json TEXT');
+  await addColumnIfTableExists('access_devices', "created_at TEXT DEFAULT (datetime('now'))");
+  await addColumnIfTableExists('access_devices', "updated_at TEXT DEFAULT (datetime('now'))");
+  await addColumnIfTableExists('access_devices', 'deleted_at TEXT');
+
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_access_devices_scope_status ON access_devices (tenant_id, unit_id, status)');
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_access_devices_scope_provider ON access_devices (tenant_id, unit_id, provider)');
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_access_devices_scope_external_device ON access_devices (tenant_id, unit_id, provider, external_device_id)');
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_access_devices_scope_serial ON access_devices (tenant_id, unit_id, serial)');
+  await runExecute(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uidx_access_devices_scope_provider_external_active
+    ON access_devices (tenant_id, unit_id, provider, external_device_id)
+    WHERE external_device_id IS NOT NULL AND deleted_at IS NULL
+  `);
+  await runExecute(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uidx_access_devices_scope_serial_active
+    ON access_devices (tenant_id, unit_id, serial)
+    WHERE serial IS NOT NULL AND deleted_at IS NULL
+  `);
+
+  await runExecute(`
+    CREATE TABLE IF NOT EXISTS access_credentials (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id INTEGER NOT NULL,
+      unit_id INTEGER NOT NULL,
+      aluno_id INTEGER NOT NULL,
+      tipo TEXT NOT NULL,
+      identificador_hash TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      external_credential_id TEXT,
+      status TEXT NOT NULL DEFAULT 'ativo',
+      enrolled_at TEXT DEFAULT (datetime('now')),
+      revoked_at TEXT,
+      metadata_json TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      deleted_at TEXT,
+      FOREIGN KEY (tenant_id) REFERENCES tenant(id),
+      FOREIGN KEY (unit_id) REFERENCES unit(id),
+      FOREIGN KEY (aluno_id) REFERENCES aluno(id)
+    )
+  `);
+
+  await addColumnIfTableExists('access_credentials', 'tenant_id INTEGER');
+  await addColumnIfTableExists('access_credentials', 'unit_id INTEGER');
+  await addColumnIfTableExists('access_credentials', 'aluno_id INTEGER');
+  await addColumnIfTableExists('access_credentials', 'tipo TEXT');
+  await addColumnIfTableExists('access_credentials', 'identificador_hash TEXT');
+  await addColumnIfTableExists('access_credentials', 'provider TEXT');
+  await addColumnIfTableExists('access_credentials', 'external_credential_id TEXT');
+  await addColumnIfTableExists('access_credentials', "status TEXT NOT NULL DEFAULT 'ativo'");
+  await addColumnIfTableExists('access_credentials', "enrolled_at TEXT DEFAULT (datetime('now'))");
+  await addColumnIfTableExists('access_credentials', 'revoked_at TEXT');
+  await addColumnIfTableExists('access_credentials', 'metadata_json TEXT');
+  await addColumnIfTableExists('access_credentials', "created_at TEXT DEFAULT (datetime('now'))");
+  await addColumnIfTableExists('access_credentials', "updated_at TEXT DEFAULT (datetime('now'))");
+  await addColumnIfTableExists('access_credentials', 'deleted_at TEXT');
+
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_access_credentials_scope_aluno_status ON access_credentials (tenant_id, unit_id, aluno_id, status)');
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_access_credentials_scope_tipo_hash_status ON access_credentials (tenant_id, unit_id, tipo, identificador_hash, status)');
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_access_credentials_scope_provider_external ON access_credentials (tenant_id, unit_id, provider, external_credential_id)');
+  await runExecute(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uidx_access_credentials_scope_tipo_hash_active
+    ON access_credentials (tenant_id, unit_id, tipo, identificador_hash)
+    WHERE deleted_at IS NULL AND revoked_at IS NULL
+  `);
+
+  await runExecute(`
+    CREATE TABLE IF NOT EXISTS access_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id INTEGER NOT NULL,
+      unit_id INTEGER NOT NULL,
+      device_id INTEGER,
+      credential_id INTEGER,
+      provider TEXT NOT NULL,
+      credential_type TEXT NOT NULL,
+      external_identifier_masked TEXT,
+      correlation_id TEXT NOT NULL,
+      raw_payload_ref TEXT,
+      received_at TEXT DEFAULT (datetime('now')),
+      decision_status TEXT NOT NULL DEFAULT 'recebido',
+      decision_reason TEXT,
+      acesso_id INTEGER,
+      metadata_json TEXT,
+      FOREIGN KEY (tenant_id) REFERENCES tenant(id),
+      FOREIGN KEY (unit_id) REFERENCES unit(id),
+      FOREIGN KEY (device_id) REFERENCES access_devices(id),
+      FOREIGN KEY (credential_id) REFERENCES access_credentials(id),
+      FOREIGN KEY (acesso_id) REFERENCES acesso(id)
+    )
+  `);
+
+  await addColumnIfTableExists('access_events', 'tenant_id INTEGER');
+  await addColumnIfTableExists('access_events', 'unit_id INTEGER');
+  await addColumnIfTableExists('access_events', 'device_id INTEGER');
+  await addColumnIfTableExists('access_events', 'credential_id INTEGER');
+  await addColumnIfTableExists('access_events', 'provider TEXT');
+  await addColumnIfTableExists('access_events', 'credential_type TEXT');
+  await addColumnIfTableExists('access_events', 'external_identifier_masked TEXT');
+  await addColumnIfTableExists('access_events', 'correlation_id TEXT');
+  await addColumnIfTableExists('access_events', 'raw_payload_ref TEXT');
+  await addColumnIfTableExists('access_events', "received_at TEXT DEFAULT (datetime('now'))");
+  await addColumnIfTableExists('access_events', "decision_status TEXT NOT NULL DEFAULT 'recebido'");
+  await addColumnIfTableExists('access_events', 'decision_reason TEXT');
+  await addColumnIfTableExists('access_events', 'acesso_id INTEGER');
+  await addColumnIfTableExists('access_events', 'metadata_json TEXT');
+
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_access_events_scope_received ON access_events (tenant_id, unit_id, received_at)');
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_access_events_device ON access_events (device_id)');
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_access_events_credential ON access_events (credential_id)');
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_access_events_acesso ON access_events (acesso_id)');
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_access_events_scope_provider_correlation ON access_events (tenant_id, unit_id, provider, correlation_id)');
+  await runExecute(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uidx_access_events_scope_provider_correlation
+    ON access_events (tenant_id, unit_id, provider, correlation_id)
+  `);
+}
+
 async function ensurePlanoPolicyColumns() {
   await addColumnIfTableExists('plano', "tipo_cobranca TEXT DEFAULT 'AVULSO_MENSAL'");
   await addColumnIfTableExists('plano', 'exige_pagamento_ato INTEGER DEFAULT 1');
@@ -631,6 +780,7 @@ async function ensureSchema() {
   await ensureLegacyAdministrativeTables();
   await ensurePlanoAssociadoTable();
   await ensurePlanoContasTable();
+  await ensureAccessDeviceTables();
   await ensurePlanoPolicyColumns();
   await ensurePlanoAssociadoColumns();
   await ensureReversaoSoftDeleteColumns();
