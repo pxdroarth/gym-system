@@ -367,7 +367,7 @@ Visão consolidada da Rede, somente leitura, voltada a acompanhamento e governan
 
 **RT-006 [pendente]** Testes devem validar mensalidade, pagamento e snapshot histórico.
 
-**RT-007 [pendente]** Testes devem validar regras de acesso por mensalidade/status/vínculo.
+**RT-007 [pendente]** Testes devem validar regras de acesso por cobertura paga vigente, pagamento, vínculo/plano, bloqueio de `em_aberto`/`parcial` e override manual auditado.
 
 **RT-008 [futuro]** Playwright deve ser considerado para fluxos críticos de UI.
 
