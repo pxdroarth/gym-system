@@ -64,6 +64,55 @@ Hoje o sistema já possui:
 - preparação para DevOps
 - preparação para hardware/catraca
 
+## Estado arquitetural atual
+
+- monólito modular pragmático
+- evitar microservices ou event-driven prematuros
+- frontend React + Vite + Tailwind
+- backend Node.js + Express
+- SQLite local como banco atual
+- migração gradual futura para PostgreSQL
+- Electron/gateway local previsto para operação offline e integração com dispositivos
+
+## Prioridades arquiteturais atuais
+
+- segurança
+- estabilidade
+- governança
+- testes
+- auditabilidade
+- reversibilidade
+- baixo acoplamento
+- diffs pequenos
+
+## Auth e RBAC atuais
+
+- auth com token opaco server-side e refresh cookie HttpOnly
+- access token apenas em memória
+- logout e logout-all implementados
+- RBAC aplicado no backend e no frontend
+- permissões críticas preservadas
+- fallback legado `x-operator-id` ou `x-user-id` restrito a testes e uso opt-in
+
+## Fluxos canônicos atuais
+
+- pagamento: `POST /pagamentos`
+- contratação ou renovação: `POST /planos/contratar-renovar`
+- dashboard financeiro: `GET /dashboard/financeiro/kpis`
+- contas financeiras manuais: `/contas-financeiras`
+- diagnóstico operacional: `tests/scripts/diagnostico-consistencia.cmd`
+
+## Fluxo operacional Codex ou IA atual
+
+- Codex deve editar o mínimo necessário
+- o usuário roda as validações locais principais
+- o assistente revisa output, diff e riscos
+- não instalar dependências pesadas sem confirmação
+- `smoke-auth` pode exigir interação e não deve ser disparado no Codex sem cuidado
+- preferir GPT-5.4 médio ou alto para diagnóstico, documentação e remoções simples
+- usar GPT-5.5 alto ou altíssimo apenas em auth, RBAC, financeiro transacional, pagamentos, cobertura, acesso, schema, migration, scheduler com efeito operacional ou reconciliação automática
+- se o modelo ou nível de esforço parecer subdimensionado, registrar a limitação e recomendar refazer
+
 ---
 
 # FASE 1 — BASE DO ERP
@@ -571,7 +620,7 @@ Automatizar resposta depois
 # FASE 8 — KPIs FINANCEIROS PROFISSIONAIS
 
 ## STATUS
-⏳ FUTURA
+🔄 BASE DE COBERTURA, ACESSO E FINANCEIRO CANÔNICO IMPLEMENTADA; KPIs AVANÇADOS SEGUEM FUTUROS
 
 ## Regra comercial consolidada de cobertura e cobrança
 
@@ -585,9 +634,11 @@ Automatizar resposta depois
 - cobranca/pagamento e cobertura/vigencia de acesso sao conceitos relacionados, mas distintos; inadimplencia real exige contrato, pacote, consumo autorizado, recorrencia assumida ou regra comercial explicita
 - dashboards futuros devem separar receita recebida, cobertura ativa, pendencias operacionais e inadimplencia real
 - `em_aberto` de plano avulso nao deve inflar automaticamente inadimplencia nem receita a receber real
+- `parcial` nao libera acesso por padrao
+- override manual de acesso exige auditoria
 - cron/scheduler futuro nao deve criar mensalidade automaticamente para todo aluno ativo
 - cron futuro deve ser apenas de diagnostico/reconciliacao idempotente, chamando service transacional e idempotente que continue sendo o dono da regra
-- em monolito local, scheduler futuro pode usar `node-cron`, mas deve nascer desativavel por configuracao e preparado para lock/idempotencia pensando em nuvem e multiplas instancias
+- em monolito local, scheduler futuro pode usar `node-cron` apenas se a dependencia for reintroduzida explicitamente; hoje `node-cron` nao esta instalado no projeto
 - a implementacao futura nao deve depender de hardcode por nome de plano, texto livre, duracao fixa ou `ifs` espalhados em `AccessService`, `MensalidadeService`, `FinanceiroService` ou cron
 - a politica deve ser parametrizada por campos/configuracao do plano e interpretada por camada central de dominio, com atributos como `tipo_cobranca`, `duracao_meses` ou `duracao_dias`, `exige_pagamento_ato`, `gera_divida_automatica`, `gera_cobertura_apos_pagamento`, `permite_renovacao_avulsa` e politica de desconto
 - a decisao de cobranca e acesso deve consultar um service central de politica de plano/cobertura para evitar duplicacao de regra e divergencia entre modulos
@@ -614,6 +665,53 @@ Automatizar resposta depois
 - scheduler futuro nao cria mensalidade para todo aluno ativo; ele chama service idempotente de diagnostico e reconciliacao
 - scheduler futuro deve nascer desativavel por configuracao e preparado para lock/idempotencia em monolito local hoje e multiplas instancias no futuro
 
+## Base implementada no estado atual
+
+- `PlanoPolicyService` existe e centraliza política de plano
+- `CoberturaService` existe e centraliza preview, contratação e renovação
+- `AccessService` usa cobertura paga vigente como base de liberação
+- contratação ou renovação transacional existe em `POST /planos/contratar-renovar`
+- preview de cobertura existe em `POST /planos/preview-cobertura`
+- contratação assistida exige pagamento integral
+- pagamento parcial não libera por padrão
+- cobertura sobreposta é bloqueada antes de criar nova cobrança ou pagamento
+- o frontend usa `cobertura_paga_vigente` e `cobertura_status` como verdade principal de cobertura
+
+## Diagnóstico operacional atual
+
+- `tests/scripts/diagnostico-consistencia.cmd` existe e é read-only
+- o diagnóstico abre o SQLite em modo somente leitura
+- não corrige dados
+- não cria mensalidade
+- não sincroniza financeiro
+- não é scheduler
+- roda 12 checks
+- criticidades `critico` e `alto` são bloqueantes
+- o achado informativo esperado hoje é aluno `AVULSO_MENSAL` sem cobertura paga vigente
+
+## Scheduler e jobs atuais
+
+- não há scheduler operacional ativo
+- não existe job automático criando mensalidade, pagamento, cobertura ou conta financeira
+- `sincronizarFinanceiro` existe apenas como fluxo manual ou acionado por rota, não por agendamento
+- scheduler futuro, se existir, deve nascer explicitamente com idempotência, auditoria, dry-run ou diagnóstico, escopo `tenant_id` e `unit_id`, proteção contra criação cega de mensalidades, testes e documentação própria
+
+## Frontend financeiro atual
+
+- telas ativas preservadas:
+  - `frontend/src/pages/financeiro/FinanceiroLayout.jsx`
+  - `frontend/src/pages/financeiro/FinanceiroDashboard.jsx`
+  - `frontend/src/pages/financeiro/ContasFinanceirasPage.jsx`
+  - `frontend/src/pages/financeiro/PlanoContasPage.jsx`
+- services ativos preservados:
+  - `frontend/src/services/dashboardService.js`
+  - `frontend/src/services/contasFinanceiras.js`
+- rotas financeiras ativas:
+  - `/financeiro`
+  - `/financeiro/dashboardFinanceiro`
+  - `/financeiro/contas-financeiras`
+  - `/financeiro/plano-contas`
+
 ## Objetivo
 
 Transformar o dashboard em BI operacional real.
@@ -635,6 +733,56 @@ Transformar o dashboard em BI operacional real.
 ```txt
 FIN-KPI-01 — Contrato formal de KPIs financeiros
 ```
+
+---
+
+# CHECKPOINT — LEGADOS JÁ REMOVIDOS
+
+## Status
+✅ CONCLUÍDO
+
+## Financeiro backend legado removido
+
+- `backend/routes/financeiro.js` foi removido
+- a montagem `app.use('/financeiro', require('./routes/financeiro'))` foi removida
+- rotas removidas:
+  - `GET /financeiro/kpis`
+  - `GET /financeiro/fluxo`
+  - `GET /financeiro/mensalidades`
+  - `GET /financeiro/vendas-produtos`
+- motivo:
+  - sem consumidor ativo
+  - sem uso em scripts ou package
+  - risco de dupla contagem
+  - semântica inferior aos endpoints canônicos
+
+## Script destrutivo removido
+
+- `backend/scripts/limparMensalidadesAlpha.js` foi removido
+- motivo:
+  - classificado como `perigoso_sem_uso`
+  - apagava `pagamento`, `mensalidade` e `conta_financeira` em lote
+  - não exigia confirmação
+  - não respeitava `tenant_id` ou `unit_id`
+  - não respeitava fechamento mensal
+  - não registrava auditoria
+  - não tinha uso versionado
+- não substituir por outro script destrutivo cego
+
+## Arquivo vazio de acesso removido
+
+- `backend/services/acessoService.js` foi removido
+- `backend/services/AccessService.js` permanece como serviço canônico
+- `frontend/src/services/acessoService.js` é arquivo diferente, ativo, e não deve ser confundido com o backend
+
+## Frontend financeiro legado removido
+
+- `frontend/src/pages/financeiro/FiltrosFinanceiro.jsx`
+- `frontend/src/pages/financeiro/FinanceiroIndex.jsx`
+- `frontend/src/pages/financeiro/RelatoriosFinanceiro.jsx`
+- `frontend/src/pages/financeiro/TabelaPendencias.jsx`
+- `frontend/src/pages/financeiro/Consolidado.jsx`
+- `frontend/src/pages/financeiro/ContasFinanceiras.jsx`
 
 ---
 
@@ -723,7 +871,7 @@ Antes de remover legado:
 
 A limpeza de legado deve ocorrer antes de criar automações recorrentes perigosas.
 
-Scheduler ou `node-cron` futuro não deve depender de código legado, scripts antigos ou fluxos herdados sem revisão.
+Scheduler futuro ou `node-cron` reintroduzido explicitamente não deve depender de código legado, scripts antigos ou fluxos herdados sem revisão.
 
 ---
 
