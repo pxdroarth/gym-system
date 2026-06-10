@@ -25,6 +25,7 @@ const PERMISSIONS = Object.freeze({
   PAGAMENTOS_REGISTRAR: 'pagamentos:registrar',
   REVERSAO_EXECUTAR: 'reversao:executar',
   ACESSO_LIBERACAO_MANUAL: 'acesso:liberacao_manual',
+  ACESSO_CREDENCIAIS_VISUALIZAR: 'acesso:credenciais_visualizar',
   PLANOS_GERENCIAR: 'planos:gerenciar',
   ALUNOS_ALTERAR_PLANO_COM_DEPENDENTES: 'alunos:alterar_plano_com_dependentes',
   LOGS_VISUALIZAR_TOTAL: 'logs:visualizar_total',

@@ -85,7 +85,9 @@ async function start() {
 
   const seedPlanoContas = require('./seeds/seedPlanoContas');
   await seedPlanoContas();
+  const accessDeviceRoutes = require('./routes/accessDevices');
 
+  app.use('/alunos/:alunoId/access-credentials', accessDeviceRoutes.alunoCredentialsRouter);
   app.use('/alunos', require('./routes/alunos'));
   app.use('/planos', require('./routes/planos'));
   app.use('/planoAssociado', require('./routes/planoAssociado'));
@@ -93,6 +95,8 @@ async function start() {
   app.use('/mensalidades', require('./routes/mensalidades'));
   app.use('/pagamentos', require('./routes/pagamentos'));
   app.use('/acessos', require('./routes/acessos'));
+  app.use('/access-devices', accessDeviceRoutes.devicesRouter);
+  app.use('/access-credentials', accessDeviceRoutes.credentialsRouter);
 
   app.use('/produtos', require('./routes/produtos'));
   app.use('/vendasProdutos', require('./routes/vendasProdutos'));
