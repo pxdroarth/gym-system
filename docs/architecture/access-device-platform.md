@@ -39,7 +39,7 @@ AccessIdentificationEvent
 ↓
 CredentialResolver
 ↓
-AccessDecisionService
+AccessService
 ↓
 DeviceCommand
 ↓
@@ -141,6 +141,133 @@ Repository conhece banco.
 UseCase orquestra.
 ```
 
+## MVP mínimo atual
+
+Este eixo deve começar de forma incremental e mockada.
+
+Separação mínima de responsabilidades:
+
+- `access_devices`: cadastro lógico de dispositivo/terminal.
+- `access_credentials`: vínculo entre aluno e credencial.
+- `access_events`: evento técnico recebido do dispositivo/mock.
+- `acesso`: registro canônico da decisão operacional final.
+- `audit_log`: auditoria administrativa e override manual.
+
+Regra principal do MVP:
+
+- `AccessService` continua como autoridade final de decisão.
+- dispositivo apenas envia credencial/evento.
+- dispositivo nunca libera acesso sozinho.
+- toda tentativa continua respeitando cobertura paga vigente, bloqueio de `em_aberto`/`parcial` e override manual auditado.
+
+### Tipos mock iniciais
+
+Credenciais:
+
+- `card_mock`
+- `pin_mock`
+- `face_mock_ref`
+- `biometric_mock_ref`
+
+Dispositivos:
+
+- `mock_terminal`
+- `catraca_mock`
+- `camera_mock`
+
+### Status sugeridos
+
+Credencial:
+
+- `ativo`
+- `revogado`
+- `bloqueado`
+- `pendente_enrollment`
+
+Dispositivo:
+
+- `ativo`
+- `inativo`
+- `bloqueado`
+- `offline`
+- `deprecated`
+
+Evento:
+
+- `recebido`
+- `resolvido`
+- `negado`
+- `erro_resolucao`
+- `erro_processamento`
+
+## Contrato mínimo de credenciais/dispositivos
+
+### access_devices
+
+- `id`
+- `tenant_id`
+- `unit_id`
+- `nome`
+- `provider`
+- `tipo`
+- `external_device_id`
+- `serial`
+- `status`
+- `last_seen_at`
+- `metadata_json`
+- `created_at`
+- `updated_at`
+- `deleted_at`
+
+### access_credentials
+
+- `id`
+- `tenant_id`
+- `unit_id`
+- `aluno_id`
+- `tipo`
+- `identificador_hash`
+- `provider`
+- `external_credential_id`
+- `status`
+- `enrolled_at`
+- `revoked_at`
+- `metadata_json`
+- `created_at`
+- `updated_at`
+- `deleted_at`
+
+### access_events
+
+- `id`
+- `tenant_id`
+- `unit_id`
+- `device_id`
+- `credential_id`
+- `provider`
+- `credential_type`
+- `external_identifier_masked`
+- `correlation_id`
+- `raw_payload_ref`
+- `received_at`
+- `decision_status`
+- `decision_reason`
+- `acesso_id`
+- `metadata_json`
+
+## Fluxo mínimo por credencial mock
+
+1. Dispositivo mock envia `device_id`, `credential_type` e `external_identifier`.
+2. Backend resolve `tenant_id` e `unit_id` a partir do dispositivo.
+3. Backend procura a credencial por hash, tipo e escopo.
+4. Se a credencial estiver ausente, bloqueada ou revogada, registra `access_event` negado.
+5. Se a credencial for válida, resolve `aluno_id`.
+6. Backend chama `AccessService`.
+7. `AccessService` decide a liberação final com base na cobertura paga vigente e demais regras atuais.
+8. Resultado final é gravado em `acesso`.
+9. `access_event` referencia `acesso_id` quando houver decisão final registrada.
+10. Override manual continua separado e auditado em `audit_log`.
+
 ## Entidades futuras
 
 ### access_devices
@@ -170,32 +297,23 @@ UseCase orquestra.
 - status
 - metadata_json
 
-### access_attempts
+### access_events
 
 - id
 - correlation_id
+- tenant_id
 - unit_id
 - device_id
+- credential_id
 - provider
 - credential_type
 - external_identifier_masked
-- resolved_aluno_id
-- decision
-- reason_code
-- latency_ms
-- created_at
-
-### manual_access_overrides
-
-- id
-- aluno_id
-- unit_id
-- granted_by_user_id
-- reason
-- scope
-- expires_at
-- consumed_at
-- status
+- raw_payload_ref
+- received_at
+- decision_status
+- decision_reason
+- acesso_id
+- metadata_json
 
 ## Sem hardware real
 
@@ -216,9 +334,34 @@ Biometria e face são dados sensíveis.
 Diretrizes:
 
 - evitar armazenar imagem bruta sem necessidade
-- preferir template/embedding/referência
+- não armazenar template biométrico bruto neste estágio
+- preferir hash, referência ou ID externo
 - permitir revogação de credencial
 - auditar enrollment/revogação
 - proteger payload sensível
 - hashear/redigir payload bruto
 - segregar por tenant/unidade
+
+## Fora do MVP
+
+- reconhecimento facial real
+- armazenamento de foto
+- armazenamento de template biométrico bruto
+- integração real Hikvision, ControlID, Topdata, Henry ou Intelbras
+- gateway Electron
+- fila offline
+- sync multi-dispositivo
+- anti-passback
+- criptografia avançada de template
+- enrollment biométrico real
+- consentimento LGPD completo operacionalizado
+
+## Riscos do MVP
+
+- LGPD e dado sensível tratado cedo demais
+- biometria bruta ou imagem facial persistida sem necessidade
+- credencial sem `tenant_id` e `unit_id`
+- dispositivo sem identidade confiável
+- evento duplicado sem correlação/idempotência
+- bypass do `AccessService`
+- confundir o `mock-hikvision` atual com integração real de hardware
