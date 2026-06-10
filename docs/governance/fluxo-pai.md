@@ -352,7 +352,7 @@ Permitir automação assistida por agente:
 # FASE 5 — MATURIDADE SaaS
 
 ## STATUS
-⏳ FUTURA
+🚧 EM PREPARAÇÃO
 
 ## Inclui
 
@@ -903,6 +903,31 @@ override
 
 O hardware apenas identifica e/ou executa.
 
+## CHECKPOINT ACCESS-03B/03C
+
+- o schema aditivo mínimo foi criado em `backend/database/ensureSchema.js`
+- as tabelas `access_devices`, `access_credentials` e `access_events` já existem no SQLite local
+- `AccessService` foi preservado como autoridade final de decisão
+- `backend/routes/acessos.js` foi preservado
+- frontend não foi alterado neste eixo
+- a regra atual de acesso não mudou
+- `acesso` continua sendo o registro canônico da decisão operacional final
+- `access_events` é trilha técnica futura e ainda não possui uso funcional
+- `audit_log` continua sendo a trilha de auditoria administrativa e override manual
+- não houve biometria real, provider real, foto, imagem facial ou template biométrico bruto
+- `tests\\scripts\\diagnostico-consistencia.cmd`, `tests\\scripts\\smoke-acesso.cmd` e `tests\\scripts\\smoke-cobertura.cmd` passaram após o schema
+
+## PONTOS DE ATENÇÃO PÓS-SCHEMA
+
+- `updated_at` nas novas tabelas não possui trigger automática neste estágio
+- foreign keys declaradas dependem do comportamento SQLite/runtime atual
+- `access_events` ainda não é usado por fluxo funcional
+- `correlation_id` é obrigatório e deverá ser gerado pelo service futuro
+- os unique parciais já existem e precisam ser respeitados por services futuros
+- dispositivo não decide acesso e não pode bypassar `AccessService`
+- `acesso` continua sendo a decisão final; `access_events` é trilha técnica
+- biometria bruta, foto e template bruto continuam fora do MVP
+
 ## BLOCO 9A — CONTRATO DE DOMÍNIO DE ACESSO FÍSICO
 
 ### Inclui
@@ -921,9 +946,15 @@ O hardware apenas identifica e/ou executa.
 
 - access_devices
 - access_credentials
-- access_attempts
-- manual_access_overrides
-- device_health
+- access_events
+- índices e unique constraints mínimos
+- escopo obrigatório por `tenant_id` e `unit_id`
+
+### Estado atual
+
+- schema mínimo já criado
+- tabelas novas ainda vazias
+- sem service, endpoint ou UI funcional usando essas tabelas
 
 ## BLOCO 9C — PROVIDER SIMULATOR
 
@@ -935,6 +966,15 @@ O hardware apenas identifica e/ou executa.
 - catraca mock
 - payloads simulados
 - falhas simuladas
+
+## PRÓXIMOS PASSOS SEGUROS
+
+- service/admin read-only para dispositivos e credenciais
+- cadastro mock de dispositivo
+- cadastro mock de credencial
+- tentativa de acesso por credencial mock usando `AccessService`
+- UI mínima depois
+- provider real só depois
 
 ## BLOCO 9D — GATEWAY LOCAL CONCEITUAL/MVP
 
@@ -1034,9 +1074,9 @@ Operação quase solo baseada em IA.
 5. BLOCO 6D — E2E Acesso (pausado)
 6. BLOCO 6E — MCP (futuro)
 7. OBS-03 — Eventos internos de integração
-8. BLOCO 9A — Contrato Access Device Platform
-9. BLOCO 9B — Modelo persistente
-10. BLOCO 9C — Provider Simulator
+8. FASE 9 — Access Device Platform (9A/9B já preparados em docs/schema)
+9. Próximo passo: service/admin read-only de dispositivos/credenciais
+10. Depois: cadastro mock + tentativa por credencial via `AccessService`
 ```
 
 ## Não priorizar agora

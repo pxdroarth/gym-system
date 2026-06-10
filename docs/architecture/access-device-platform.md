@@ -202,6 +202,16 @@ Evento:
 
 ## Contrato mínimo de credenciais/dispositivos
 
+Checkpoint atual:
+
+- o schema mínimo já foi criado em `backend/database/ensureSchema.js`
+- `access_devices`, `access_credentials` e `access_events` já existem no SQLite local
+- as três tabelas permanecem vazias neste checkpoint
+- `AccessService` não foi alterado
+- `acesso` continua sendo o registro canônico da decisão operacional final
+- `audit_log` continua sendo a trilha administrativa e de override manual
+- `access_events` já existe no schema, mas ainda não possui uso funcional no runtime atual
+
 ### access_devices
 
 - `id`
@@ -255,6 +265,65 @@ Evento:
 - `acesso_id`
 - `metadata_json`
 
+## Diagramas Mermaid
+
+### Entidades e tabelas atuais
+
+```mermaid
+flowchart LR
+  aluno["aluno"]
+  credentials["access_credentials"]
+  devices["access_devices"]
+  events["access_events"]
+  service["AccessService"]
+  acesso["acesso"]
+  audit["audit_log"]
+
+  aluno --> credentials
+  devices --> events
+  credentials --> events
+  events --> service
+  service --> acesso
+  audit -. "override/manual" .-> acesso
+```
+
+### Fluxo futuro por credencial mock
+
+```mermaid
+flowchart TD
+  device["Dispositivo mock envia device_id + credential_type + external_identifier"]
+  scope["Backend resolve device e escopo tenant_id/unit_id"]
+  hash["Backend calcula hash do identificador"]
+  lookup["Busca access_credentials por hash/tipo/escopo"]
+  aluno["Resolve aluno_id"]
+  service["Chama AccessService"]
+  cobertura["AccessService avalia cobertura paga vigente"]
+  acesso["Grava acesso como decisão final"]
+  event["access_events referencia acesso_id"]
+
+  device --> scope --> hash --> lookup
+  lookup -->|credencial válida| aluno --> service --> cobertura --> acesso --> event
+  lookup -->|credencial ausente/revogada| event
+```
+
+### Fronteiras e responsabilidades
+
+```mermaid
+flowchart LR
+  device["Dispositivo / provider mock"]
+  resolver["Camada de credencial"]
+  service["AccessService"]
+  acesso["acesso"]
+  events["access_events"]
+  audit["audit_log"]
+
+  device -->|"captura e envia"| resolver
+  resolver -->|"resolve identidade"| service
+  service -->|"decide"| acesso
+  resolver -. "trilha técnica" .-> events
+  audit -. "auditoria administrativa" .-> acesso
+```
+
 ## Fluxo mínimo por credencial mock
 
 1. Dispositivo mock envia `device_id`, `credential_type` e `external_identifier`.
@@ -268,7 +337,9 @@ Evento:
 9. `access_event` referencia `acesso_id` quando houver decisão final registrada.
 10. Override manual continua separado e auditado em `audit_log`.
 
-## Entidades futuras
+## Evoluções futuras
+
+As tabelas `access_devices`, `access_credentials` e `access_events` já existem no schema mínimo. Os itens abaixo representam expansão futura de capacidades, não pré-requisito para o MVP mockado.
 
 ### access_devices
 
@@ -365,3 +436,14 @@ Diretrizes:
 - evento duplicado sem correlação/idempotência
 - bypass do `AccessService`
 - confundir o `mock-hikvision` atual com integração real de hardware
+
+## Pontos de atenção pós-schema
+
+- `updated_at` nas novas tabelas não possui trigger automática neste estágio
+- foreign keys foram declaradas, mas o comportamento efetivo continua dependente do runtime SQLite atual
+- `access_events` existe no schema, mas ainda não é usado por service, rota ou UI
+- `correlation_id` é obrigatório e deverá ser gerado pelo service futuro
+- os unique parciais já existem e precisam ser respeitados pelos services futuros
+- não armazenar foto, imagem facial, biometria bruta ou template biométrico bruto
+- `AccessService` não pode ser bypassado por dispositivo, provider ou mock
+- `acesso` continua sendo a decisão operacional final; `access_events` é trilha técnica
