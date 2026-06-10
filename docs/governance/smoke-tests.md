@@ -134,7 +134,7 @@ Nota 3C-B: o cliente central usa flags internas `_skipAuthHeader`, `_skipAuthRef
 | Mensalidade | criar/consultar mensalidade. | Status e vínculo com aluno aparecem corretamente. | Validar vencimento quando houver massa. | parcial |
 | Pagamento | registrar pagamento de mensalidade. | Pagamento gravado e refletido no histórico/tela. | Deve preservar snapshot quando aplicável. | parcial |
 | Venda | registrar venda de produto. | Venda gravada e produto/financeiro refletidos conforme fluxo atual. | Usar produto de teste. | parcial |
-| Acesso | simular/liberar acesso. | Acesso liberado ou bloqueado conforme regra de aluno/mensalidade/status. | Endpoint de simulação usa nomenclatura mock-hikvision, mas Hikvision real é futuro. | parcial |
+| Acesso | simular/liberar acesso. | Acesso liberado ou bloqueado conforme regra de cobertura paga vigente, override manual e auditoria. | Endpoint de simulação usa nomenclatura mock-hikvision, mas Hikvision real é futuro. | parcial |
 | Vínculo | criar/consultar vínculo responsável/dependente. | Dependente fica relacionado ao responsável. | Validar impacto em acesso. | parcial |
 | Auditoria/Histórico | executar ação crítica e consultar Histórico de Atividades. | Evento aparece para perfil autorizado e permanece somente leitura. | Escopo ainda precisa validação ampla. | parcial |
 | Financeiro restrito | acessar financeiro com perfis autorizados e não autorizados. | Autorizados acessam; operacionais não. | Backend deve ser a autoridade final. | parcial |
@@ -144,12 +144,13 @@ Nota 3C-B: o cliente central usa flags internas `_skipAuthHeader`, `_skipAuthRef
 
 | Teste | Comando ou acao | Resultado esperado | Observacao | Status |
 |---|---|---|---|---|
-| Aluno ativo sem mensalidade | Simular acesso via `/acessos/mock-hikvision`. | Bloqueado com motivo `sem_mensalidade_registrada` ou `sem_mensalidade_vigente`. | Nao existe tolerancia automatica. | parcial |
+| Aluno sem cobertura paga vigente | Simular acesso via `/acessos/mock-hikvision`. | Bloqueado por ausencia de cobertura paga vigente. | Nao existe tolerancia automatica para `em_aberto` ou `parcial`. | parcial |
 | POST `/acessos` sem override | Enviar `aluno_id` de aluno bloqueado para `POST /acessos` sem `liberacao_manual`. | Registro deve sair como `negado`; nunca `permitido` por payload direto. | Rota comum deve passar pela avaliacao do `AccessService`. | parcial |
 | PUT `/acessos/:id` com campo critico | Tentar alterar `resultado`, `aluno_id`, `data_hora`, `motivo_bloqueio` ou status critico de registro existente. | Bloqueado com `403` e codigo `ACESSO_REGISTRO_IMUTAVEL`. | Registro de acesso e log operacional sensivel; excecao deve usar liberacao manual auditada. | parcial |
 | DELETE `/acessos/:id` | Tentar apagar registro de acesso existente. | Bloqueado com `403` e codigo `ACESSO_REGISTRO_IMUTAVEL`. | Registro de acesso nao deve ser apagado fisicamente por rota comum. | parcial |
-| Mensalidade vencida | Simular acesso de aluno com mensalidade vencida ou parcial vencida. | Bloqueado com motivo `mensalidade_vencida` ou `responsavel_inadimplente`. | Vencimento menor que hoje bloqueia. | parcial |
-| Mensalidade em aberto no prazo | Simular acesso de aluno com vencimento futuro. | Liberado automaticamente. | Vencimento igual a hoje ainda libera. | parcial |
+| Cobertura vencida | Simular acesso de aluno com mensalidade ou cobertura vencida. | Bloqueado por ausencia de cobertura paga vigente. | Vencimento menor que hoje bloqueia. | parcial |
+| Mensalidade em aberto ou parcial no prazo | Simular acesso de aluno com vencimento futuro, mas status `em_aberto` ou `parcial`. | Bloqueado por ausencia de cobertura paga vigente. | `em_aberto` e `parcial` nao liberam acesso por padrao. | parcial |
+| Cobertura paga vigente | Simular acesso de aluno com mensalidade paga vigente. | Liberado. | A liberação padrão depende de cobertura paga vigente. | parcial |
 | Liberacao manual auditada | Simular acesso bloqueado com `liberacao_manual`, `motivo` e operador autorizado. | Permitido como manual e evento `acesso_liberado_manual` no Historico/Auditoria. | Deve registrar operador, aluno, motivo original, unidade e rede. | parcial |
 
 Automacao local disponivel:
@@ -158,7 +159,7 @@ Automacao local disponivel:
 tests\scripts\smoke-acesso.cmd
 ```
 
-O smoke automatizado usa fixtures locais com prefixo `SMOKE_ACESSO_`, valida acesso/mensalidade sem tolerancia automatica e limpa apenas registros criados por ele. Use somente em banco local/demo; nao usar em producao.
+O smoke automatizado usa fixtures locais com prefixo `SMOKE_ACESSO_`, valida acesso por cobertura paga vigente sem tolerancia automatica para `em_aberto` ou `parcial` e limpa apenas registros criados por ele. Use somente em banco local/demo; nao usar em producao.
 
 ## 10. Resultado esperado
 

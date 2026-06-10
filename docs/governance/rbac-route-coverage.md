@@ -44,7 +44,7 @@ Domínios prioritários nessa categoria:
 - Alunos: [backend/routes/alunos.js](/C:/sistema-academia-main/backend/routes/alunos.js)
 - Mensalidades: [backend/routes/mensalidades.js](/C:/sistema-academia-main/backend/routes/mensalidades.js), exceto `reverter`
 - Pagamentos: [backend/routes/pagamentos.js](/C:/sistema-academia-main/backend/routes/pagamentos.js)
-- Financeiro consolidado por unidade: [backend/routes/financeiro.js](/C:/sistema-academia-main/backend/routes/financeiro.js)
+- Dashboard financeiro canônico: [backend/routes/dashboardFinanceiro.js](/C:/sistema-academia-main/backend/routes/dashboardFinanceiro.js)
 - Contas financeiras: [backend/routes/contasFinanceiras.js](/C:/sistema-academia-main/backend/routes/contasFinanceiras.js), exceto `reverter`
 - Vendas: [backend/routes/vendasProdutos.js](/C:/sistema-academia-main/backend/routes/vendasProdutos.js), exceto `reverter`
 - Fechamento mensal: [backend/routes/fechamentoMensal.js](/C:/sistema-academia-main/backend/routes/fechamentoMensal.js), em `analisar` e `fechar`
@@ -154,7 +154,8 @@ Impacto atual:
 - `contasFinanceiras.js` depende de escopo, com permissão explícita só em reversão
 - [backend/routes/dashboardFinanceiro.js](/C:/sistema-academia-main/backend/routes/dashboardFinanceiro.js):
   - `GET /dashboard/financeiro` e `GET /dashboard/financeiro/kpis` dependem de escopo
-  - `POST /dashboard/financeiro/sincronizar` não exige `requireScope` nem `requirePermission`
+  - `POST /dashboard/financeiro/sincronizar` exige `requirePermission(PERMISSIONS.FINANCEIRO_SINCRONIZAR)` e chama `requireScope(req)` dentro da rota
+- `backend/routes/financeiro.js` e as rotas `/financeiro/*` legadas foram removidos
 
 ### Vendas
 
@@ -198,17 +199,17 @@ Hoje:
 Risco:
 - domínio de negócio com cobertura de autorização aparentemente inexistente
 
-### 2. `POST /dashboard/financeiro/sincronizar` sem guarda explícita
+### 2. `POST /dashboard/financeiro/sincronizar` é rota sensível e deve permanecer auditada
 
 - [backend/routes/dashboardFinanceiro.js](/C:/sistema-academia-main/backend/routes/dashboardFinanceiro.js)
 
 Hoje:
-- não exige autenticação explícita
-- não exige escopo
-- não exige permissão
+- exige `requirePermission(PERMISSIONS.FINANCEIRO_SINCRONIZAR)`
+- exige escopo via `requireScope(req)` dentro da rota
+- executa sincronização financeira manual, não agendada
 
-Risco:
-- operação sensível de sincronização exposta fora do padrão do restante do módulo
+Risco residual:
+- continua sendo operação sensível e merece revisão periódica de RBAC, auditoria e escopo
 
 ### 3. CRUDs críticos dependem só de escopo
 
