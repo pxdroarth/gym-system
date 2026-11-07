@@ -9,6 +9,7 @@ const {
 } = require('../constants/domainStates');
 const { PERMISSIONS, roleHasPermission } = require('../constants/userRoles');
 const AuditService = require('./AuditService');
+const { dataLocalISO } = require('../utils/dataLocal');
 
 function resultadoBancoPorStatus(status) {
   return [
@@ -24,15 +25,14 @@ function normalizarDataHora(dataHora) {
   return dataHora ? new Date(dataHora).toISOString() : new Date().toISOString();
 }
 
-function estaVencida(vencimento) {
-  if (!vencimento || vencimento === '0000-00-00') return false;
-
-  const hoje = new Date().toISOString().slice(0, 10);
-  return String(vencimento).slice(0, 10) < hoje;
+// P9: "hoje" e a data local da operacao (fuso da Rede), nao a data UTC.
+function hojeISO(agora = new Date()) {
+  return dataLocalISO(agora);
 }
 
-function hojeISO() {
-  return new Date().toISOString().slice(0, 10);
+function estaVencida(vencimento, hoje = hojeISO()) {
+  if (!vencimento || vencimento === '0000-00-00') return false;
+  return String(vencimento).slice(0, 10) < hoje;
 }
 
 function dataISO(value) {
@@ -84,16 +84,25 @@ async function listarMensalidadesAcesso(alunoId, scope = null) {
   );
 }
 
-function mensalidadeNoPeriodoAtual(mensalidade) {
-  const hoje = hojeISO();
+// P2: quando a mensalidade tem periodo de cobertura, so ele decide se ela
+// vale hoje. Antes, qualquer vencimento futuro tornava a mensalidade
+// "vigente", e uma fatura futura em aberto escondia a cobertura paga atual.
+// Registros legados sem datas de cobertura mantem a regra antiga.
+function mensalidadeNoPeriodoAtual(mensalidade, hoje = hojeISO()) {
   const inicio = dataISO(mensalidade.data_inicio);
   const fim = dataISO(mensalidade.data_fim);
   const vencimento = dataISO(mensalidade.vencimento);
 
-  if (vencimento && vencimento >= hoje) return true;
   if (inicio && fim) return inicio <= hoje && fim >= hoje;
   if (fim) return fim >= hoje;
+  if (vencimento) return vencimento >= hoje;
   return false;
+}
+
+// Entre as mensalidades que cobrem hoje, a paga prevalece.
+function escolherMensalidadeVigente(mensalidades, hoje) {
+  const vigentes = mensalidades.filter((mensalidade) => mensalidadeNoPeriodoAtual(mensalidade, hoje));
+  return vigentes.find((mensalidade) => mensalidade.status === MENSALIDADE_STATUS.PAGO) || vigentes[0] || null;
 }
 
 function motivoInadimplencia(vinculo) {
@@ -114,6 +123,8 @@ function respostaBloqueada(status, motivo, aluno, responsavel_id = null) {
 async function avaliarAcessoAluno(alunoId, options = {}) {
   const id = Number(alunoId);
   if (!id) throw new AppError('aluno_id e obrigatorio', 400, 'ALUNO_ID_INVALIDO');
+  // `options.agora` existe para testes; em operacao e o instante da requisicao.
+  const hoje = hojeISO(options.agora || new Date());
 
   const aluno = await carregarAluno(id, options.scope);
   if (!aluno) {
@@ -177,7 +188,7 @@ async function avaliarAcessoAluno(alunoId, options = {}) {
     mensalidade.status === MENSALIDADE_STATUS.VENCIDO
     || (
       [MENSALIDADE_STATUS.EM_ABERTO, MENSALIDADE_STATUS.PARCIAL].includes(mensalidade.status)
-      && estaVencida(mensalidade.vencimento)
+      && estaVencida(mensalidade.vencimento, hoje)
     )
   ));
 
@@ -190,7 +201,7 @@ async function avaliarAcessoAluno(alunoId, options = {}) {
     );
   }
 
-  const mensalidadeVigente = mensalidades.find(mensalidadeNoPeriodoAtual);
+  const mensalidadeVigente = escolherMensalidadeVigente(mensalidades, hoje);
 
   if (!mensalidadeVigente) {
     return respostaBloqueada(

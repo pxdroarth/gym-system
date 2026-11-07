@@ -211,3 +211,12 @@ node tests\scripts\diagnostico-vinculos.js [caminho\academia.sqlite]
 ```
 
 Tratamento dos achados: `docs/governance/vinculos-escopo-legado.md`.
+
+## `smoke-f0-acesso-datas.js` (GS-07 F0)
+
+Valida em processo, com relógio fixo: P2 (mensalidade futura em aberto não esconde cobertura paga vigente; débito vencido, pré-pago e legado sem datas mantêm a regra atual), P9 (data local da operação, inclusive na virada das 21h de Brasília) e P10 (edição preserva cobertura e observações não enviadas). Use base descartável criada com `npm run db:seed:dev`; as fixtures `SMOKE_F0_*` são removidas no fim.
+
+```cmd
+node tests\scripts\smoke-f0-acesso-datas.js
+```
+

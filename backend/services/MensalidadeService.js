@@ -13,6 +13,10 @@ function isISODate(v) {
   return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
 }
 
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj || {}, key);
+}
+
 function toMoney(value) {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
@@ -311,11 +315,25 @@ async function atualizarMensalidade(id, payload = {}, scope = null) {
     : atual.vencimento;
   const statusNormalizado = payload.status ? validarStatusMensalidade(payload.status) : atual.status;
 
-  const plano = scope?.tenant_id
-    ? await runGet('SELECT * FROM plano WHERE id = ? AND tenant_id = ?', [atual.plano_id, scope.tenant_id])
-    : await runGet('SELECT * FROM plano WHERE id = ?', [atual.plano_id]);
-  const inicioCiclo = startOfCycle(venc);
-  const dataFim = addDays(inicioCiclo, Math.max(0, Number(plano?.duracao_em_dias || 30) - 1));
+  // P10: a edicao so muda cobertura e observacoes quando esses campos vem no
+  // payload. Antes, toda edicao recalculava a cobertura pela regra de 30 dias
+  // (desfazendo pacotes e contratacoes) e apagava observacoes nao enviadas.
+  const pedeInicio = hasOwn(payload, 'data_inicio');
+  const pedeFim = hasOwn(payload, 'data_fim');
+  let inicioCiclo = atual.data_inicio;
+  let dataFim = atual.data_fim;
+  if (pedeInicio || pedeFim) {
+    inicioCiclo = pedeInicio ? payload.data_inicio : atual.data_inicio;
+    dataFim = pedeFim ? payload.data_fim : atual.data_fim;
+    if (!isISODate(inicioCiclo) || !isISODate(dataFim) || inicioCiclo > dataFim) {
+      throw new AppError(
+        'data_inicio e data_fim devem ser datas AAAA-MM-DD com data_inicio <= data_fim',
+        400,
+        'MENSALIDADE_COBERTURA_INVALIDA'
+      );
+    }
+  }
+  const observacoes = hasOwn(payload, 'observacoes') ? (payload.observacoes ?? '') : atual.observacoes;
 
   return runTransaction(async (tx) => {
     await FechamentoMensalService.assertPeriodoEditavelPorData(venc, 'edicao de mensalidade', tx, scope);
@@ -328,7 +346,7 @@ async function atualizarMensalidade(id, payload = {}, scope = null) {
       `UPDATE mensalidade
        SET valor_cobrado = ?, desconto_aplicado = ?, data_inicio = ?, data_fim = ?, vencimento = ?, observacoes = ?, status = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
-      [valor, desconto, inicioCiclo, dataFim, venc, payload.observacoes || '', statusNormalizado, mensalidadeId]
+      [valor, desconto, inicioCiclo, dataFim, venc, observacoes, statusNormalizado, mensalidadeId]
     );
 
     return tx.get('SELECT * FROM mensalidade WHERE id = ?', [mensalidadeId]);

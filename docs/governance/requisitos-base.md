@@ -197,7 +197,7 @@ Visão consolidada da Rede, somente leitura, voltada a acompanhamento e governan
 
 **RN-001 [feito]** Mensalidade vencida deve bloquear acesso automaticamente; não existe tolerância automática para inadimplência.
 
-**RN-002 [feito]** No dia do vencimento, o acesso ainda deve ser permitido quando a mensalidade ainda não está vencida.
+**RN-002 [feito]** No dia do vencimento, o acesso ainda deve ser permitido quando a mensalidade ainda não está vencida. Para planos mensais manuais (GS-07), substituída pela decisão D5: sem cobertura quitada, o acesso é bloqueado também no dia do vencimento.
 
 **RN-003 [feito]** Pagamento deve preservar snapshot histórico suficiente para não depender apenas do estado atual de plano, mensalidade ou aluno.
 
@@ -420,6 +420,29 @@ Visão consolidada da Rede, somente leitura, voltada a acompanhamento e governan
 **GS-05 — Gerenciamento de sessões [pendente].** Listar sessões ativas do próprio usuário (dispositivo, IP, último uso), encerrar uma sessão específica e, para owner/admin no seu escopo, encerrar sessões de um usuário gerenciado. Aceite: sessão encerrada falha no próximo request e no refresh; ações auditadas; admin não vê sessões fora do seu escopo.
 
 **GS-06 — Recuperação de senha [pendente].** Fluxo de "esqueci minha senha" com token de uso único, expiração curta, armazenamento por hash, resposta neutra (não revela se o login existe) e limite de tentativas; redefinição revoga todas as sessões. Depende de decisão sobre canal de envio (e-mail) e de gestão de segredos. Aceite: token reutilizado ou expirado é recusado; nenhuma resposta permite enumerar usuários.
+
+### GS-07 — Planos e Mensalidades (mensal manual)
+
+Diagnóstico e plano completos no documento da GS-07 (commit analisado: `bd74c2d`).
+
+**F0 limitada (P2, P9, P10) — feita na branch `gs-07-f0-acesso-datas`:**
+
+- P2: uma mensalidade futura em aberto não esconde mais a cobertura paga vigente. Quando a mensalidade tem período de cobertura, só ele decide se ela vale hoje; registros legados sem datas mantêm a regra antiga. Débito vencido continua bloqueando (RN-001).
+- P9: o acesso usa a data local da operação (`APP_TIMEZONE`, padrão `America/Sao_Paulo`), não a data UTC.
+- P10: editar uma mensalidade só altera cobertura e observações quando esses campos vêm no pedido.
+- Validação: `tests/scripts/smoke-f0-acesso-datas.js`.
+
+**Lotes separados:** P1 (pagamentos múltiplos por mensalidade) e P11 (fechamento e KPIs pela data correta) seguem em lotes próprios.
+
+**Decisões registradas para o mensal manual:**
+
+- **D1 — Ciclo:** do vencimento até a véspera do próximo vencimento. Em mês curto, o vencimento cai no último dia e a âncora original (29, 30 ou 31) é preservada nos meses seguintes.
+- **D2 — Adesão:** por plano, com prévia por aluno. Períodos já pagos são preservados e qualquer intervalo de transição é mostrado antes da ativação.
+- **D3 — Primeira matrícula fora do vencimento:** cobrança proporcional até a véspera do próximo ciclo, calculada em centavos com a quantidade real de dias do ciclo.
+- **D5 — Tolerância zero:** se a cobertura anterior acabou e o novo ciclo ainda não foi quitado, o acesso fica bloqueado, inclusive no dia do vencimento. Para planos mensais manuais, esta decisão substitui RN-002.
+- **D6 — Pagamento parcial:** somam-se os pagamentos válidos da mesma mensalidade; o parcial não libera a cobertura daquele ciclo até completar o valor.
+- **D7 — Estorno:** estorna-se o pagamento específico, preserva-se a competência e a situação é recalculada pelo saldo dos pagamentos restantes. Se a quitação deixar de existir, o saldo daquele ciclo é reaberto.
+- Pendentes: D4 (troca do dia de vencimento), D8 (geração das mensalidades), D9 (trimestral/semestral), D10 (limite de competências adiantadas), D11 (fuso por Rede/unidade) e D12 (planos compartilhados).
 
 ## 15. Critérios de aceite do produto
 
