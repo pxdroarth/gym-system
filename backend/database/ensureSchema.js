@@ -84,7 +84,8 @@ async function ensureTenantUnitBase() {
     `);
   }
 
-  if (!(await tableExists('usuario_unit'))) {
+  const scopeLinksTableCreated = !(await tableExists('usuario_unit'));
+  if (scopeLinksTableCreated) {
     await runExecute(`
       CREATE TABLE usuario_unit (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,6 +100,15 @@ async function ensureTenantUnitBase() {
       )
     `);
   }
+
+  // Origem do vinculo (GS-03): bootstrap, migracao_legado, onboarding,
+  // usuarios_internos, seed_dev. NULL = vinculo antigo de origem nao confirmada.
+  await addColumnIfMissing('usuario_unit', 'origem TEXT');
+  await addColumnIfMissing('usuario_unit', 'created_by TEXT');
+  await addColumnIfMissing('usuario_unit', 'updated_at TEXT');
+  await addColumnIfMissing('usuario_unit', 'updated_by TEXT');
+  await addColumnIfMissing('usuario_tenant', 'origem TEXT');
+  await addColumnIfMissing('usuario_tenant', 'updated_at TEXT');
 
   const tenant = await runGet('SELECT * FROM tenant WHERE documento = ? LIMIT 1', [DEFAULT_TENANT.documento]);
   let tenantId = tenant?.id;
@@ -125,7 +135,7 @@ async function ensureTenantUnitBase() {
     unitId = result.lastID;
   }
 
-  return { tenantId, unitId };
+  return { tenantId, unitId, scopeLinksTableCreated };
 }
 
 async function ensureScopeColumns() {
@@ -257,32 +267,46 @@ async function backfillDefaultScope(tenantId, unitId) {
   }
 }
 
-async function ensureExistingUserScopes(tenantId, unitId) {
-  const users = await runQuery('SELECT id, papel FROM usuario_interno');
-  for (const user of users) {
-    const tenantLink = await runGet(
-      'SELECT id FROM usuario_tenant WHERE usuario_id = ? AND tenant_id = ? LIMIT 1',
-      [user.id, tenantId]
+// Vincula usuarios a um escopo padrao. Antes da GS-03 isso rodava a cada boot
+// para todos os usuarios e criava acesso indevido a Matriz. Agora so roda na
+// migracao de uma base pre-multiunidade (tabela usuario_unit criada neste boot)
+// e so para usuarios sem nenhum vinculo. Vinculos existentes nunca sao tocados.
+async function linkUserToScope(usuarioId, papel, tenantId, unitId, origem) {
+  const tenantLink = await runGet(
+    'SELECT id FROM usuario_tenant WHERE usuario_id = ? AND tenant_id = ? LIMIT 1',
+    [usuarioId, tenantId]
+  );
+  if (!tenantLink) {
+    await runExecute(
+      `INSERT INTO usuario_tenant (usuario_id, tenant_id, papel_no_tenant, status, origem, created_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+      [usuarioId, tenantId, papel, USER_SCOPE_STATUS.ATIVO, origem]
     );
-    if (!tenantLink) {
-      await runExecute(
-        `INSERT INTO usuario_tenant (usuario_id, tenant_id, papel_no_tenant, status, created_at)
-         VALUES (?, ?, ?, ?, datetime('now'))`,
-        [user.id, tenantId, user.papel, USER_SCOPE_STATUS.ATIVO]
-      );
-    }
+  }
 
-    const unitLink = await runGet(
-      'SELECT id FROM usuario_unit WHERE usuario_id = ? AND unit_id = ? LIMIT 1',
-      [user.id, unitId]
+  const unitLink = await runGet(
+    'SELECT id FROM usuario_unit WHERE usuario_id = ? AND unit_id = ? LIMIT 1',
+    [usuarioId, unitId]
+  );
+  if (!unitLink) {
+    await runExecute(
+      `INSERT INTO usuario_unit (usuario_id, unit_id, is_default, status, origem, created_by, created_at)
+       VALUES (?, ?, 1, ?, ?, 'bootstrap', datetime('now'))`,
+      [usuarioId, unitId, USER_SCOPE_STATUS.ATIVO, origem]
     );
-    if (!unitLink) {
-      await runExecute(
-        `INSERT INTO usuario_unit (usuario_id, unit_id, is_default, status, created_at)
-         VALUES (?, ?, 1, ?, datetime('now'))`,
-        [user.id, unitId, USER_SCOPE_STATUS.ATIVO]
-      );
-    }
+  }
+}
+
+async function ensureLegacyUserScopes(defaultScope) {
+  if (!defaultScope.scopeLinksTableCreated) return;
+
+  const users = await runQuery(`
+    SELECT u.id, u.papel
+    FROM usuario_interno u
+    WHERE NOT EXISTS (SELECT 1 FROM usuario_unit uu WHERE uu.usuario_id = u.id)
+  `);
+  for (const user of users) {
+    await linkUserToScope(user.id, user.papel, defaultScope.tenantId, defaultScope.unitId, 'migracao_legado');
   }
 }
 
@@ -609,7 +633,7 @@ async function ensureReversaoSoftDeleteColumns() {
   await addColumnIfMissing('conta_financeira', 'reversao_controlada_id INTEGER');
 }
 
-async function ensureUsuarioInterno() {
+async function ensureUsuarioInterno(defaultScope) {
   if (!(await tableExists('usuario_interno'))) {
     await runExecute(`
       CREATE TABLE usuario_interno (
@@ -634,7 +658,7 @@ async function ensureUsuarioInterno() {
   const bootstrapPasswordHash = await hashPassword(bootstrapPassword);
 
   if (Number(count?.total || 0) === 0) {
-    await runExecute(
+    const created = await runExecute(
       `INSERT INTO usuario_interno
         (nome, email, login, papel, status, senha_hash, created_by, updated_by, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
@@ -649,6 +673,7 @@ async function ensureUsuarioInterno() {
         'bootstrap',
       ]
     );
+    await linkUserToScope(created.lastID, USER_ROLES.PLATFORM_ADMIN, defaultScope.tenantId, defaultScope.unitId, 'bootstrap');
 
     if (!process.env.BOOTSTRAP_ADMIN_PASSWORD) {
       console.warn('[BOOTSTRAP] Platform admin inicial criado com senha local explicita: admin123. Defina BOOTSTRAP_ADMIN_PASSWORD para controlar isso.');
@@ -771,9 +796,152 @@ async function ensureAuthRefreshToken() {
   `);
 }
 
+// Tabelas de negocio que bases antigas ja possuem, mas que o bootstrap nunca
+// criava. Sem elas, uma base SQLite nova sobe sem alunos, planos, mensalidades,
+// pagamentos, acessos, produtos, vendas e contas financeiras.
+// DDL derivado do backup historico + escopo tenant/unit. CREATE TABLE IF NOT
+// EXISTS nao altera bases existentes; colunas de politica, soft delete e escopo
+// continuam sendo garantidas pelos ensure* abaixo.
+async function ensureCoreBusinessTables() {
+  await runExecute(`
+    CREATE TABLE IF NOT EXISTS plano (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome TEXT NOT NULL,
+      valor_base REAL NOT NULL,
+      descricao TEXT,
+      compartilhado INTEGER DEFAULT 0,
+      valor REAL,
+      duracao_em_dias INTEGER,
+      quantidade_max_pessoas INTEGER,
+      tenant_id INTEGER,
+      FOREIGN KEY (tenant_id) REFERENCES tenant(id)
+    )
+  `);
+  await addColumnIfTableExists('plano', 'quantidade_max_pessoas INTEGER');
+
+  // Matricula unica por unidade: compatibilidade com routes/alunos.js, que
+  // calcula MAX(matricula) por tenant/unit. Cadastro unico por Rede e GS-02.
+  await runExecute(`
+    CREATE TABLE IF NOT EXISTS aluno (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      matricula INTEGER NOT NULL,
+      nome TEXT NOT NULL,
+      status TEXT DEFAULT 'ativo',
+      dia_vencimento INTEGER,
+      plano_id INTEGER,
+      telefone TEXT,
+      data_nascimento DATE NOT NULL,
+      tenant_id INTEGER,
+      unit_id INTEGER,
+      FOREIGN KEY (plano_id) REFERENCES plano(id),
+      FOREIGN KEY (tenant_id) REFERENCES tenant(id),
+      FOREIGN KEY (unit_id) REFERENCES unit(id),
+      UNIQUE(tenant_id, unit_id, matricula)
+    )
+  `);
+
+  await runExecute(`
+    CREATE TABLE IF NOT EXISTS mensalidade (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      aluno_id INTEGER,
+      plano_id INTEGER,
+      vencimento DATE,
+      valor_cobrado REAL,
+      desconto_aplicado REAL DEFAULT 0,
+      status TEXT,
+      data_inicio DATE,
+      data_fim DATE,
+      observacoes TEXT,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      tenant_id INTEGER,
+      unit_id INTEGER,
+      FOREIGN KEY (aluno_id) REFERENCES aluno(id),
+      FOREIGN KEY (plano_id) REFERENCES plano(id)
+    )
+  `);
+
+  await runExecute(`
+    CREATE TABLE IF NOT EXISTS pagamento (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      mensalidade_id INTEGER,
+      data_pagamento DATE,
+      valor_pago REAL,
+      valor_previsto REAL DEFAULT 0,
+      tenant_id INTEGER,
+      unit_id INTEGER,
+      FOREIGN KEY (mensalidade_id) REFERENCES mensalidade(id)
+    )
+  `);
+
+  await runExecute(`
+    CREATE TABLE IF NOT EXISTS acesso (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      aluno_id INTEGER,
+      data_hora DATETIME,
+      resultado TEXT CHECK(resultado IN ('permitido', 'negado')),
+      motivo_bloqueio TEXT,
+      tenant_id INTEGER,
+      unit_id INTEGER,
+      FOREIGN KEY (aluno_id) REFERENCES aluno(id)
+    )
+  `);
+
+  await runExecute(`
+    CREATE TABLE IF NOT EXISTS produto (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      nome TEXT NOT NULL,
+      descricao TEXT,
+      preco REAL NOT NULL,
+      estoque INTEGER NOT NULL,
+      imagem TEXT,
+      criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      tenant_id INTEGER,
+      unit_id INTEGER
+    )
+  `);
+
+  await runExecute(`
+    CREATE TABLE IF NOT EXISTS venda_produto (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      produto_id INTEGER,
+      produto_nome TEXT,
+      quantidade INTEGER,
+      preco_unitario REAL,
+      valor_total REAL DEFAULT 0,
+      data_venda TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      tenant_id INTEGER,
+      unit_id INTEGER,
+      FOREIGN KEY (produto_id) REFERENCES produto(id)
+    )
+  `);
+
+  await runExecute(`
+    CREATE TABLE IF NOT EXISTS conta_financeira (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      descricao TEXT NOT NULL,
+      tipo TEXT CHECK(tipo IN ('receita', 'despesa')) NOT NULL,
+      valor REAL NOT NULL,
+      data_lancamento TEXT NOT NULL,
+      status TEXT CHECK(status IN ('pendente', 'pago')) NOT NULL DEFAULT 'pendente',
+      plano_contas_id INTEGER,
+      observacao TEXT,
+      pago INTEGER DEFAULT 0,
+      data_vencimento TEXT,
+      origem TEXT,
+      origem_id INTEGER,
+      tenant_id INTEGER,
+      unit_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY (plano_contas_id) REFERENCES plano_contas(id)
+    )
+  `);
+}
+
 async function ensureSchema() {
   await ensureAuditLog();
   const defaultScope = await ensureTenantUnitBase();
+  await ensureCoreBusinessTables();
   await ensureFechamentoMensal();
   await ensureFechamentoMensalUnitUnique(defaultScope);
   await ensureReversaoControlada();
@@ -785,8 +953,8 @@ async function ensureSchema() {
   await ensurePlanoAssociadoColumns();
   await ensureReversaoSoftDeleteColumns();
   await ensureScopeColumns();
-  await ensureUsuarioInterno();
-  await ensureExistingUserScopes(defaultScope.tenantId, defaultScope.unitId);
+  await ensureUsuarioInterno(defaultScope);
+  await ensureLegacyUserScopes(defaultScope);
   await backfillDefaultScope(defaultScope.tenantId, defaultScope.unitId);
   await ensureAuthSession();
   await ensureAuthRefreshToken();

@@ -1,73 +1,124 @@
 import React, { useEffect, useState } from "react";
-import { Building2, ShieldCheck, UserCog, Users } from "lucide-react";
+import { ChevronRight, Lock, Plus, ShieldAlert } from "lucide-react";
 import { toast } from "react-toastify";
 import RoleGate from "../../components/auth/RoleGate";
-import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import EmptyState from "../../components/ui/EmptyState";
-import KpiCard from "../../components/ui/KpiCard";
-import PageHeader from "../../components/ui/PageHeader";
-import RestrictedAreaNotice from "../../components/ui/RestrictedAreaNotice";
 import Select from "../../components/ui/Select";
 import useAuth from "../../hooks/useAuth";
+import useMediaQuery from "../../hooks/useMediaQuery";
 import Table from "../../components/ui/Table";
 import {
   alterarPapelUsuarioInterno,
   alterarStatusUsuarioInterno,
+  alterarUnidadesUsuarioInterno,
   criarUsuarioInterno,
   listarUsuariosInternos,
 } from "../../services/usuariosInternosService";
 import { getApiErrorMessage } from "../../utils/getApiErrorMessage";
-import { getRoleLabel, ROLES, UI_PERMISSIONS } from "../../utils/permissions";
+import { getRoleLabel, ROLES, UI_PERMISSIONS, userHasUiPermission } from "../../utils/permissions";
 import UsuarioInternoModal from "./UsuarioInternoModal";
+import GerenciarAcessoModal from "./GerenciarAcessoModal";
 
-const statusOptions = ["ativo", "inativo", "bloqueado"];
+// Motivos devolvidos pelo backend (GS-03). A tela so explica; quem decide e a API.
+const MOTIVOS_BLOQUEIO = {
+  USUARIO_AUTOGESTAO_BLOQUEADA: "Sua própria conta não é editada aqui.",
+  PLATFORM_ADMIN_RESTRITO: "Gerido pela plataforma.",
+  HIERARQUIA_INSUFICIENTE: "Papel acima do seu.",
+  USUARIO_FORA_DAS_UNIDADES_GERENCIAVEIS: "Possui unidades que você não gerencia.",
+  USUARIO_MULTI_REDE_RESTRITO: "Vinculado a outra Rede: papel e status só pela plataforma.",
+};
 
-function statusBadge(status) {
-  if (status === "ativo") return <Badge tone="green">Ativo</Badge>;
-  if (status === "bloqueado") return <Badge tone="red">Bloqueado</Badge>;
-  return <Badge tone="amber">Inativo</Badge>;
+const STATUS_LABEL = { ativo: "Ativo", inativo: "Inativo", bloqueado: "Bloqueado" };
+// Cor so para quem exige atencao; sempre acompanhada do texto.
+const STATUS_CLASS = { ativo: "ops-status--success", inativo: "ops-status--warning", bloqueado: "ops-status--danger" };
+
+function listarNomes(itens) {
+  if (!itens.length) return "Nenhum";
+  return itens.join(", ");
 }
 
-function roleBadge(role) {
-  if (role === ROLES.PLATFORM_ADMIN) return <Badge tone="blue">Admin Plataforma</Badge>;
-  if (role === ROLES.OWNER) return <Badge tone="blue">Owner</Badge>;
-  if (role === ROLES.ADMIN) return <Badge tone="amber">Administrador</Badge>;
-  if (role === ROLES.FINANCEIRO) return <Badge tone="green">Financeiro</Badge>;
-  if (role === ROLES.GESTOR) return <Badge tone="gray">Gestor</Badge>;
-  if (role === ROLES.RECEPCAO) return <Badge tone="gray">Recepcao</Badge>;
-  return <Badge tone="gray">Operador de Acesso</Badge>;
+function ordenarUnidades(unidades = []) {
+  return [...unidades].sort((a, b) => Number(b.is_default) - Number(a.is_default));
+}
+
+function Unidades({ unidades, papel }) {
+  const lista = ordenarUnidades(unidades);
+  if (!lista.length) return <span className="ops-muted">Nenhuma</span>;
+  const principal = lista[0];
+  const restantes = lista.length - 1;
+  const nome = (unidade) => `${unidade.nome}${!unidade.origem ? " *" : ""}`;
+
+  return (
+    <>
+      <span className="ops-units ops-units__full">
+        {lista.map((unidade, index) => (
+          <React.Fragment key={unidade.id}>
+            {index > 0 && ", "}
+            {Number(unidade.is_default) === 1 ? (
+              <span className="ops-units__default">
+                {nome(unidade)}
+                <span className="ops-units__tag">padrão</span>
+              </span>
+            ) : (
+              nome(unidade)
+            )}
+          </React.Fragment>
+        ))}
+      </span>
+      <span className="ops-units__main">
+        {getRoleLabel(papel)} · {nome(principal)}{restantes > 0 ? ` +${restantes}` : ""}
+      </span>
+    </>
+  );
 }
 
 export default function UsuariosInternosPage() {
   const { user } = useAuth();
+  const celular = useMediaQuery("(max-width: 767px)");
   const [usuarios, setUsuarios] = useState([]);
+  const [contexto, setContexto] = useState(null);
+  const [redeFiltro, setRedeFiltro] = useState("");
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [modalAberto, setModalAberto] = useState(false);
+  const [usuarioAcesso, setUsuarioAcesso] = useState(null);
+  const [escopoAberto, setEscopoAberto] = useState(!celular);
+  // Sem permissao de leitura a API responde 403: nao chamar evita avisos de erro na tela restrita.
+  const podeVisualizar = userHasUiPermission(user, UI_PERMISSIONS.USUARIOS_VISUALIZAR);
 
-  async function carregarUsuarios() {
+  useEffect(() => {
+    setEscopoAberto(!celular);
+  }, [celular]);
+
+  async function carregarUsuarios(tenantId = redeFiltro) {
     setLoading(true);
     try {
-      const resposta = await listarUsuariosInternos();
-      setUsuarios(resposta.data || []);
+      const resposta = await listarUsuariosInternos(tenantId || undefined);
+      const lista = resposta.data || [];
+      setUsuarios(lista);
+      setContexto(resposta.contexto || null);
+      return lista;
     } catch (error) {
       toast.error(getApiErrorMessage(error));
+      return null;
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
+    if (!podeVisualizar) return;
     carregarUsuarios();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [redeFiltro, podeVisualizar]);
 
   async function handleCriarUsuario(payload) {
     try {
       setSalvando(true);
       await criarUsuarioInterno(payload);
-      toast.success("Usuario interno criado com sucesso.");
+      toast.success("Usuário criado com sucesso.");
       setModalAberto(false);
       await carregarUsuarios();
     } catch (error) {
@@ -77,203 +128,235 @@ export default function UsuariosInternosPage() {
     }
   }
 
-  async function handleAlterarPapel(usuario, papel) {
-    if (papel === usuario.papel) return;
+  // Aplica cada mudanca pelo endpoint proprio da GS-03, na ordem papel -> status -> unidades.
+  async function handleSalvarAcesso(alteracoes) {
+    if (!usuarioAcesso) return;
+    const alvo = usuarioAcesso;
+    const tenantId = redeFiltro || undefined;
+    setSalvando(true);
     try {
-      await alterarPapelUsuarioInterno(usuario.id, papel);
-      toast.success("Papel atualizado.");
+      if (alteracoes.papel) await alterarPapelUsuarioInterno(alvo.id, alteracoes.papel, tenantId);
+      if (alteracoes.status) await alterarStatusUsuarioInterno(alvo.id, alteracoes.status, tenantId);
+      if (alteracoes.unidades) {
+        await alterarUnidadesUsuarioInterno(alvo.id, {
+          ...alteracoes.unidades,
+          tenantId: contexto?.pode_escolher_rede ? contexto?.tenant?.id : undefined,
+        });
+      }
+      toast.success("Acesso atualizado. As sessões do usuário foram encerradas.");
+      setUsuarioAcesso(null);
       await carregarUsuarios();
     } catch (error) {
       toast.error(getApiErrorMessage(error));
+      // Parte das mudancas pode ter sido aplicada: recarrega e mantem a janela com o estado real.
+      const lista = await carregarUsuarios();
+      const atualizado = lista?.find((item) => item.id === alvo.id);
+      setUsuarioAcesso(atualizado || null);
+    } finally {
+      setSalvando(false);
     }
   }
 
-  async function handleAlterarStatus(usuario, status) {
-    if (status === usuario.status) return;
-    try {
-      await alterarStatusUsuarioInterno(usuario.id, status);
-      toast.success("Status atualizado.");
-      await carregarUsuarios();
-    } catch (error) {
-      toast.error(getApiErrorMessage(error));
-    }
-  }
-
-  const admins = usuarios.filter((usuario) => usuario.papel === ROLES.ADMIN || usuario.papel === ROLES.OWNER).length;
   const ativos = usuarios.filter((usuario) => usuario.status === "ativo").length;
-  const platformAdmins = usuarios.filter((usuario) => usuario.papel === ROLES.PLATFORM_ADMIN).length;
   const canManagePlatformUsers = user?.papel === ROLES.PLATFORM_ADMIN;
-  const papeis = [
-    ...(canManagePlatformUsers ? [ROLES.PLATFORM_ADMIN] : []),
-    ROLES.OWNER,
-    ROLES.ADMIN,
-    ROLES.GESTOR,
-    ROLES.FINANCEIRO,
-    ROLES.RECEPCAO,
-    ROLES.OPERADOR_ACESSO,
-  ];
+  const papeisAtribuiveis = contexto?.papeis_atribuiveis || [];
+  // Plataforma vendo "todas as Redes" nao tem Rede de contexto para editar unidades.
+  const unidadesEditaveisNaVisao = !canManagePlatformUsers || Boolean(redeFiltro);
+  const temVinculoLegado = usuarios.some((usuario) => (usuario.unidades || []).some((unidade) => !unidade.origem));
+  const podeAlterarPapel = userHasUiPermission(user, UI_PERMISSIONS.USUARIOS_ALTERAR_PAPEL);
+  const podeAlterarStatus = userHasUiPermission(user, UI_PERMISSIONS.USUARIOS_ALTERAR_STATUS);
+  const podeAlterarUnidades = userHasUiPermission(user, UI_PERMISSIONS.USUARIOS_ALTERAR_UNIDADES);
+  const nomeRede = canManagePlatformUsers && !redeFiltro ? "Todas as Redes" : contexto?.tenant?.nome;
+
+  function permissoesDaLinha(usuario) {
+    const papelStatus = Boolean(usuario.papel_status_editavel);
+    const unidades = Boolean(usuario.gerenciavel) && unidadesEditaveisNaVisao && podeAlterarUnidades;
+    let motivoUnidades = null;
+    if (!unidades) {
+      motivoUnidades = usuario.gerenciavel && !unidadesEditaveisNaVisao
+        ? "Selecione uma Rede para editar unidades."
+        : MOTIVOS_BLOQUEIO[usuario.motivo_bloqueio] || null;
+    }
+    return {
+      papel: papelStatus && podeAlterarPapel,
+      status: papelStatus && podeAlterarStatus,
+      unidades,
+      motivoPapelStatus: papelStatus ? null : MOTIVOS_BLOQUEIO[usuario.motivo_bloqueio] || "Sem permissão para alterar.",
+      motivoUnidades,
+    };
+  }
+
+  const permissoesSelecionado = usuarioAcesso ? permissoesDaLinha(usuarioAcesso) : null;
 
   return (
     <RoleGate
       permission={UI_PERMISSIONS.USUARIOS_VISUALIZAR}
       fallback={
-        <EmptyState
-          title="Area restrita a administradores."
-          description="Perfis operacionais nao recebem atalhos nem controles desta governanca interna."
-        />
+        <Card className="ops-restricted">
+          <ShieldAlert size={20} aria-hidden="true" />
+          <div>
+            <div className="ops-restricted__title">Área restrita a administradores.</div>
+            <div className="ops-restricted__text">
+              O seu perfil não gerencia usuários. Peça ao administrador da unidade para criar ou alterar acessos.
+            </div>
+          </div>
+        </Card>
       }
     >
-      <div className="governance-shell">
-        <PageHeader
-          title="Usuarios Internos"
-          subtitle="Controle operacional de usuarios, papeis e status de acesso."
-          actions={(
-            <RoleGate permission={UI_PERMISSIONS.USUARIOS_CRIAR}>
-              <Button onClick={() => setModalAberto(true)}>+ Novo Usuario</Button>
-            </RoleGate>
-          )}
-        />
-
-        <RestrictedAreaNotice
-          title="Governanca interna"
-          badgeLabel={canManagePlatformUsers ? "Plataforma" : "Administracao"}
-          tone="blue"
-          description="Esta tela continua submetida as permissoes reais do backend. Perfis operacionais nao recebem visibilidade de rotas, cards ou acoes sensiveis."
-        />
-
-        <Card className="governance-hero">
-          <div className="governance-hero__content">
-            <div>
-              <div className="governance-hero__eyebrow">Administracao interna</div>
-              <h2 className="governance-hero__title">
-                Usuarios, papeis e status com leitura administrativa madura e isolamento claro por perfil.
-              </h2>
-              <p className="governance-hero__copy">
-                A interface deixa explicito quem atua no escopo da plataforma e quem pertence a governanca da academia,
-                sem criar permissoes falsas no frontend e sem abrir atalhos indevidos para perfis errados.
-              </p>
-            </div>
-
-            <div className="governance-hero__meta">
-              <div className="governance-hero__meta-card">
-                <div className="governance-hero__meta-label">Seu papel</div>
-                <div className="governance-hero__meta-value">{getRoleLabel(user?.papel)}</div>
-                <div className="governance-hero__meta-copy">
-                  Acoes visiveis seguem o papel autenticado e continuam validadas pelo backend.
-                </div>
-              </div>
-              <div className="governance-hero__meta-card">
-                <div className="governance-hero__meta-label">Isolamento</div>
-                <div className="governance-hero__meta-value">{canManagePlatformUsers ? "Plataforma" : "Tenant"}</div>
-                <div className="governance-hero__meta-copy">
-                  Contas da plataforma ficam destacadas e sem edicao visual por perfis inadequados.
-                </div>
-              </div>
-            </div>
+      <div className="ops-page">
+        <Card className="ops-header">
+          <div className="ops-header__main">
+            <h1 className="ops-header__title">Usuários</h1>
+            <p className="ops-header__meta">
+              {nomeRede && <span className="ops-header__context">{nomeRede}</span>}
+              {nomeRede && " · "}
+              {usuarios.length} {usuarios.length === 1 ? "usuário" : "usuários"}, {ativos} {ativos === 1 ? "ativo" : "ativos"}
+            </p>
           </div>
-        </Card>
-
-        <div className="ui-status-grid">
-          <KpiCard label="Usuarios" value={usuarios.length} icon={<Users size={20} />} tone="blue" />
-          <KpiCard label="Ativos" value={ativos} icon={<ShieldCheck size={20} />} tone="green" />
-          <KpiCard label="Admins" value={admins} icon={<UserCog size={20} />} tone="amber" />
-          <KpiCard label="Plataforma" value={platformAdmins} icon={<Building2 size={20} />} tone="blue" />
-        </div>
-
-        <Card className="governance-table-card">
-          <div className="governance-panel__body">
-            <div className="ui-section-header">
-              <div>
-                <h2 className="ui-section-title">Equipe Interna</h2>
-                <p className="ui-section-subtitle">Alteracoes sensiveis sao auditadas e validadas pelo backend.</p>
-              </div>
-              <Badge tone="gray">{canManagePlatformUsers ? "Escopo plataforma" : "Escopo administrativo"}</Badge>
-            </div>
-
-            {loading ? (
-              <EmptyState title="Carregando usuarios..." />
-            ) : usuarios.length === 0 ? (
-              <EmptyState title="Nenhum usuario interno cadastrado." />
-            ) : (
-              <Table>
-                <thead>
-                  <tr>
-                    <th>Nome</th>
-                    <th>Login</th>
-                    <th>Email</th>
-                    <th>Papel</th>
-                    <th>Status</th>
-                    <th>Ultimo acesso</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {usuarios.map((usuario) => {
-                    const isPlatformRow = usuario.papel === ROLES.PLATFORM_ADMIN;
-                    const platformRowLocked = isPlatformRow && !canManagePlatformUsers;
-
-                    return (
-                      <tr key={usuario.id}>
-                        <td className="font-semibold">{usuario.nome}</td>
-                        <td>{usuario.login || "-"}</td>
-                        <td>{usuario.email || "-"}</td>
-                        <td>
-                          {platformRowLocked ? (
-                            <div className="space-y-2">
-                              <div>{roleBadge(usuario.papel)}</div>
-                              <div className="text-xs text-slate-500">Gerido pela plataforma.</div>
-                            </div>
-                          ) : (
-                            <RoleGate permission={UI_PERMISSIONS.USUARIOS_ALTERAR_PAPEL}>
-                              <div className="space-y-2">
-                                <div className="governance-role-badge">{roleBadge(usuario.papel)}</div>
-                                <Select
-                                  value={usuario.papel}
-                                  onChange={(event) => handleAlterarPapel(usuario, event.target.value)}
-                                >
-                                  {papeis.map((papel) => (
-                                    <option key={papel} value={papel}>{getRoleLabel(papel)}</option>
-                                  ))}
-                                </Select>
-                              </div>
-                            </RoleGate>
-                          )}
-                        </td>
-                        <td>
-                          {platformRowLocked ? (
-                            <div className="space-y-2">
-                              <div>{statusBadge(usuario.status)}</div>
-                              <div className="text-xs text-slate-500">Sem controle visual neste perfil.</div>
-                            </div>
-                          ) : (
-                            <RoleGate permission={UI_PERMISSIONS.USUARIOS_ALTERAR_STATUS}>
-                              <div className="flex items-center gap-2">
-                                {statusBadge(usuario.status)}
-                                <Select
-                                  value={usuario.status}
-                                  onChange={(event) => handleAlterarStatus(usuario, event.target.value)}
-                                >
-                                  {statusOptions.map((status) => (
-                                    <option key={status} value={status}>{status}</option>
-                                  ))}
-                                </Select>
-                              </div>
-                            </RoleGate>
-                          )}
-                        </td>
-                        <td>{usuario.ultimo_acesso_em || "-"}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </Table>
+          <div className={`ops-header__actions ${contexto?.pode_escolher_rede ? "" : "ops-header__actions--single"}`}>
+            {contexto?.pode_escolher_rede && (
+              <Select
+                aria-label="Rede"
+                className="ops-header__select"
+                value={redeFiltro}
+                onChange={(event) => setRedeFiltro(event.target.value)}
+              >
+                <option value="">Todas as Redes</option>
+                {(contexto.redes || []).map((rede) => (
+                  <option key={rede.id} value={rede.id}>{rede.nome}</option>
+                ))}
+              </Select>
             )}
+            <RoleGate permission={UI_PERMISSIONS.USUARIOS_CRIAR}>
+              <Button onClick={() => setModalAberto(true)} disabled={!contexto}>
+                <Plus size={16} aria-hidden="true" />
+                Novo usuário
+              </Button>
+            </RoleGate>
           </div>
+
+          {contexto && (
+            <details
+              className="ops-scope"
+              open={escopoAberto}
+              onToggle={(event) => setEscopoAberto(event.currentTarget.open)}
+            >
+              <summary>
+                <ChevronRight size={16} aria-hidden="true" />
+                Seu escopo de gestão
+              </summary>
+              <dl className="ops-scope__list">
+                <div>
+                  <dt>Seu papel</dt>
+                  <dd>{getRoleLabel(user?.papel)}</dd>
+                </div>
+                <div>
+                  <dt>Papéis que você atribui</dt>
+                  <dd>{listarNomes(papeisAtribuiveis.map(getRoleLabel))}</dd>
+                </div>
+                <div>
+                  <dt>Unidades que você gerencia</dt>
+                  <dd>{listarNomes((contexto.unidades || []).map((unidade) => unidade.nome))}</dd>
+                </div>
+              </dl>
+            </details>
+          )}
         </Card>
+
+        <Card className="ops-panel">
+          {loading && usuarios.length === 0 ? (
+            <EmptyState title="Carregando usuários..." />
+          ) : usuarios.length === 0 ? (
+            <EmptyState title="Nenhum usuário nesta Rede." />
+          ) : (
+            <Table className="ops-table ops-table--users">
+              <thead>
+                <tr>
+                  <th scope="col">Usuário</th>
+                  <th scope="col">Papel</th>
+                  <th scope="col">Unidades autorizadas</th>
+                  <th scope="col">Status</th>
+                  <th scope="col"><span className="sr-only">Ações</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {usuarios.map((usuario) => {
+                  const permissoes = permissoesDaLinha(usuario);
+                  const gerenciavel = permissoes.papel || permissoes.status || permissoes.unidades;
+                  const motivo = MOTIVOS_BLOQUEIO[usuario.motivo_bloqueio] || "Sem permissão para alterar.";
+                  const ehVoce = usuario.motivo_bloqueio === "USUARIO_AUTOGESTAO_BLOQUEADA";
+                  const identificacao = [usuario.login, usuario.email].filter(Boolean).join(" · ");
+
+                  return (
+                    <tr key={usuario.id}>
+                      <td>
+                        <div className="ops-user">
+                          <span className="ops-user__name">
+                            {usuario.nome}
+                            {ehVoce && <span className="ops-user__you"> (você)</span>}
+                          </span>
+                          {identificacao && <span className="ops-user__id" title={identificacao}>{identificacao}</span>}
+                        </div>
+                      </td>
+                      <td>{getRoleLabel(usuario.papel)}</td>
+                      <td>
+                        <Unidades unidades={usuario.unidades} papel={usuario.papel} />
+                      </td>
+                      <td>
+                        <span className={`ops-status ${STATUS_CLASS[usuario.status] || ""}`}>
+                          {STATUS_LABEL[usuario.status] || usuario.status}
+                        </span>
+                      </td>
+                      <td className="ops-table__actions">
+                        {gerenciavel ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => setUsuarioAcesso(usuario)}
+                            aria-label={`Gerenciar acesso de ${usuario.nome}`}
+                          >
+                            Gerenciar acesso
+                          </Button>
+                        ) : (
+                          <span className="ops-lock">
+                            <Lock size={13} aria-hidden="true" />
+                            {motivo}
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </Table>
+          )}
+        </Card>
+
+        {(temVinculoLegado || (canManagePlatformUsers && !redeFiltro)) && (
+          <p className="ops-footnote">
+            {temVinculoLegado ? '* Vínculo criado antes da GS-03, de origem não confirmada. Revise em "Gerenciar acesso". ' : ""}
+            {canManagePlatformUsers && !redeFiltro ? "Selecione uma Rede para editar unidades." : ""}
+          </p>
+        )}
 
         <UsuarioInternoModal
           open={modalAberto}
           onClose={() => setModalAberto(false)}
           onSubmit={handleCriarUsuario}
+          loading={salvando}
+          opcoes={contexto}
+        />
+
+        <GerenciarAcessoModal
+          usuario={usuarioAcesso}
+          opcoes={contexto}
+          podeEditarPapel={permissoesSelecionado?.papel}
+          podeEditarStatus={permissoesSelecionado?.status}
+          podeEditarUnidades={permissoesSelecionado?.unidades}
+          motivoPapelStatus={permissoesSelecionado?.motivoPapelStatus}
+          motivoUnidades={permissoesSelecionado?.motivoUnidades}
+          onClose={() => setUsuarioAcesso(null)}
+          onSubmit={handleSalvarAcesso}
           loading={salvando}
         />
       </div>

@@ -27,6 +27,7 @@ export const UI_PERMISSIONS = Object.freeze({
   USUARIOS_CRIAR: "usuarios:criar",
   USUARIOS_ALTERAR_PAPEL: "usuarios:alterar_papel",
   USUARIOS_ALTERAR_STATUS: "usuarios:alterar_status",
+  USUARIOS_ALTERAR_UNIDADES: "usuarios:alterar_unidades",
   LOGS_VISUALIZAR_TOTAL: "logs:visualizar_total",
   LOGS_VISUALIZAR_ESCOPO: "logs:visualizar_escopo",
   FINANCEIRO_VISUALIZAR: "financeiro:visualizar",

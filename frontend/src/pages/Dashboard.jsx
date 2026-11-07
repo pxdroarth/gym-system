@@ -1,22 +1,32 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { Activity, ArrowRight, ShieldCheck, UserCheck, UserX, Users } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { ChevronRight, DoorOpen, RefreshCw, Users } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { fetchAlunos } from "../services/alunoService";
 import { fetchTodosAcessos } from "../services/acessoService";
 import ModalAcessosHoje from "../components/ModalAcessosHoje";
-import Badge from "../components/ui/Badge";
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
 import EmptyState from "../components/ui/EmptyState";
-import KpiCard from "../components/ui/KpiCard";
-import PageHeader from "../components/ui/PageHeader";
-import Table from "../components/ui/Table";
+import { Table } from "../components/ui/Table";
+import useAuth from "../hooks/useAuth";
 import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
-function badgeAcesso(resultado) {
+const LIMITE_ACESSOS = 20;
+
+const MOTIVOS_BLOQUEIO = {
+  mensalidade_vencida: "Mensalidade vencida",
+  responsavel_inadimplente: "Responsável inadimplente",
+  aluno_inativo: "Aluno inativo",
+  aluno_bloqueado: "Aluno bloqueado",
+  sem_mensalidade_registrada: "Sem mensalidade registrada",
+  sem_mensalidade_vigente: "Sem mensalidade vigente",
+  sem_cobertura_paga_vigente: "Sem cobertura paga",
+  vinculo_irregular: "Vínculo irregular",
+};
+
+function acessoPermitido(resultado) {
   const status = String(resultado || "").toLowerCase().trim();
-  const permitido = status === "permitido" || status === "liberado";
-  return <Badge tone={permitido ? "green" : "red"}>{permitido ? "Permitido" : "Negado"}</Badge>;
+  return status === "permitido" || status === "liberado";
 }
 
 function possuiCoberturaPaga(aluno) {
@@ -25,10 +35,36 @@ function possuiCoberturaPaga(aluno) {
     || aluno?.cobertura_status === "cobertura_paga_vigente";
 }
 
+function descreverMotivo(motivo) {
+  if (!motivo) return null;
+  return MOTIVOS_BLOQUEIO[motivo] || String(motivo).replace(/_/g, " ");
+}
+
+function inicioDoDia(data) {
+  return new Date(data.getFullYear(), data.getMonth(), data.getDate()).getTime();
+}
+
+// "Hoje, 07:15" / "Ontem, 07:15" / "05/11, 07:15": leitura rapida na recepcao.
+function formatarDataHora(valor) {
+  const data = new Date(valor);
+  if (Number.isNaN(data.getTime())) return "-";
+  const hora = data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const dias = Math.round((inicioDoDia(new Date()) - inicioDoDia(data)) / 86400000);
+  if (dias === 0) return `Hoje, ${hora}`;
+  if (dias === 1) return `Ontem, ${hora}`;
+  return `${data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}, ${hora}`;
+}
+
+function hojePorExtenso() {
+  return new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
+}
+
 export default function Dashboard() {
+  const { currentUnit } = useAuth();
   const [alunos, setAlunos] = useState([]);
   const [acessos, setAcessos] = useState([]);
   const [erro, setErro] = useState(null);
+  const [carregando, setCarregando] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
   const navigate = useNavigate();
 
@@ -37,6 +73,7 @@ export default function Dashboard() {
   }, []);
 
   async function carregarDados() {
+    setCarregando(true);
     try {
       const listaAlunos = await fetchAlunos();
       setAlunos(listaAlunos);
@@ -51,126 +88,96 @@ export default function Dashboard() {
       setErro(null);
     } catch (error) {
       setErro(getApiErrorMessage(error));
+    } finally {
+      setCarregando(false);
     }
   }
 
   const totalAlunos = alunos.length;
-  const alunosComCobertura = alunos.filter(possuiCoberturaPaga).length;
-  const alunosSemCobertura = alunos.filter((aluno) => !possuiCoberturaPaga(aluno)).length;
-  const ultimosAcessos = acessos.slice(0, 20);
-  const acessosPermitidos = acessos.filter((acesso) => {
-    const status = String(acesso.resultado || "").toLowerCase();
-    return status === "permitido" || status === "liberado";
-  }).length;
+  const alunosSemCobertura = alunos.filter((aluno) => !possuiCoberturaPaga(aluno));
+  const alunosComCobertura = totalAlunos - alunosSemCobertura.length;
   const percentualCobertura = totalAlunos > 0 ? Math.round((alunosComCobertura / totalAlunos) * 100) : 0;
-
-  const pontosAtencao = useMemo(
-    () => [
-      {
-        id: "cobertura",
-        titulo: "Cobertura de acesso",
-        texto: `${alunosSemCobertura} aluno(s) sem cobertura paga vigente no retorno atual.`,
-      },
-      {
-        id: "acessos",
-        titulo: "Fluxo de entrada",
-        texto: `${ultimosAcessos.length} acesso(s) recentes monitorados sem expor dados monetários sensíveis.`,
-      },
-      {
-        id: "rotina",
-        titulo: "Rotina da unidade",
-        texto: "A operação permanece por unidade, com autenticação, permissões e escopo preservados.",
-      },
-    ],
-    [alunosSemCobertura, ultimosAcessos.length]
-  );
+  const ultimosAcessos = acessos.slice(0, LIMITE_ACESSOS);
+  const permitidos = ultimosAcessos.filter((acesso) => acessoPermitido(acesso.resultado)).length;
+  const negados = ultimosAcessos.length - permitidos;
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Dashboard Geral"
-        subtitle="Visão operacional da academia com foco em alunos, acessos e rotina da unidade."
-        actions={<Button variant="secondary" onClick={carregarDados}>Atualizar</Button>}
-      />
-
-      <Card className="dashboard-hero">
-        <div className="dashboard-hero__content">
-          <div>
-            <div className="dashboard-hero__eyebrow">
-              <ShieldCheck size={14} />
-              Operação diária
-            </div>
-            <h2 className="dashboard-hero__title">Acompanhamento claro da unidade sem misturar dados financeiros sensíveis.</h2>
-            <p className="dashboard-hero__description">
-              Esta visão permanece operacional: alunos, acessos e sinais de atenção da rotina. O módulo financeiro continua isolado e o consolidado da rede segue somente leitura.
-            </p>
-
-            <div className="dashboard-hero__actions">
-              <Button onClick={() => navigate("/alunos")}>
-                Ver alunos
-                <ArrowRight size={15} />
-              </Button>
-              <Button variant="secondary" onClick={() => setModalAberto(true)}>
-                Acessos do Dia
-              </Button>
-            </div>
-          </div>
-
-          <div className="dashboard-hero__meta">
-            <div className="dashboard-hero__meta-card">
-              <div className="dashboard-hero__meta-label">Presença operacional</div>
-              <div className="dashboard-hero__meta-value">{acessosPermitidos}</div>
-              <div className="dashboard-hero__meta-copy">Acessos liberados nos registros carregados.</div>
-            </div>
-            <div className="dashboard-hero__meta-card">
-              <div className="dashboard-hero__meta-label">Cobertura vigente</div>
-              <div className="dashboard-hero__meta-value">{percentualCobertura}%</div>
-              <div className="dashboard-hero__meta-copy">Percentual com cobertura paga vigente no retorno atual.</div>
-            </div>
-          </div>
+    <div className="ops-page">
+      <Card className="ops-header">
+        <div className="ops-header__main">
+          <h1 className="ops-header__title">Dashboard</h1>
+          <p className="ops-header__meta">
+            {currentUnit?.nome && <span className="ops-header__context">{currentUnit.nome}</span>}
+            {currentUnit?.nome && " · "}
+            {hojePorExtenso()}
+          </p>
+        </div>
+        <div className="ops-header__actions">
+          <Button onClick={() => navigate("/alunos")}>
+            <Users size={16} aria-hidden="true" />
+            Alunos
+          </Button>
+          <Button variant="secondary" onClick={() => setModalAberto(true)}>
+            <DoorOpen size={16} aria-hidden="true" />
+            Acessos do Dia
+          </Button>
+          <Button
+            variant="ghost"
+            className="ops-icon-button"
+            onClick={carregarDados}
+            disabled={carregando}
+            aria-label="Atualizar dados"
+            title="Atualizar dados"
+          >
+            <RefreshCw size={16} aria-hidden="true" className={carregando ? "ops-spin" : undefined} />
+          </Button>
         </div>
       </Card>
 
-      {erro && <Card className="p-4 text-red-700 font-semibold">{erro}</Card>}
+      {erro && <div className="ops-alert" role="alert">{erro}</div>}
 
-      <div className="ui-status-grid">
-        <KpiCard
-          label="Total de alunos"
-          value={totalAlunos}
-          subtitle="Cadastrados no sistema"
-          icon={<Users size={20} />}
-          tone="blue"
-          onClick={() => navigate("/alunos")}
-        />
-        <KpiCard
-          label="Cobertura vigente"
-          value={alunosComCobertura}
-          subtitle="Cobertura paga vigente"
-          icon={<UserCheck size={20} />}
-          tone="green"
-        />
-        <KpiCard
-          label="Sem cobertura paga"
-          value={alunosSemCobertura}
-          subtitle="Nao assume divida automaticamente"
-          icon={<UserX size={20} />}
-          tone="amber"
-        />
-        <KpiCard
-          label="Acessos recentes"
-          value={ultimosAcessos.length}
-          subtitle="Últimos registros carregados"
-          icon={<Activity size={20} />}
-          tone="gray"
-        />
-      </div>
+      <Card className="ops-stats" aria-label="Indicadores da unidade">
+        <Link to="/alunos" className="ops-stat ops-stat--link">
+          <span className="ops-stat__label">Alunos cadastrados</span>
+          <span className="ops-stat__value">{totalAlunos}</span>
+          <span className="ops-stat__hint">Ver lista <ChevronRight size={13} aria-hidden="true" /></span>
+        </Link>
+        <div className="ops-stat">
+          <span className="ops-stat__label">Com cobertura paga</span>
+          <span className="ops-stat__value">
+            {alunosComCobertura}
+            <span className="ops-stat__suffix">{percentualCobertura}%</span>
+          </span>
+          {/* Decorativa: o percentual ao lado do numero ja informa o valor. */}
+          <span className="ops-meter" aria-hidden="true">
+            <span className="ops-meter__fill" style={{ width: `${Math.min(100, Math.max(0, percentualCobertura))}%` }} />
+          </span>
+          <span className="ops-stat__hint">do total de alunos</span>
+        </div>
+        <div className="ops-stat">
+          <span className="ops-stat__label">Sem cobertura paga</span>
+          <span className={`ops-stat__value ${alunosSemCobertura.length ? "ops-stat__value--warning" : ""}`}>
+            {alunosSemCobertura.length}
+          </span>
+          <span className="ops-stat__hint">Não gera dívida automática</span>
+        </div>
+      </Card>
 
-      <div className="dashboard-grid">
-        <Card className="dashboard-panel">
-          <div className="ui-section-header">
-            <div>
-              <h2 className="ui-section-title">Últimos 20 acessos</h2>
-              <p className="ui-section-subtitle">Leitura operacional recente, sem indicadores monetários na dashboard comum.</p>
+      <div className="ops-grid">
+        <Card className="ops-panel">
+          <div className="ops-panel__header">
+            <div className="ops-panel__heading">
+              <h2 className="ops-panel__title">Últimos acessos</h2>
+              {ultimosAcessos.length > 0 && (
+                <span className="ops-panel__counts">
+                  <span className="ops-status ops-status--success">
+                    {permitidos} {permitidos === 1 ? "permitido" : "permitidos"}
+                  </span>
+                  <span className={`ops-status ${negados ? "ops-status--danger" : ""}`}>
+                    {negados} {negados === 1 ? "negado" : "negados"}
+                  </span>
+                </span>
+              )}
             </div>
             <Button size="sm" variant="secondary" onClick={() => setModalAberto(true)}>
               Ver dia completo
@@ -178,52 +185,71 @@ export default function Dashboard() {
           </div>
 
           {ultimosAcessos.length === 0 ? (
-            <EmptyState title="Nenhum acesso encontrado." />
+            <EmptyState
+              title={carregando ? "Carregando acessos..." : "Nenhum acesso registrado nesta unidade."}
+            />
           ) : (
-            <Table>
+            <Table className="ops-table ops-table--acessos">
               <thead>
                 <tr>
-                  <th>Aluno</th>
-                  <th>Data/Hora</th>
-                  <th>Resultado</th>
+                  <th scope="col">Aluno</th>
+                  <th scope="col">Data e hora</th>
+                  <th scope="col">Resultado</th>
+                  <th scope="col">Detalhe</th>
                 </tr>
               </thead>
               <tbody>
-                {ultimosAcessos.map(({ id, nome, data_hora, resultado }) => (
-                  <tr key={`${id}-${data_hora}`}>
-                    <td className="font-semibold">{nome}</td>
-                    <td>{new Date(data_hora).toLocaleString("pt-BR")}</td>
-                    <td>{badgeAcesso(resultado)}</td>
-                  </tr>
-                ))}
+                {ultimosAcessos.map(({ id, nome, data_hora, resultado, motivo_bloqueio }) => {
+                  const permitido = acessoPermitido(resultado);
+                  return (
+                    <tr key={`${id}-${data_hora}`}>
+                      <td className="ops-table__primary">{nome}</td>
+                      <td className="ops-table__time">{formatarDataHora(data_hora)}</td>
+                      <td className="ops-table__status">
+                        <span className={`ops-status ${permitido ? "ops-status--success" : "ops-status--danger"}`}>
+                          {permitido ? "Permitido" : "Negado"}
+                        </span>
+                      </td>
+                      <td className="ops-table__detail">
+                        {!permitido && motivo_bloqueio ? descreverMotivo(motivo_bloqueio) : ""}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </Table>
           )}
         </Card>
 
-        <Card className="dashboard-panel">
-          <div className="ui-section-header">
-            <div>
-              <h2 className="ui-section-title">Pontos de atenção</h2>
-              <p className="ui-section-subtitle">Sinais rápidos para a rotina operacional da unidade.</p>
-            </div>
+        <Card className="ops-panel">
+          <div className="ops-panel__header">
+            <h2 className="ops-panel__title">Sem cobertura paga</h2>
+            <span className="ops-panel__aside">
+              {alunosSemCobertura.length} {alunosSemCobertura.length === 1 ? "aluno" : "alunos"}
+            </span>
           </div>
-
-          <div className="dashboard-panel__body">
-            <div className="dashboard-attention-list">
-              {pontosAtencao.map((item) => (
-                <div key={item.id} className="dashboard-attention-item">
-                  <div className="dashboard-attention-item__icon">
-                    <ShieldCheck size={16} />
-                  </div>
-                  <div>
-                    <h3 className="dashboard-attention-item__title">{item.titulo}</h3>
-                    <p className="dashboard-attention-item__text">{item.texto}</p>
-                  </div>
-                </div>
+          {alunosSemCobertura.length === 0 ? (
+            <EmptyState title={carregando ? "Carregando alunos..." : "Todos os alunos têm cobertura paga vigente."} />
+          ) : (
+            <ul className="ops-list">
+              {alunosSemCobertura.slice(0, 8).map((aluno) => (
+                <li key={aluno.id}>
+                  <Link to={`/alunos/${aluno.id}`} className="ops-list__item">
+                    <span className="ops-list__name">{aluno.nome}</span>
+                    <span className="ops-list__meta">
+                      {String(aluno.status || "").toLowerCase() === "inativo" ? "Inativo" : `Matrícula ${aluno.matricula ?? "-"}`}
+                    </span>
+                    <ChevronRight size={15} aria-hidden="true" className="ops-list__chevron" />
+                  </Link>
+                </li>
               ))}
+            </ul>
+          )}
+          {alunosSemCobertura.length > 8 && (
+            <div className="ops-panel__footer">
+              <Link to="/alunos" className="ops-link">Ver todos os {alunosSemCobertura.length} alunos</Link>
             </div>
-          </div>
+          )}
         </Card>
       </div>
 

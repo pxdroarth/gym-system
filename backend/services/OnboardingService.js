@@ -76,15 +76,15 @@ async function prepararTenantInicial(payload = {}, actor = null) {
     );
 
     await tx.run(
-      `INSERT INTO usuario_tenant (usuario_id, tenant_id, papel_no_tenant, status, created_at)
-       VALUES (?, ?, ?, ?, datetime('now'))`,
+      `INSERT INTO usuario_tenant (usuario_id, tenant_id, papel_no_tenant, status, origem, created_at)
+       VALUES (?, ?, ?, ?, 'onboarding', datetime('now'))`,
       [userResult.lastID, tenantResult.lastID, USER_ROLES.OWNER, USER_SCOPE_STATUS.ATIVO]
     );
 
     await tx.run(
-      `INSERT INTO usuario_unit (usuario_id, unit_id, is_default, status, created_at)
-       VALUES (?, ?, 1, ?, datetime('now'))`,
-      [userResult.lastID, unitResult.lastID, USER_SCOPE_STATUS.ATIVO]
+      `INSERT INTO usuario_unit (usuario_id, unit_id, is_default, status, origem, created_by, created_at)
+       VALUES (?, ?, 1, ?, 'onboarding', ?, datetime('now'))`,
+      [userResult.lastID, unitResult.lastID, USER_SCOPE_STATUS.ATIVO, actor?.id ? String(actor.id) : 'onboarding_interno']
     );
 
     await AuditService.logAction({

@@ -1,7 +1,7 @@
 const { runExecute, runGet, runQuery, runTransaction } = require('../dbHelper');
 const AppError = require('../errors/AppError');
 const AuditService = require('./AuditService');
-const { DEFAULT_UNIT, UNIT_STATUS, USER_SCOPE_STATUS } = require('../constants/scope');
+const { DEFAULT_UNIT, TENANT_STATUS, UNIT_STATUS, USER_SCOPE_STATUS } = require('../constants/scope');
 const TenantService = require('./TenantService');
 
 async function ensureDefaultUnit(client = null) {
@@ -25,60 +25,35 @@ async function ensureDefaultUnit(client = null) {
   return db.get('SELECT * FROM unit WHERE id = ?', [result.lastID]);
 }
 
-async function ensureUserDefaultScope(usuarioId, papel = null, client = null) {
-  const db = client || { get: runGet, run: runExecute };
-  const unit = await ensureDefaultUnit(db);
+// GS-03: nao existe mais vinculo automatico com a Matriz. Uma unidade so e
+// valida para o usuario quando: o vinculo usuario_unit esta ativo, a unidade
+// esta ativa, a Rede (tenant) esta ativa e o usuario tem vinculo ativo com a Rede.
+const ALLOWED_UNITS_SELECT = `
+  SELECT
+    u.id,
+    u.tenant_id,
+    u.nome,
+    u.codigo,
+    u.status,
+    u.is_matriz,
+    uu.is_default
+  FROM usuario_unit uu
+  JOIN unit u ON u.id = uu.unit_id
+  JOIN tenant t ON t.id = u.tenant_id
+  JOIN usuario_tenant ut ON ut.usuario_id = uu.usuario_id AND ut.tenant_id = u.tenant_id
+  WHERE uu.usuario_id = ?
+    AND uu.status = ?
+    AND u.status = ?
+    AND t.status = ?
+    AND ut.status = ?
+`;
 
-  const tenantLink = await db.get(
-    `SELECT id FROM usuario_tenant
-     WHERE usuario_id = ? AND tenant_id = ?
-     LIMIT 1`,
-    [usuarioId, unit.tenant_id]
-  );
-
-  if (!tenantLink) {
-    await db.run(
-      `INSERT INTO usuario_tenant (usuario_id, tenant_id, papel_no_tenant, status, created_at)
-       VALUES (?, ?, ?, ?, datetime('now'))`,
-      [usuarioId, unit.tenant_id, papel, USER_SCOPE_STATUS.ATIVO]
-    );
-  }
-
-  const unitLink = await db.get(
-    `SELECT id FROM usuario_unit
-     WHERE usuario_id = ? AND unit_id = ?
-     LIMIT 1`,
-    [usuarioId, unit.id]
-  );
-
-  if (!unitLink) {
-    await db.run(
-      `INSERT INTO usuario_unit (usuario_id, unit_id, is_default, status, created_at)
-       VALUES (?, ?, 1, ?, datetime('now'))`,
-      [usuarioId, unit.id, USER_SCOPE_STATUS.ATIVO]
-    );
-  }
-
-  return { tenant_id: unit.tenant_id, unit_id: unit.id };
-}
-
-async function listAllowedUnits(usuarioId) {
-  return runQuery(
-    `SELECT
-       u.id,
-       u.tenant_id,
-       u.nome,
-       u.codigo,
-       u.status,
-       u.is_matriz,
-       uu.is_default
-     FROM usuario_unit uu
-     JOIN unit u ON u.id = uu.unit_id
-     WHERE uu.usuario_id = ?
-       AND uu.status = ?
-       AND u.status = ?
+async function listAllowedUnits(usuarioId, client = null) {
+  const db = client || { all: runQuery };
+  return db.all(
+    `${ALLOWED_UNITS_SELECT}
      ORDER BY uu.is_default DESC, u.nome COLLATE NOCASE`,
-    [usuarioId, USER_SCOPE_STATUS.ATIVO, UNIT_STATUS.ATIVA]
+    [usuarioId, USER_SCOPE_STATUS.ATIVO, UNIT_STATUS.ATIVA, TENANT_STATUS.ATIVO, USER_SCOPE_STATUS.ATIVO]
   );
 }
 
@@ -92,22 +67,10 @@ async function getUnitForUser(usuarioId, unitId) {
   if (!id) return null;
 
   return runGet(
-    `SELECT
-       u.id,
-       u.tenant_id,
-       u.nome,
-       u.codigo,
-       u.status,
-       u.is_matriz,
-       uu.is_default
-     FROM usuario_unit uu
-     JOIN unit u ON u.id = uu.unit_id
-     WHERE uu.usuario_id = ?
+    `${ALLOWED_UNITS_SELECT}
        AND uu.unit_id = ?
-       AND uu.status = ?
-       AND u.status = ?
      LIMIT 1`,
-    [usuarioId, id, USER_SCOPE_STATUS.ATIVO, UNIT_STATUS.ATIVA]
+    [usuarioId, USER_SCOPE_STATUS.ATIVO, UNIT_STATUS.ATIVA, TENANT_STATUS.ATIVO, USER_SCOPE_STATUS.ATIVO, id]
   );
 }
 
@@ -184,7 +147,6 @@ async function atualizarUnitBasica(id, payload = {}, actor) {
 
 module.exports = {
   ensureDefaultUnit,
-  ensureUserDefaultScope,
   listAllowedUnits,
   getDefaultUnitForUser,
   getUnitForUser,

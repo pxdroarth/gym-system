@@ -19,6 +19,7 @@ const PERMISSIONS = Object.freeze({
   USUARIOS_CRIAR: 'usuarios:criar',
   USUARIOS_ALTERAR_PAPEL: 'usuarios:alterar_papel',
   USUARIOS_ALTERAR_STATUS: 'usuarios:alterar_status',
+  USUARIOS_ALTERAR_UNIDADES: 'usuarios:alterar_unidades',
   FECHAMENTO_FECHAR: 'fechamento:fechar',
   FECHAMENTO_REABRIR: 'fechamento:reabrir',
   FINANCEIRO_SINCRONIZAR: 'financeiro:sincronizar',

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { NavLink, useLocation } from "react-router-dom";
 import {
   BarChart3,
   Building2,
@@ -14,6 +14,7 @@ import {
   ShoppingCart,
   UserCog,
   Users,
+  X,
 } from "lucide-react";
 import useAuth from "../hooks/useAuth";
 import { getRoleLabel, UI_PERMISSIONS, userHasUiPermission } from "../utils/permissions";
@@ -51,12 +52,24 @@ function initials(name) {
     .toUpperCase();
 }
 
-export default function Sidebar({ aberta = true }) {
+// compacto: abaixo de 1024 px o menu vira gaveta (mesmos links, submenu abre dentro).
+export default function Sidebar({ aberta = true, compacto = false, gavetaAberta = false, onFechar }) {
   const [hovering, setHovering] = useState(false);
-  const [open, setOpen] = useState({});
+  const location = useLocation();
+  const [open, setOpen] = useState(() => (
+    location.pathname.startsWith("/financeiro") ? { Financeiro: true } : {}
+  ));
+  const asideRef = useRef(null);
   const { user } = useAuth();
-  const expanded = hovering || aberta;
+  const expanded = compacto || hovering || aberta;
   const visibleMenu = menu.filter((item) => userHasUiPermission(user, item.permission));
+
+  // Ao abrir a gaveta, o foco vai para o primeiro link.
+  useEffect(() => {
+    if (compacto && gavetaAberta) {
+      asideRef.current?.querySelector(".app-sidebar__nav a, .app-sidebar__nav button")?.focus();
+    }
+  }, [compacto, gavetaAberta]);
 
   const handleToggle = (label) => {
     setOpen((prev) => ({ ...prev, [label]: !prev[label] }));
@@ -64,17 +77,30 @@ export default function Sidebar({ aberta = true }) {
 
   return (
     <aside
-      className={`app-sidebar ${expanded ? "" : "app-sidebar--collapsed"}`}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
+      id="app-sidebar"
+      ref={asideRef}
+      aria-label="Menu principal"
+      className={[
+        "app-sidebar",
+        expanded ? "" : "app-sidebar--collapsed",
+        compacto ? "app-sidebar--drawer" : "",
+        compacto && gavetaAberta ? "is-open" : "",
+      ].filter(Boolean).join(" ")}
+      onMouseEnter={() => !compacto && setHovering(true)}
+      onMouseLeave={() => !compacto && setHovering(false)}
     >
       <div className="app-sidebar__brand">
         <div className="app-sidebar__mark">SA</div>
         {expanded && (
-          <div>
+          <div className="app-sidebar__brand-text">
             <div className="app-sidebar__title">Academia SA</div>
-            <div className="app-sidebar__subtitle">ERP SaaS | Operação por unidade</div>
+            <div className="app-sidebar__subtitle">Operação por unidade</div>
           </div>
+        )}
+        {compacto && (
+          <button type="button" className="app-sidebar__close" onClick={onFechar} aria-label="Fechar menu">
+            <X size={20} aria-hidden="true" />
+          </button>
         )}
       </div>
 
@@ -90,6 +116,7 @@ export default function Sidebar({ aberta = true }) {
                   className="app-sidebar__submenu-trigger"
                   onClick={() => expanded && handleToggle(item.label)}
                   aria-expanded={Boolean(open[item.label])}
+                  aria-controls={`submenu-${item.label}`}
                 >
                   <span className="app-sidebar__icon">
                     <Icon size={18} />
@@ -105,7 +132,7 @@ export default function Sidebar({ aberta = true }) {
                 </button>
 
                 {expanded && open[item.label] && (
-                  <div className="app-sidebar__submenu">
+                  <div className="app-sidebar__submenu" id={`submenu-${item.label}`}>
                     {item.submenu.map((sub) => (
                       <NavLink
                         key={sub.to}

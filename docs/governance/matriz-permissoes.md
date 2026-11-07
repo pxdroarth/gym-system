@@ -99,7 +99,7 @@ Não deve acessar financeiro. Não deve registrar pagamento por padrão. Não de
 | Dashboard operacional | Total | Escopo Rede | Escopo Rede/Unidade | Escopo Unidade | Leitura/Operação limitada | Leitura limitada | Dashboard comum não deve expor financeiro restrito. |
 | Consolidado da Rede | Total | Leitura / Escopo Rede | Leitura / Escopo Rede | Leitura / Pendente | Não permitido | Não permitido | Consolidado é somente leitura. |
 | Onboarding da Rede | Total | Não permitido | Não permitido | Não permitido | Não permitido | Não permitido | Onboarding é interno da plataforma. |
-| Usuários internos | Total | Escopo Rede | Escopo Rede/Unidade | Não permitido | Não permitido | Não permitido | Alterar papel/status é ação crítica. |
+| Usuários internos | Total | Escopo Rede | Escopo das suas Unidades | Não permitido | Não permitido | Não permitido | Alterar papel/status/unidades é ação crítica. Regras na seção 7.1 (GS-03). |
 | Alunos | Total | Escopo Rede | Escopo Rede/Unidade | Escopo Unidade | Operação limitada | Leitura limitada | Recepção pode cadastrar/consultar conforme fluxo operacional. |
 | Perfil do aluno | Total | Escopo Rede | Escopo Rede/Unidade | Escopo Unidade | Operação limitada | Leitura limitada | Operador deve ver apenas o necessário para acesso. |
 | Planos | Total | Escopo Rede | Escopo Rede/Unidade | Leitura / Pendente | Leitura | Não permitido | Edição de plano é administrativa. |
@@ -129,6 +129,7 @@ Não deve acessar financeiro. Não deve registrar pagamento por padrão. Não de
 | criar usuário interno | platform_admin, owner, admin | Global/Rede/Unidade | Sim | Deve respeitar escopo e papel do ator. |
 | alterar papel de usuário | platform_admin, owner, admin | Global/Rede/Unidade | Sim | Revoga sessões do usuário afetado. |
 | alterar status de usuário | platform_admin, owner, admin | Global/Rede/Unidade | Sim | Inativar/bloquear revoga sessões. |
+| alterar unidades autorizadas de usuário | platform_admin, owner, admin | Global/Rede/Unidade | Sim | Adicionar/remover unidade revoga sessões do usuário afetado (GS-03). |
 | cadastrar aluno | owner, admin, gerente, recepção | Rede/Unidade | Sim | Recepção deve operar em escopo limitado. |
 | editar aluno | owner, admin, gerente, recepção | Rede/Unidade | Sim | Campos sensíveis podem exigir restrição futura. |
 | alterar plano | owner, admin | Rede/Unidade | Sim | Gerente é pendente. |
@@ -161,6 +162,28 @@ Não deve acessar financeiro. Não deve registrar pagamento por padrão. Não de
 - Perfis operacionais não devem acessar plataforma/global.
 - Permissões devem ser validadas por escopo de Rede/Unidade.
 - Dados financeiros globais vistos por `platform_admin` em produção exigem decisão formal.
+
+### 7.1 Gestão de usuários internos (GS-03)
+
+Validado no servidor (`backend/services/UserService.js`); a tela Usuários apenas reflete o retorno da API.
+
+| Regra | Comportamento | Código de erro |
+|---|---|---|
+| Escopo da Rede | `owner`/`admin` gerenciam apenas a Rede da unidade atual (`X-Unit-Id`). `tenant_id` em query/body só é aceito para `platform_admin`. | `TENANT_FORA_DO_ESCOPO` (403) |
+| Usuário de outra Rede | Não aparece na listagem e não pode ser alterado. | `USUARIO_NAO_ENCONTRADO` (404) |
+| Unidades gerenciáveis | `platform_admin`: todas as unidades ativas da Rede escolhida. `owner`: todas as unidades ativas da Rede. `admin`: só as unidades em que ele mesmo está autorizado. | `UNIDADE_FORA_DO_ESCOPO` (403) |
+| Alvo fora do escopo do admin | Admin só altera quem tem todas as unidades da Rede dentro das unidades dele; lista apenas quem compartilha ao menos uma unidade. | `USUARIO_FORA_DAS_UNIDADES_GERENCIAVEIS` (403) |
+| Hierarquia | `platform_admin` > `owner` > `admin` > demais. Ninguém atribui papel acima do próprio nem altera quem está acima. Admin pode gerenciar outro admin. | `HIERARQUIA_INSUFICIENTE` (403) |
+| Plataforma | Só `platform_admin` atribui o papel `platform_admin` ou altera conta de plataforma. Contas de plataforma não aparecem para a academia. | `PLATFORM_ADMIN_RESTRITO` (403) |
+| Autogestão | Ninguém altera o próprio papel, status ou unidades por esta tela (Minha conta é o lote GS-04). | `USUARIO_AUTOGESTAO_BLOQUEADA` (403) |
+| Usuário em mais de uma Rede | Papel e status são globais ao usuário; fora da plataforma não podem ser alterados. Unidades da própria Rede podem. | `USUARIO_MULTI_REDE_RESTRITO` (403) |
+| Unidade obrigatória | Criação exige ao menos uma unidade. Remover todas as unidades de uma Rede só é aceito se o usuário mantiver unidade em outra Rede. | `USUARIO_UNIDADE_OBRIGATORIA` (400) |
+| Sem vínculo automático | Bootstrap, login, sessão e refresh não criam vínculo. Sem unidade válida (unidade e Rede ativas, vínculo ativo com a Rede), login e refresh falham. | `USUARIO_SEM_UNIDADE_AUTORIZADA` (403) |
+| Auditoria | `criar_usuario_interno`, `alterar_papel_usuario`, `alterar_status_usuario`, `alterar_unidades_usuario` (com unidades antes/depois) e revogação de sessões. | — |
+
+Decisões assumidas na GS-03, a validar com o produto: admin pode criar/editar outro admin; owner gerencia todas as unidades da Rede mesmo sem vínculo próprio; contas de plataforma ficam ocultas para a academia.
+
+Vínculos antigos de origem não confirmada: ver `vinculos-escopo-legado.md`.
 
 ## 8. Pendências de decisão
 

@@ -317,6 +317,8 @@ Visão consolidada da Rede, somente leitura, voltada a acompanhamento e governan
 
 **RD-016 [pendente]** Antes do PostgreSQL, o schema deve passar por congelamento e revisão de nomes, índices e constraints.
 
+**RD-017 [pendente — bloqueante antes do piloto multiunidade]** O aluno deve ter cadastro e matrícula únicos por Rede; o plano define as Unidades autorizadas e cada entrada é registrada na Unidade onde aconteceu. Detalhe e aceite na pendência GS-02 (seção 14). Até lá, a matrícula é única por Unidade (`UNIQUE(tenant_id, unit_id, matricula)`), por compatibilidade com o código atual (GS-01).
+
 ## 11. Requisitos não funcionais
 
 **RNF-001 [parcial]** O sistema deve priorizar segurança de sessão e proteção contra roubo de token.
@@ -382,7 +384,42 @@ Visão consolidada da Rede, somente leitura, voltada a acompanhamento e governan
 - Executar e documentar smoke test geral.
 - Fazer schema freeze antes de migrations.
 - Revisar nomes técnicos para migração PostgreSQL.
-- Definir estratégia de seed/bootstrap para ambiente limpo.
+- Estratégia de seed/bootstrap para ambiente limpo: feita na GS-01 (`ensureSchema` cria as tabelas de negócio; `npm run db:seed:dev` gera base sintética reproduzível).
+- GS-02 — cadastro e matrícula únicos por Rede (bloqueante antes do piloto multiunidade; ver abaixo).
+- GS-03 — Identidade e Acesso, lote 1: feito (ver abaixo).
+- GS-04, GS-05, GS-06 — próximos lotes de Identidade e Acesso (ver abaixo).
+
+### GS-02 — Cadastro e matrícula únicos por Rede
+
+**Status:** pendente. **Obrigatória antes do piloto multiunidade.** Fora do escopo da GS-01.
+
+**Contexto:** hoje cada Unidade tem cadastro e matrícula próprios (`aluno.unit_id`, matrícula calculada por `MAX(matricula)` por tenant/unit em `backend/routes/alunos.js`). Um aluno que frequenta duas Unidades precisa de dois cadastros.
+
+**Escopo:**
+
+- Um único cadastro e uma única matrícula do aluno por Rede (tenant).
+- O plano define as Unidades autorizadas.
+- A decisão de acesso considera a Unidade onde a tentativa acontece e as Unidades autorizadas pelo plano.
+- Cada entrada é registrada na Unidade onde aconteceu (`acesso.unit_id` = Unidade do dispositivo/recepção), não na Unidade de cadastro.
+- Plano de migração para bases existentes com alunos duplicados entre Unidades.
+- ~~Revisar `ensureExistingUserScopes`~~: resolvido na GS-03 (vínculos automáticos com a Matriz removidos; ver `vinculos-escopo-legado.md`).
+
+**Critério de aceite:** um aluno com um único cadastro e uma única matrícula consegue entrar nas Unidades liberadas pelo plano e recebe acesso negado em uma Unidade fora do plano; cada entrada aparece registrada na Unidade onde aconteceu.
+
+### GS-03 — Identidade e Acesso, lote 1 (feito)
+
+- Tela e API de Usuários respeitam Rede e unidades gerenciáveis; papel, status e unidades autorizadas são validados no servidor e auditados (regras em `matriz-permissoes.md`, seção 7.1).
+- Removidos os vínculos automáticos com a Matriz no bootstrap, login, resolução de sessão, refresh e criação de usuário; `usuario_unit.origem` registra a origem de cada vínculo novo.
+- Vínculos antigos de origem não confirmada: procedimento em `vinculos-escopo-legado.md` e diagnóstico `tests/scripts/diagnostico-vinculos.js`.
+- Validação: `tests/scripts/smoke-identidade.js` (Matriz → Filial, Filial → Matriz, Rede A → Rede B, hierarquia, bloqueio de promoção a `platform_admin`), repetido após reinício da API e refresh de sessão.
+
+### Próximos lotes de Identidade e Acesso
+
+**GS-04 — Minha conta [pendente].** Tela e API para o próprio usuário ver seus dados, Rede/unidades autorizadas e trocar a própria senha (exigindo a senha atual), sem alterar papel, status ou unidades. Aceite: troca de senha revoga as demais sessões e é auditada; tentativa de alterar papel/unidades pela própria conta é recusada.
+
+**GS-05 — Gerenciamento de sessões [pendente].** Listar sessões ativas do próprio usuário (dispositivo, IP, último uso), encerrar uma sessão específica e, para owner/admin no seu escopo, encerrar sessões de um usuário gerenciado. Aceite: sessão encerrada falha no próximo request e no refresh; ações auditadas; admin não vê sessões fora do seu escopo.
+
+**GS-06 — Recuperação de senha [pendente].** Fluxo de "esqueci minha senha" com token de uso único, expiração curta, armazenamento por hash, resposta neutra (não revela se o login existe) e limite de tentativas; redefinição revoga todas as sessões. Depende de decisão sobre canal de envio (e-mail) e de gestão de segredos. Aceite: token reutilizado ou expirado é recusado; nenhuma resposta permite enumerar usuários.
 
 ## 15. Critérios de aceite do produto
 

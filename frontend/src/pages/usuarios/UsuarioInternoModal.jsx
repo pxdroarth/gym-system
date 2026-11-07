@@ -6,17 +6,8 @@ import Input from "../../components/ui/Input";
 import Modal from "../../components/ui/Modal";
 import Select from "../../components/ui/Select";
 import useAuth from "../../hooks/useAuth";
-import { ROLES } from "../../utils/permissions";
-
-const papeis = [
-  { value: ROLES.PLATFORM_ADMIN, label: "Admin Plataforma" },
-  { value: ROLES.OWNER, label: "Owner" },
-  { value: ROLES.ADMIN, label: "Administrador" },
-  { value: ROLES.RECEPCAO, label: "Recepcao" },
-  { value: ROLES.GESTOR, label: "Gestor" },
-  { value: ROLES.FINANCEIRO, label: "Financeiro" },
-  { value: ROLES.OPERADOR_ACESSO, label: "Operador de Acesso" },
-];
+import { getRoleLabel, ROLES } from "../../utils/permissions";
+import UnidadesChecklist from "./UnidadesChecklist";
 
 const statusOptions = [
   { value: "ativo", label: "Ativo" },
@@ -24,27 +15,32 @@ const statusOptions = [
   { value: "bloqueado", label: "Bloqueado" },
 ];
 
-function formInicial() {
+function formInicial(opcoes) {
+  const unidades = opcoes?.unidades || [];
+  const papeis = opcoes?.papeis_atribuiveis || [];
+  const primeira = unidades.length === 1 ? Number(unidades[0].id) : null;
   return {
     nome: "",
     email: "",
     login: "",
     senha: "",
-    papel: ROLES.RECEPCAO,
+    papel: papeis.includes(ROLES.RECEPCAO) ? ROLES.RECEPCAO : (papeis[papeis.length - 1] || ROLES.RECEPCAO),
     status: "ativo",
+    unitIds: primeira ? [primeira] : [],
+    padraoId: primeira,
   };
 }
 
-export default function UsuarioInternoModal({ open, onClose, onSubmit, loading }) {
+// Papeis e unidades vem de GET /usuarios-internos/opcoes: o backend decide o
+// que este operador pode atribuir e valida de novo ao salvar.
+export default function UsuarioInternoModal({ open, onClose, onSubmit, loading, opcoes }) {
   const { user } = useAuth();
-  const [form, setForm] = useState(formInicial());
-  const papeisDisponiveis = papeis.filter((papel) => (
-    papel.value !== ROLES.PLATFORM_ADMIN || user?.papel === ROLES.PLATFORM_ADMIN
-  ));
+  const [form, setForm] = useState(formInicial(opcoes));
+  const papeisDisponiveis = opcoes?.papeis_atribuiveis || [];
 
   useEffect(() => {
-    if (open) setForm(formInicial());
-  }, [open]);
+    if (open) setForm(formInicial(opcoes));
+  }, [open, opcoes]);
 
   if (!open) return null;
 
@@ -55,8 +51,16 @@ export default function UsuarioInternoModal({ open, onClose, onSubmit, loading }
 
   function handleSubmit(event) {
     event.preventDefault();
-    onSubmit?.(form);
+    const { unitIds, padraoId, ...dados } = form;
+    onSubmit?.({
+      ...dados,
+      unit_ids: unitIds,
+      unit_padrao_id: padraoId,
+      ...(opcoes?.pode_escolher_rede && opcoes?.tenant?.id ? { tenant_id: opcoes.tenant.id } : {}),
+    });
   }
+
+  const semUnidade = form.unitIds.length === 0;
 
   return (
     <Modal title="Novo usuario interno" onClose={onClose} className="max-w-4xl">
@@ -70,7 +74,7 @@ export default function UsuarioInternoModal({ open, onClose, onSubmit, loading }
               <Input label="Senha inicial" name="senha" type="password" value={form.senha} onChange={handleChange} required />
               <Select label="Papel" name="papel" value={form.papel} onChange={handleChange}>
                 {papeisDisponiveis.map((papel) => (
-                  <option key={papel.value} value={papel.value}>{papel.label}</option>
+                  <option key={papel} value={papel}>{getRoleLabel(papel)}</option>
                 ))}
               </Select>
               <Select label="Status" name="status" value={form.status} onChange={handleChange}>
@@ -80,10 +84,24 @@ export default function UsuarioInternoModal({ open, onClose, onSubmit, loading }
               </Select>
             </div>
 
+            <div className="space-y-2">
+              <div className="ui-field__label">
+                Unidades autorizadas{opcoes?.tenant?.nome ? ` - ${opcoes.tenant.nome}` : ""}
+              </div>
+              <UnidadesChecklist
+                unidades={opcoes?.unidades || []}
+                selecionadas={form.unitIds}
+                padraoId={form.padraoId}
+                onChange={({ unitIds, padraoId }) => setForm((prev) => ({ ...prev, unitIds, padraoId }))}
+                disabled={loading}
+              />
+              {semUnidade && <div className="text-xs text-red-600">Selecione ao menos uma unidade.</div>}
+            </div>
+
             <div className="ui-info-item">
               <div className="ui-info-item__label">Governanca</div>
               <div className="ui-info-item__value text-sm">
-                Criacao de usuario e promocao para administrador continuam validadas pelo backend.
+                Papel, status e unidades sao validados pelo backend: so aparecem papeis e unidades que o seu perfil pode atribuir.
               </div>
             </div>
           </div>
@@ -98,7 +116,7 @@ export default function UsuarioInternoModal({ open, onClose, onSubmit, loading }
               <div className="governance-list__item">
                 <div>
                   <div className="governance-list__title">Papel disponivel</div>
-                  <div className="governance-list__copy">platform_admin so aparece para quem ja pertence a administracao da plataforma.</div>
+                  <div className="governance-list__copy">platform_admin so aparece para a plataforma; ninguem atribui papel acima do proprio.</div>
                 </div>
                 <div className="governance-list__value"><ShieldCheck size={18} /></div>
               </div>
@@ -111,8 +129,8 @@ export default function UsuarioInternoModal({ open, onClose, onSubmit, loading }
               </div>
               <div className="governance-list__item">
                 <div>
-                  <div className="governance-list__title">Escopo visual</div>
-                  <div className="governance-list__copy">A interface reflete o papel retornado pelo backend sem duplicar a logica de seguranca.</div>
+                  <div className="governance-list__title">Sem vinculo automatico</div>
+                  <div className="governance-list__copy">O usuario so acessa as unidades marcadas aqui. Nao ha acesso implicito a Matriz.</div>
                 </div>
                 <div className="governance-list__value"><UserCog size={18} /></div>
               </div>
@@ -130,7 +148,7 @@ export default function UsuarioInternoModal({ open, onClose, onSubmit, loading }
           <Button type="button" variant="ghost" onClick={onClose} disabled={loading}>
             Cancelar
           </Button>
-          <Button type="submit" disabled={loading}>
+          <Button type="submit" disabled={loading || semUnidade}>
             {loading ? "Salvando..." : "Criar usuario"}
           </Button>
         </div>

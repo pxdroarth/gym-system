@@ -182,3 +182,32 @@ Observacoes:
 - antes de criar scheduler futuro
 - antes ou depois de manutencao operacional sensivel
 - como apoio a auditoria local
+
+## `smoke-identidade.js` (GS-03)
+
+### Objetivo
+
+Validar isolamento de identidade e escopo pela API: Matriz → Filial, Filial → Matriz, Rede A → Rede B, hierarquia de papéis, bloqueio de promoção a `platform_admin`, unidade obrigatória, revogação de sessão ao mudar unidades, auditoria e repetição após refresh de sessão.
+
+### Pré-requisitos
+
+- API rodando sobre base criada com `npm run db:seed:dev`. **Não rodar em base real**: o smoke cria a Rede B `smoke-identidade-rede-b` e usuários `smoke.*`.
+- Senhas: `SEED_DEV_PASSWORD` (padrão `dev12345`) e `SMOKE_PLATFORM_PASSWORD` (padrão `BOOTSTRAP_ADMIN_PASSWORD` ou `admin123`).
+
+### Execução
+
+```cmd
+node tests\scripts\smoke-identidade.js --base-url=http://localhost:3001
+```
+
+Rode de novo depois de reiniciar a API para cobrir o cenário de reinício. Exit code `0` passou, `1` falhou.
+
+## `diagnostico-vinculos.js` (GS-03)
+
+Diagnóstico **somente leitura** dos vínculos usuário ↔ Rede/Unidade. Abre o SQLite em modo leitura e lista vínculos de origem não confirmada, usuários em mais de uma Rede, mais de uma unidade padrão e usuários ativos sem unidade.
+
+```cmd
+node tests\scripts\diagnostico-vinculos.js [caminho\academia.sqlite]
+```
+
+Tratamento dos achados: `docs/governance/vinculos-escopo-legado.md`.

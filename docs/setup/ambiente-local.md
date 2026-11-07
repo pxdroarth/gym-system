@@ -115,6 +115,35 @@ Regras:
 - tratar o banco local como ambiente de desenvolvimento/demo;
 - o backend executa `ensureSchema` na inicializacao.
 
+### Base de desenvolvimento do zero
+
+O clone nao traz `backend/academia.sqlite` (ignorado pelo Git). Para criar uma base local completa e reproduzivel:
+
+```cmd
+npm.cmd run db:seed:dev
+npm.cmd start
+```
+
+- `db:seed:dev` executa `ensureSchema`, que cria todas as tabelas de plataforma e de negocio, e grava dados sinteticos em uma unica transacao.
+- So roda em base nova ou sem alunos; em base ja populada ele recusa e nao altera o arquivo. Recusa tambem `NODE_ENV=production`.
+- Sem o seed, `npm start` em base vazia ja cria o schema completo e o `platform_admin` bootstrap (`admin` / `BOOTSTRAP_ADMIN_PASSWORD`, padrao local `admin123`).
+- Datas sao relativas ao dia da execucao, para que as regras de acesso deem sempre o mesmo resultado.
+
+Conteudo semeado (ficticio):
+
+| Item | Detalhe |
+|---|---|
+| Unidades | `Unidade Matriz` (bootstrap) e `Unidade Filial (dev)` |
+| Usuarios | `owner` (Matriz e Filial), `admin.academia`, `gestor`, `financeiro`, `recepcao`, `operador` (Matriz), `recepcao.filial` (Filial), `inativo` |
+| Senha | `SEED_DEV_PASSWORD` ou padrao local `dev12345` |
+| Alunos Matriz | em dia, inadimplente, inativo, titular e dependente de plano dupla, pagamento parcial, trimestral |
+| Alunos Filial | em dia e inadimplente, com as mesmas matriculas da Matriz (matricula unica por unidade) |
+| Demais | planos, mensalidades, pagamentos, produtos, vendas, despesas, historico de acessos e receitas sincronizadas pelo `FinanceiroService` |
+
+Para recriar do zero, pare a API, apague ou renomeie `backend/academia.sqlite` (e `-wal`/`-shm`, se existirem) e rode o seed de novo. Bases existentes nao sao migradas nem alteradas pelo seed.
+
+Desde a GS-03 nao ha vinculo automatico com a Matriz: `recepcao.filial` acessa apenas a Filial, mesmo depois de reiniciar a API. Para validar Matriz -> Filial, Filial -> Matriz e Rede A -> Rede B, rode `node tests\scripts\smoke-identidade.js` com a API no ar sobre esta base (o smoke cria uma Rede B de teste).
+
 ### Arquivos `.env`
 
 Arquivos relevantes:
@@ -184,6 +213,16 @@ tests\scripts\smoke-auth.cmd -Login admin
 tests\scripts\smoke-acesso.cmd
 ```
 
+### Smoke de identidade e escopo (GS-03)
+
+Com a API no ar sobre uma base criada por `npm.cmd run db:seed:dev` (nunca sobre base real):
+
+```cmd
+node tests\scripts\smoke-identidade.js --base-url=http://localhost:3001
+```
+
+Para cobrir reinicio, rode de novo depois de reiniciar a API. O diagnostico somente leitura de vinculos fica em `node tests\scripts\diagnostico-vinculos.js`.
+
 ### Build oficial do frontend
 
 ```cmd
@@ -212,6 +251,7 @@ npm.cmd --prefix frontend install
 ```
 
 4. Configurar os arquivos `.env` necessarios a partir dos exemplos, sem copiar secrets reais para o repositorio.
+   Em seguida, criar a base local com `npm.cmd run db:seed:dev`.
 5. Rodar o doctor read-only:
 
 ```cmd
@@ -270,6 +310,7 @@ Revisar:
 ### Banco local nao encontrado
 
 - confirmar a presenca de `backend/academia.sqlite`;
+- em clone novo, criar a base com `npm.cmd run db:seed:dev` (ver "Base de desenvolvimento do zero");
 - iniciar o backend manualmente quando necessario;
 - validar `/test-db` depois que a API estiver de pe.
 

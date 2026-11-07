@@ -6,6 +6,7 @@
   "scripts": {
     "start": "node backend/server.js",
     "backend": "node backend/server.js",
+    "db:seed:dev": "node backend/scripts/seedDev.js",
     "frontend": "npm --prefix frontend run dev",
     "build:frontend": "npm --prefix frontend run build",
     "e2e": "powershell -ExecutionPolicy Bypass -File tests/scripts/e2e-playwright.ps1",

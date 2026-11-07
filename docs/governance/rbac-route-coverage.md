@@ -67,6 +67,9 @@ Rotas com guarda explícita de permissão:
   - `POST /usuarios-internos`
   - `PATCH /usuarios-internos/:id/papel`
   - `PATCH /usuarios-internos/:id/status`
+  - `GET /usuarios-internos/opcoes` (`usuarios:visualizar`; GS-03)
+  - `PATCH /usuarios-internos/:id/unidades` (`usuarios:alterar_unidades`; GS-03)
+  - Além da permissão, todas aplicam escopo de Rede/unidades e hierarquia no `UserService` (ver `matriz-permissoes.md`, seção 7.1).
 - Tenants:
   - `GET /tenants`
   - `GET /tenants/:id`

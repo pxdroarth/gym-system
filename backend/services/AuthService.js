@@ -8,6 +8,7 @@ const { verifyPassword, hashToken, generateToken } = require('../utils/passwordH
 const DEFAULT_DEV_SESSION_MINUTES = 12 * 60;
 const DEFAULT_PROD_SESSION_MINUTES = 30;
 const REFRESH_COOKIE_NAME = 'academia_sa_refresh';
+const USUARIO_SEM_UNIDADE = 'USUARIO_SEM_UNIDADE_AUTORIZADA';
 const DEFAULT_REFRESH_DAYS = 30;
 
 function readPositiveNumber(value) {
@@ -221,6 +222,12 @@ async function login(payload = {}, req = null) {
     throw new AppError('Credenciais invalidas', 401, 'CREDENCIAIS_INVALIDAS');
   }
 
+  // GS-03: login nao cria vinculo de unidade. Sem unidade autorizada, nao ha sessao.
+  const unitsAtLogin = await UnitService.listAllowedUnits(user.id);
+  if (!unitsAtLogin.length) {
+    throw new AppError('Usuario sem unidade autorizada', 403, USUARIO_SEM_UNIDADE);
+  }
+
   return runTransaction(async (tx) => {
     const client = getClientInfo(req);
     const accessSession = await createAccessSession(user, req, tx);
@@ -236,7 +243,8 @@ async function login(payload = {}, req = null) {
       [user.id]
     );
 
-    const userScope = await UnitService.ensureUserDefaultScope(user.id, user.papel, tx);
+    const loginUnits = await UnitService.listAllowedUnits(user.id, tx);
+    const loginUnit = loginUnits.find((unit) => Number(unit.is_default) === 1) || loginUnits[0] || null;
 
     await AuditService.logAction({
       actor: { id: String(user.id), name: user.nome || user.login, role: user.papel },
@@ -247,12 +255,12 @@ async function login(payload = {}, req = null) {
       before: null,
       after: sanitizeUser(user),
       metadata: { session_id: accessSession.id, refresh_family_id: refreshToken.family_id, ip: client.ip, user_agent: client.user_agent },
-      tenant_id: userScope.tenant_id,
-      unit_id: userScope.unit_id,
+      tenant_id: loginUnit?.tenant_id || null,
+      unit_id: loginUnit?.id || null,
     }, tx);
 
     const updatedUser = await tx.get('SELECT * FROM usuario_interno WHERE id = ?', [user.id]);
-    const allowedUnits = await UnitService.listAllowedUnits(user.id);
+    const allowedUnits = loginUnits;
     const currentUnit = allowedUnits.find((unit) => Number(unit.is_default) === 1) || allowedUnits[0] || null;
 
     return {
@@ -294,7 +302,6 @@ async function resolveSessionToken(token) {
   if (row.usuario_status !== USER_STATUS.ATIVO) return null;
 
   await runExecute('UPDATE auth_session SET last_used_at = datetime(\'now\') WHERE id = ?', [row.id]);
-  await UnitService.ensureUserDefaultScope(row.usuario_id, row.papel);
   const allowedUnits = await UnitService.listAllowedUnits(row.usuario_id);
   const currentUnit = allowedUnits.find((unit) => Number(unit.is_default) === 1) || allowedUnits[0] || null;
 
@@ -523,6 +530,12 @@ async function refresh(req = null) {
       return { error: new AppError('Sessao revogada nao pode renovar token', 401, 'SESSAO_REVOGADA') };
     }
 
+    // GS-03: refresh nao cria vinculo; sem unidade autorizada a sessao nao renova.
+    const allowedUnits = await UnitService.listAllowedUnits(row.usuario_id, tx);
+    if (!allowedUnits.length) {
+      return { error: new AppError('Usuario sem unidade autorizada', 403, USUARIO_SEM_UNIDADE) };
+    }
+
     const accessSession = await rotateAccessSession(row.session_id, req, tx);
     const nextRefresh = await createRefreshToken({
       sessionId: accessSession.id,
@@ -547,9 +560,7 @@ async function refresh(req = null) {
       [row.usuario_id]
     );
 
-    await UnitService.ensureUserDefaultScope(row.usuario_id, row.papel, tx);
     const updatedUser = await tx.get('SELECT * FROM usuario_interno WHERE id = ?', [row.usuario_id]);
-    const allowedUnits = await UnitService.listAllowedUnits(row.usuario_id);
     const currentUnit = allowedUnits.find((unit) => Number(unit.is_default) === 1) || allowedUnits[0] || null;
     const client = getClientInfo(req);
 
