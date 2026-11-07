@@ -387,12 +387,14 @@ async function assertSuccessPersistence(response, preview) {
     throw new Error(`pagamento.valor_pago=${pagamento.valor_pago}, esperado=${preview.valor_cobrado}`);
   }
 
+  // GS-07 P1: cada pagamento gera o proprio lancamento (origem
+  // 'pagamento_mensalidade', origem_id = pagamento.id).
   const contaFinanceira = await runGet(
     `SELECT *
      FROM conta_financeira
      WHERE origem = ? AND origem_id = ? AND tenant_id = ? AND unit_id = ? AND deleted_at IS NULL
      ORDER BY id DESC LIMIT 1`,
-    ['mensalidade', mensalidadeId, created.tenantId, created.unitId]
+    ['pagamento_mensalidade', pagamentoId, created.tenantId, created.unitId]
   );
   if (!contaFinanceira) throw new Error('conta_financeira derivada nao encontrada');
   if (contaFinanceira.status !== 'pago') throw new Error(`conta_financeira.status=${contaFinanceira.status}`);

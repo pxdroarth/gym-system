@@ -24,7 +24,17 @@ const runExecute = (sql, params = []) =>
     });
   });
 
-const runTransaction = async (callback) => {
+// O app usa uma unica conexao SQLite. Sem fila, duas requisicoes simultaneas
+// tentam BEGIN na mesma conexao ("cannot start a transaction within a
+// transaction") e os comandos de uma entram na transacao da outra. A fila
+// abaixo serializa as transacoes do processo (GS-07 P1). Leituras e escritas
+// fora de runTransaction continuam sem fila.
+const { AsyncLocalStorage } = require('async_hooks');
+
+const transacaoAtual = new AsyncLocalStorage();
+let filaTransacoes = Promise.resolve();
+
+const executarTransacao = async (callback) => {
   await runExecute('BEGIN IMMEDIATE TRANSACTION');
 
   const tx = {
@@ -34,7 +44,7 @@ const runTransaction = async (callback) => {
   };
 
   try {
-    const result = await callback(tx);
+    const result = await transacaoAtual.run(true, () => callback(tx));
     await runExecute('COMMIT');
     return result;
   } catch (error) {
@@ -45,6 +55,17 @@ const runTransaction = async (callback) => {
     }
     throw error;
   }
+};
+
+const runTransaction = (callback) => {
+  if (transacaoAtual.getStore()) {
+    // Mesmo comportamento de antes (o SQLite recusava BEGIN aninhado), mas
+    // sem travar a fila: passe o `tx` recebido para a funcao interna.
+    return Promise.reject(new Error('runTransaction aninhado: reutilize o tx da transacao atual'));
+  }
+  const execucao = filaTransacoes.then(() => executarTransacao(callback));
+  filaTransacoes = execucao.catch(() => {});
+  return execucao;
 };
 
 module.exports = { runQuery, runGet, runExecute, runTransaction };

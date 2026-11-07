@@ -76,6 +76,12 @@ async function analisarPeriodo(ano, mes, client = null, scope = null) {
        AND m.deleted_at IS NULL
        AND DATE(COALESCE(m.updated_at, m.vencimento)) BETWEEN DATE(?) AND DATE(?)
        AND cf.id IS NULL
+       -- GS-07 P1: pagamentos novos tem lancamento proprio por pagamento.
+       AND NOT EXISTS (
+         SELECT 1 FROM pagamento p
+         JOIN conta_financeira cfp ON cfp.origem = 'pagamento_mensalidade' AND cfp.origem_id = p.id AND cfp.deleted_at IS NULL
+         WHERE p.mensalidade_id = m.id
+       )
        ${scope?.tenant_id && scope?.unit_id ? 'AND m.tenant_id = ? AND m.unit_id = ?' : ''}`,
     scope?.tenant_id && scope?.unit_id ? [inicio, fim, scope.tenant_id, scope.unit_id] : [inicio, fim]
   );
@@ -112,13 +118,15 @@ async function analisarPeriodo(ano, mes, client = null, scope = null) {
      FROM conta_financeira cf
      LEFT JOIN mensalidade m ON cf.origem = 'mensalidade' AND cf.origem_id = m.id
      LEFT JOIN venda_produto v ON cf.origem = 'venda_produto' AND cf.origem_id = v.id
+     LEFT JOIN pagamento pg ON cf.origem = 'pagamento_mensalidade' AND cf.origem_id = pg.id
      WHERE DATE(cf.data_lancamento) BETWEEN DATE(?) AND DATE(?)
        AND cf.deleted_at IS NULL
-       AND cf.origem IN ('mensalidade', 'venda_produto')
+       AND cf.origem IN ('mensalidade', 'venda_produto', 'pagamento_mensalidade')
        ${scope?.tenant_id && scope?.unit_id ? 'AND cf.tenant_id = ? AND cf.unit_id = ?' : ''}
        AND (
          (cf.origem = 'mensalidade' AND m.id IS NULL)
          OR (cf.origem = 'venda_produto' AND v.id IS NULL)
+         OR (cf.origem = 'pagamento_mensalidade' AND pg.id IS NULL)
        )`,
     scope?.tenant_id && scope?.unit_id ? [inicio, fim, scope.tenant_id, scope.unit_id] : [inicio, fim]
   );

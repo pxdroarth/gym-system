@@ -432,7 +432,18 @@ Diagnóstico e plano completos no documento da GS-07 (commit analisado: `bd74c2d
 - P10: editar uma mensalidade só altera cobertura e observações quando esses campos vêm no pedido.
 - Validação: `tests/scripts/smoke-f0-acesso-datas.js`.
 
-**Lotes separados:** P1 (pagamentos múltiplos por mensalidade) e P11 (fechamento e KPIs pela data correta) seguem em lotes próprios.
+**P1 — pagamentos parciais e estorno por pagamento — feito na branch `gs-07-p1-pagamentos-parciais` (empilhada sobre a F0):**
+
+- Cada pagamento é um registro próprio. A mensalidade fica `parcial` enquanto a soma dos pagamentos válidos (não estornados) for menor que o valor cobrado, e `pago` quando alcança o valor (D6).
+- Pagamento acima do saldo em aberto é recusado (`422 PAGAMENTO_ACIMA_DO_SALDO`); mensalidade quitada recusa novo pagamento (`409 MENSALIDADE_QUITADA`). O saldo é comparado em centavos, na mesma transação que grava o pagamento; valores com mais de duas casas decimais são recusados.
+- Idempotência: header `Idempotency-Key` (ou campo `chave_idempotencia`), única por Rede/Unidade. Mesma chave com os mesmos dados devolve o resultado original (`200`, header `Idempotent-Replayed: true`) sem gravar pagamento, lançamento ou auditoria, inclusive com saldo zerado ou pagamento já estornado. Mesma chave com dados diferentes: `409 IDEMPOTENCIA_CONFLITO`. Sem chave, cada envio é um pagamento novo.
+- Estorno: `POST /pagamentos/:id/estornar` com `motivo`, exige `reversao:executar`, valida Rede/Unidade (pagamento de outra unidade: `404`) e o fechamento do período do pagamento e da data do estorno. Estorna só o pagamento escolhido, mantém vencimento e período de cobertura e recalcula o status pelo saldo restante (D7). Registra `reversao_controlada`, lançamento inverso e auditoria `estornar_pagamento_mensalidade`.
+- Financeiro: cada pagamento novo gera o próprio lançamento (`origem = 'pagamento_mensalidade'`) na data do pagamento, para que um pagamento posterior não altere lançamento de mês já fechado. Lançamentos legados (`origem = 'mensalidade'`) são preservados; a sincronização não soma de novo o que já tem lançamento próprio, e o "a receber" agregado é baixado quando a mensalidade passa a ter pagamentos no modelo novo.
+- A reversão em bloco (`/reversoes/mensalidades/:id`) continua para mensalidades legadas; com pagamentos no modelo novo, responde `409 USAR_ESTORNO_POR_PAGAMENTO`.
+- As transações do processo passaram a ser serializadas (fila em `dbHelper.runTransaction`): com uma única conexão SQLite, requisições simultâneas falhavam com "cannot start a transaction within a transaction".
+- Validação: `tests/scripts/smoke-p1-pagamentos.js`.
+
+**Lote separado:** P11 (fechamento e KPIs pela data correta, incluindo receita líquida de estornos) segue em lote próprio.
 
 **Decisões registradas para o mensal manual:**
 

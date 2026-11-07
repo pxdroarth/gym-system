@@ -97,6 +97,20 @@ async function reverterMensalidade(mensalidadeId, payload = {}, actor, scope = n
       throw new AppError('Mensalidade ja possui reversao controlada', 409, 'MENSALIDADE_JA_REVERTIDA');
     }
 
+    // GS-07 P1: mensalidade com pagamentos no modelo novo (lancamento por
+    // pagamento) e estornada pagamento a pagamento, nunca em bloco.
+    const pagamentoNovo = await tx.get(
+      'SELECT id FROM pagamento WHERE mensalidade_id = ? AND lancamento_id IS NOT NULL LIMIT 1',
+      [id]
+    );
+    if (pagamentoNovo) {
+      throw new AppError(
+        'Esta mensalidade usa pagamentos individuais: estorne cada pagamento em POST /pagamentos/:id/estornar',
+        409,
+        'USAR_ESTORNO_POR_PAGAMENTO'
+      );
+    }
+
     const pagamento = scope?.tenant_id && scope?.unit_id
       ? await tx.get('SELECT * FROM pagamento WHERE mensalidade_id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id])
       : await tx.get('SELECT * FROM pagamento WHERE mensalidade_id = ?', [id]);
@@ -286,7 +300,133 @@ async function reverterContaFinanceira(contaId, payload = {}, actor, scope = nul
   });
 }
 
+// GS-07 P1 (D7): estorna somente o pagamento indicado, integral ou parcial.
+// A competencia (vencimento, data_inicio, data_fim) nao muda; o status e
+// recalculado pelo saldo dos pagamentos validos restantes. O efeito
+// financeiro e desfeito pelo lancamento inverso, preservando o original.
+async function estornarPagamento(pagamentoId, payload = {}, actor, scope = null) {
+  const motivo = exigirMotivo(payload.motivo);
+  const responsavel = exigirAtor(actor);
+  const id = Number(pagamentoId);
+  if (!Number.isInteger(id) || id <= 0) throw new AppError('pagamento_id invalido', 400, 'PAGAMENTO_ID_INVALIDO');
+  if (!scope?.tenant_id || !scope?.unit_id) {
+    throw new AppError('Escopo de rede/unidade obrigatorio para estorno', 403, 'ESCOPO_OBRIGATORIO');
+  }
+  // Import tardio: evita ciclo de require com MensalidadeService.
+  const MensalidadeService = require('./MensalidadeService');
+
+  return runTransaction(async (tx) => {
+    const pagamento = await tx.get(
+      'SELECT * FROM pagamento WHERE id = ? AND tenant_id = ? AND unit_id = ?',
+      [id, scope.tenant_id, scope.unit_id]
+    );
+    if (!pagamento) throw new AppError('Pagamento nao encontrado', 404, 'PAGAMENTO_NAO_ENCONTRADO');
+    if (pagamento.estornado_em) {
+      throw new AppError('Pagamento ja estornado', 409, 'PAGAMENTO_JA_ESTORNADO', {
+        reversao_controlada_id: pagamento.reversao_controlada_id,
+      });
+    }
+
+    const mensalidade = await tx.get(
+      'SELECT * FROM mensalidade WHERE id = ? AND tenant_id = ? AND unit_id = ?',
+      [pagamento.mensalidade_id, scope.tenant_id, scope.unit_id]
+    );
+    if (!mensalidade || mensalidade.deleted_at) {
+      throw new AppError('Mensalidade do pagamento nao encontrada', 404, 'MENSALIDADE_NAO_ENCONTRADA');
+    }
+    if (mensalidade.reversao_controlada_id || mensalidade.status === MENSALIDADE_STATUS.EM_REVERSAO_CONTROLADA) {
+      throw new AppError('Mensalidade ja possui reversao controlada', 409, 'MENSALIDADE_JA_REVERTIDA');
+    }
+
+    // Fechamento: o periodo do pagamento original e o periodo de hoje (data
+    // do lancamento inverso) precisam estar abertos.
+    const hoje = new Date().toISOString().slice(0, 10);
+    await FechamentoMensalService.assertPeriodoEditavelPorData(pagamento.data_pagamento || hoje, 'estorno de pagamento', tx, scope);
+    await FechamentoMensalService.assertPeriodoEditavelPorData(hoje, 'estorno de pagamento', tx, scope);
+
+    const antes = await MensalidadeService.resumoSaldoMensalidade(tx, mensalidade);
+
+    const lancamentoOriginal = pagamento.lancamento_id
+      ? await tx.get('SELECT * FROM conta_financeira WHERE id = ? AND deleted_at IS NULL', [pagamento.lancamento_id])
+      : await tx.get(
+        `SELECT * FROM conta_financeira
+         WHERE origem = 'mensalidade' AND origem_id = ? AND tenant_id = ? AND unit_id = ? AND deleted_at IS NULL`,
+        [mensalidade.id, scope.tenant_id, scope.unit_id]
+      );
+
+    const reversao = await criarRegistroReversao(tx, {
+      modulo: 'pagamentos',
+      tipo: 'pagamento_mensalidade',
+      registroId: id,
+      motivo,
+      actor: responsavel,
+      metadata: {
+        pagamento_id: id,
+        mensalidade_id: mensalidade.id,
+        valor_estornado: Number(pagamento.valor_pago),
+        lancamento_id: lancamentoOriginal?.id || null,
+      },
+    });
+
+    // A contrapartida usa o valor do pagamento, mesmo quando o lancamento de
+    // origem e o agregado legado da mensalidade.
+    const lancamentoInverso = await criarLancamentoInverso(tx, {
+      reversao,
+      lancamento: lancamentoOriginal ? { ...lancamentoOriginal, valor: Number(pagamento.valor_pago) } : null,
+      descricao: `Estorno do pagamento ${id} da mensalidade ${mensalidade.id}`,
+    });
+
+    await tx.run(
+      `UPDATE pagamento
+       SET estornado_em = datetime('now'), estornado_por = ?, reversao_controlada_id = ?
+       WHERE id = ?`,
+      [responsavel.id, reversao.id, id]
+    );
+
+    const depois = await MensalidadeService.resumoSaldoMensalidade(tx, mensalidade);
+    const novoStatus = MensalidadeService.statusPorSaldo(depois.valorCobradoCentavos, depois.pagoCentavos, mensalidade.status);
+    await tx.run('UPDATE mensalidade SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [novoStatus, mensalidade.id]);
+
+    const mensalidadeDepois = await tx.get('SELECT * FROM mensalidade WHERE id = ?', [mensalidade.id]);
+    const pagamentoDepois = await tx.get('SELECT * FROM pagamento WHERE id = ?', [id]);
+    const reversaoDepois = await tx.get('SELECT * FROM reversao_controlada WHERE id = ?', [reversao.id]);
+
+    const saldo = {
+      valor_cobrado: depois.valor_cobrado,
+      total_pago: depois.total_pago,
+      saldo_em_aberto: depois.saldo_em_aberto,
+    };
+
+    await AuditService.logAction({
+      actor: responsavel,
+      action: 'estornar_pagamento_mensalidade',
+      module: 'pagamentos',
+      recordType: 'pagamento',
+      recordId: id,
+      before: {
+        pagamento,
+        mensalidade,
+        saldo: { total_pago: antes.total_pago, saldo_em_aberto: antes.saldo_em_aberto },
+      },
+      after: { pagamento: pagamentoDepois, mensalidade: mensalidadeDepois, reversao: reversaoDepois, lancamento_inverso: lancamentoInverso, saldo },
+      metadata: { motivo, mensalidade_id: mensalidade.id, valor_estornado: Number(pagamento.valor_pago) },
+      tenant_id: scope.tenant_id,
+      unit_id: scope.unit_id,
+    }, tx);
+
+    return {
+      pagamento: pagamentoDepois,
+      mensalidade: mensalidadeDepois,
+      reversao: reversaoDepois,
+      lancamento_inverso: lancamentoInverso,
+      ...saldo,
+      status_mensalidade: novoStatus,
+    };
+  });
+}
+
 module.exports = {
+  estornarPagamento,
   reverterMensalidade,
   reverterVenda,
   reverterContaFinanceira,

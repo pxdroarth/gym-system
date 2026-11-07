@@ -3,19 +3,51 @@ const router = express.Router();
 const { runQuery } = require('../dbHelper');
 const MensalidadeService = require('../services/MensalidadeService');
 const AuditService = require('../services/AuditService');
+const ReversaoControladaService = require('../services/ReversaoControladaService');
+const AppError = require('../errors/AppError');
 const { actorWithScope, requireScope } = require('../helpers/scope');
 const { PERMISSIONS } = require('../constants/userRoles');
 const { requirePermission } = require('../middlewares/requirePermission');
 
+function chaveIdempotenciaDaRequisicao(req) {
+  const doHeader = req.get('Idempotency-Key');
+  const doCorpo = req.body?.chave_idempotencia;
+  if (doHeader && doCorpo && String(doHeader).trim() !== String(doCorpo).trim()) {
+    throw new AppError('Idempotency-Key e chave_idempotencia divergentes', 400, 'IDEMPOTENCIA_CHAVE_DIVERGENTE');
+  }
+  return doHeader || doCorpo || null;
+}
+
 router.post('/', requirePermission(PERMISSIONS.PAGAMENTOS_REGISTRAR), async (req, res, next) => {
   try {
     const scope = requireScope(req);
+    const chave = chaveIdempotenciaDaRequisicao(req);
     const pagamento = await MensalidadeService.registrarPagamento(
+      { ...(req.body || {}), chave_idempotencia: chave },
+      actorWithScope(AuditService.getActorFromRequest(req), scope),
+      scope
+    );
+    if (pagamento.idempotente) {
+      res.set('Idempotent-Replayed', 'true');
+      return res.status(200).json(pagamento);
+    }
+    return res.status(201).json(pagamento);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+// GS-07 P1 (D7): estorna um pagamento especifico, integral ou parcial.
+router.post('/:id/estornar', requirePermission(PERMISSIONS.REVERSAO_EXECUTAR), async (req, res, next) => {
+  try {
+    const scope = requireScope(req);
+    const resultado = await ReversaoControladaService.estornarPagamento(
+      req.params.id,
       req.body || {},
       actorWithScope(AuditService.getActorFromRequest(req), scope),
       scope
     );
-    res.status(201).json(pagamento);
+    res.json(resultado);
   } catch (error) {
     next(error);
   }

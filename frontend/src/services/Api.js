@@ -209,8 +209,11 @@ export async function fetchMensalidades(params = {}) {
 }
 
 // ============ PAGAMENTOS ============
-export async function registrarPagamento(payload) {
-  const response = await api.post('/pagamentos', payload);
+// chaveIdempotencia: reenviar a mesma chave com os mesmos dados devolve o
+// pagamento original sem criar outro (GS-07 P1).
+export async function registrarPagamento(payload, chaveIdempotencia = null) {
+  const config = chaveIdempotencia ? { headers: { 'Idempotency-Key': chaveIdempotencia } } : undefined;
+  const response = await api.post('/pagamentos', payload, config);
   return response.data;
 }
 

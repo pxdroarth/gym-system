@@ -185,9 +185,11 @@ export default function PerfilPage() {
   async function pagarMensalidade(mensalidade) {
     try {
       setCarregandoPagamentoId(mensalidade.id);
+      // Quita o saldo em aberto (pagamentos parciais anteriores ja contam).
+      const saldo = mensalidade.saldo_em_aberto ?? mensalidade.valor_cobrado;
       await registrarPagamento({
         mensalidade_id: mensalidade.id,
-        valor_pago: mensalidade.valor_cobrado,
+        valor_pago: saldo,
         data_pagamento: new Date().toISOString().slice(0, 10),
       });
 

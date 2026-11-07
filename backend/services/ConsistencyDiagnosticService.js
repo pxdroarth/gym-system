@@ -106,6 +106,7 @@ const CHECKS = Object.freeze([
           FROM pagamento p
           WHERE p.mensalidade_id = m.id
             AND COALESCE(p.valor_pago, 0) > 0
+            AND p.estornado_em IS NULL
             AND COALESCE(p.tenant_id, m.tenant_id, -1) = COALESCE(m.tenant_id, p.tenant_id, -1)
             AND COALESCE(p.unit_id, m.unit_id, -1) = COALESCE(m.unit_id, p.unit_id, -1)
         )
@@ -158,6 +159,14 @@ const CHECKS = Object.freeze([
             AND COALESCE(cf.tenant_id, m.tenant_id, -1) = COALESCE(m.tenant_id, cf.tenant_id, -1)
             AND COALESCE(cf.unit_id, m.unit_id, -1) = COALESCE(m.unit_id, cf.unit_id, -1)
         )
+        -- GS-07 P1: pagamentos novos tem lancamento proprio por pagamento.
+        AND NOT EXISTS (
+          SELECT 1
+          FROM pagamento p
+          JOIN conta_financeira cfp ON cfp.origem = 'pagamento_mensalidade' AND cfp.origem_id = p.id
+          WHERE p.mensalidade_id = m.id
+            AND COALESCE(cfp.deleted_at, '') = ''
+        )
       ORDER BY m.id
     `,
   },
@@ -209,18 +218,41 @@ const CHECKS = Object.freeze([
     `,
   },
   {
+    // GS-07 P1 (D6): varios pagamentos por mensalidade passaram a ser validos.
+    // A anomalia restante e ter mais de um pagamento no modelo legado (sem
+    // lancamento proprio), que sobrescrevia o registro anterior.
     id: 'pagamentos_multiplos_por_mensalidade',
-    titulo: 'Pagamentos multiplos por mensalidade',
+    titulo: 'Pagamentos multiplos legados por mensalidade',
     criticidade: CRITICIDADE.ALTO,
-    descricao: 'Mais de um pagamento para a mesma mensalidade no mesmo escopo.',
+    descricao: 'Mais de um pagamento legado (sem lancamento proprio) para a mesma mensalidade no mesmo escopo.',
     grouped: true,
     params: () => [],
     sql: `
       SELECT mensalidade_id, tenant_id, unit_id, COUNT(*) AS total, GROUP_CONCAT(id) AS pagamento_ids
       FROM pagamento
+      WHERE lancamento_id IS NULL
       GROUP BY mensalidade_id, COALESCE(tenant_id, -1), COALESCE(unit_id, -1)
       HAVING COUNT(*) > 1
       ORDER BY total DESC, mensalidade_id
+    `,
+  },
+  {
+    id: 'pagamentos_acima_do_valor_cobrado',
+    titulo: 'Pagamentos acima do valor cobrado',
+    criticidade: CRITICIDADE.ALTO,
+    descricao: 'Soma dos pagamentos validos (nao estornados) maior que o valor cobrado da mensalidade.',
+    params: () => [],
+    sql: `
+      SELECT m.id, m.aluno_id, m.status, m.valor_cobrado, COALESCE(SUM(p.valor_pago), 0) AS total_pago,
+             COUNT(p.id) AS pagamentos, m.tenant_id, m.unit_id
+      FROM mensalidade m
+      JOIN pagamento p ON p.mensalidade_id = m.id AND p.estornado_em IS NULL
+      WHERE COALESCE(m.deleted_at, '') = ''
+        AND COALESCE(p.tenant_id, m.tenant_id, -1) = COALESCE(m.tenant_id, p.tenant_id, -1)
+        AND COALESCE(p.unit_id, m.unit_id, -1) = COALESCE(m.unit_id, p.unit_id, -1)
+      GROUP BY m.id, m.aluno_id, m.status, m.valor_cobrado, m.tenant_id, m.unit_id
+      HAVING ROUND(COALESCE(SUM(p.valor_pago), 0) * 100) > ROUND(COALESCE(m.valor_cobrado, 0) * 100)
+      ORDER BY m.id
     `,
   },
   {
@@ -233,7 +265,7 @@ const CHECKS = Object.freeze([
       SELECT m.id, m.aluno_id, m.status, m.valor_cobrado, COALESCE(SUM(p.valor_pago), 0) AS total_pago,
              COUNT(p.id) AS pagamentos, m.tenant_id, m.unit_id
       FROM mensalidade m
-      JOIN pagamento p ON p.mensalidade_id = m.id
+      JOIN pagamento p ON p.mensalidade_id = m.id AND p.estornado_em IS NULL
       WHERE m.status IN ('pago', 'parcial')
         AND COALESCE(m.deleted_at, '') = ''
         AND COALESCE(p.tenant_id, m.tenant_id, -1) = COALESCE(m.tenant_id, p.tenant_id, -1)

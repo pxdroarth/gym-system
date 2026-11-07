@@ -95,6 +95,82 @@ async function upsertLancamentoFinanceiro(lancamento, client = null) {
   return result.lastID;
 }
 
+// GS-07 P1: cada pagamento novo gera o proprio lancamento (origem
+// 'pagamento_mensalidade', origem_id = pagamento.id) na data do pagamento.
+// O lancamento agregado (origem 'mensalidade') continua existindo para
+// mensalidades legadas e como valor a receber de mensalidades sem pagamento.
+// Esta funcao decide o que fazer com o agregado sem duplicar receita:
+// - sem pagamento com lancamento proprio: regra legada inalterada;
+// - com pagamentos novos e legados: agregado = soma bruta dos legados;
+// - so pagamentos novos: um agregado pendente (a receber) e baixado.
+// Estornos nunca alteram estes valores: a contrapartida e o lancamento
+// inverso da reversao controlada.
+async function reconciliarLancamentoAgregadoMensalidade(m, client = null, { operacao = 'lancamento agregado de mensalidade' } = {}) {
+  const db = clientOrDefault(client);
+  const scopeArgs = [m.id, m.tenant_id, m.unit_id];
+  const proprios = await db.get(
+    `SELECT COUNT(*) AS total FROM pagamento
+     WHERE mensalidade_id = ? AND tenant_id = ? AND unit_id = ? AND lancamento_id IS NOT NULL`,
+    scopeArgs
+  );
+  const legado = await db.get(
+    `SELECT COUNT(*) AS total, COALESCE(SUM(valor_pago), 0) AS soma, MAX(valor_pago) AS maior,
+            MAX(data_pagamento) AS data_pagamento
+     FROM pagamento
+     WHERE mensalidade_id = ? AND tenant_id = ? AND unit_id = ? AND lancamento_id IS NULL`,
+    scopeArgs
+  );
+  const resolvedScope = { tenant_id: m.tenant_id, unit_id: m.unit_id };
+  const base = {
+    descricao: `Mensalidade ${m.id}`,
+    tipo: 'receita',
+    plano_contas_id: 1,
+    origem: 'mensalidade',
+    origem_id: m.id,
+    tenant_id: m.tenant_id,
+    unit_id: m.unit_id,
+  };
+
+  if (!Number(proprios?.total)) {
+    const pago = m.status === 'pago' || m.status === 'parcial';
+    const dataLancamento = pago
+      ? (legado?.data_pagamento || (m.updated_at ? String(m.updated_at).slice(0, 10) : null) || m.vencimento)
+      : m.vencimento;
+    if (!(await isPeriodoEditavel(dataLancamento, operacao, db, resolvedScope))) return 'ignorado_por_fechamento';
+    await upsertLancamentoFinanceiro({
+      ...base,
+      valor: Number(pago ? (legado?.maior || m.valor_cobrado || 0) : (m.valor_cobrado || 0)),
+      data_lancamento: dataLancamento,
+      status: pago ? 'pago' : 'pendente',
+    }, db);
+    return 'agregado_legado';
+  }
+
+  if (Number(legado?.total)) {
+    if (!(await isPeriodoEditavel(legado.data_pagamento, operacao, db, resolvedScope))) return 'ignorado_por_fechamento';
+    await upsertLancamentoFinanceiro({
+      ...base,
+      valor: Number(legado.soma || 0),
+      data_lancamento: legado.data_pagamento,
+      status: 'pago',
+    }, db);
+    return 'agregado_legado_misto';
+  }
+
+  const agregado = await db.get(
+    `SELECT * FROM conta_financeira
+     WHERE origem = 'mensalidade' AND origem_id = ? AND tenant_id = ? AND unit_id = ? AND deleted_at IS NULL`,
+    scopeArgs
+  );
+  if (!agregado || agregado.status === 'pago') return 'sem_alteracao';
+  if (!(await isPeriodoEditavel(agregado.data_lancamento, operacao, db, resolvedScope))) return 'ignorado_por_fechamento';
+  await db.run(
+    "UPDATE conta_financeira SET deleted_at = datetime('now'), updated_at = datetime('now') WHERE id = ?",
+    [agregado.id]
+  );
+  return 'a_receber_baixado';
+}
+
 async function sincronizarLancamentosMensalidades(scope, client = null, summary = createSyncSummary()) {
   const db = clientOrDefault(client);
   const resolvedScope = normalizeScope(scope);
@@ -126,35 +202,11 @@ async function sincronizarLancamentosMensalidades(scope, client = null, summary 
 
   for (const m of mensalidades) {
     summary.mensalidadesProcessadas += 1;
-    const pago = m.status === 'pago' || m.status === 'parcial';
-    const dataLancamento = pago
-      ? (m.data_pagamento || (m.updated_at ? String(m.updated_at).slice(0, 10) : null) || m.vencimento)
-      : m.vencimento;
-
-    const canSync = await isPeriodoEditavel(
-      dataLancamento,
-      'sincronizacao financeira de mensalidade',
-      db,
-      resolvedScope
-    );
-    if (!canSync) {
-      summary.ignoradosPorFechamento += 1;
-      continue;
-    }
-
-    await upsertLancamentoFinanceiro({
-      descricao: `Mensalidade ${m.id}`,
-      tipo: 'receita',
-      valor: Number(pago ? (m.valor_pago || m.valor_cobrado || 0) : (m.valor_cobrado || 0)),
-      data_lancamento: dataLancamento,
-      status: pago ? 'pago' : 'pendente',
-      plano_contas_id: 1,
-      origem: 'mensalidade',
-      origem_id: m.id,
-      tenant_id: m.tenant_id,
-      unit_id: m.unit_id,
-    }, db);
-    summary.lancamentosCriadosOuAtualizados += 1;
+    const resultado = await reconciliarLancamentoAgregadoMensalidade(m, db, {
+      operacao: 'sincronizacao financeira de mensalidade',
+    });
+    if (resultado === 'ignorado_por_fechamento') summary.ignoradosPorFechamento += 1;
+    else if (resultado !== 'sem_alteracao') summary.lancamentosCriadosOuAtualizados += 1;
   }
 
   return summary;
@@ -209,6 +261,7 @@ async function sincronizarFinanceiro(scope, client = null) {
 
 module.exports = {
   upsertLancamentoFinanceiro,
+  reconciliarLancamentoAgregadoMensalidade,
   sincronizarFinanceiro,
   sincronizarLancamentosMensalidades,
   sincronizarLancamentosVendas,

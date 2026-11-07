@@ -220,3 +220,11 @@ Valida em processo, com relógio fixo: P2 (mensalidade futura em aberto não esc
 node tests\scripts\smoke-f0-acesso-datas.js
 ```
 
+## `smoke-p1-pagamentos.js` (GS-07 P1)
+
+Valida pela API o pagamento parcial e o estorno por pagamento: mensalidade de R$ 80, paga 50 (saldo 30), 31 recusado, paga 30 (quitada), reenvio com a mesma chave sem duplicar, estorno dos 30 (volta a parcial, 50 pagos, 30 em aberto, mesma competência), 403 para quem não tem `reversao:executar`, 404 de outra unidade e concorrência (dois pagamentos simultâneos sobre o mesmo saldo; a mesma chave em paralelo). Com `--db`, confere também lançamentos, reversão e auditoria na base (somente leitura). Use base descartável criada com `npm run db:seed:dev` e a API rodando sobre ela.
+
+```cmd
+node tests\scripts\smoke-p1-pagamentos.js --base-url=http://localhost:3001 --db=backend\academia.sqlite
+```
+

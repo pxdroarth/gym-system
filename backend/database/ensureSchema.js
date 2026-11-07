@@ -938,6 +938,28 @@ async function ensureCoreBusinessTables() {
   `);
 }
 
+// GS-07 P1: pagamentos multiplos por mensalidade, idempotencia e estorno por
+// pagamento. Somente colunas e indices aditivos; nenhum dado existente muda.
+async function ensurePagamentoParcialColumns() {
+  await addColumnIfTableExists('pagamento', 'chave_idempotencia TEXT');
+  await addColumnIfTableExists('pagamento', 'idempotencia_hash TEXT');
+  await addColumnIfTableExists('pagamento', 'resposta_json TEXT');
+  await addColumnIfTableExists('pagamento', 'lancamento_id INTEGER');
+  await addColumnIfTableExists('pagamento', 'estornado_em TEXT');
+  await addColumnIfTableExists('pagamento', 'estornado_por INTEGER');
+  await addColumnIfTableExists('pagamento', 'reversao_controlada_id INTEGER');
+  await addColumnIfTableExists('pagamento', 'created_at TEXT');
+  await addColumnIfTableExists('pagamento', 'created_by INTEGER');
+  if (await tableExists('pagamento')) {
+    await runExecute(`
+      CREATE UNIQUE INDEX IF NOT EXISTS uidx_pagamento_scope_idempotencia
+      ON pagamento (tenant_id, unit_id, chave_idempotencia)
+      WHERE chave_idempotencia IS NOT NULL
+    `);
+    await runExecute('CREATE INDEX IF NOT EXISTS idx_pagamento_mensalidade ON pagamento (mensalidade_id)');
+  }
+}
+
 async function ensureSchema() {
   await ensureAuditLog();
   const defaultScope = await ensureTenantUnitBase();
@@ -953,6 +975,7 @@ async function ensureSchema() {
   await ensurePlanoAssociadoColumns();
   await ensureReversaoSoftDeleteColumns();
   await ensureScopeColumns();
+  await ensurePagamentoParcialColumns();
   await ensureUsuarioInterno(defaultScope);
   await ensureLegacyUserScopes(defaultScope);
   await backfillDefaultScope(defaultScope.tenantId, defaultScope.unitId);
