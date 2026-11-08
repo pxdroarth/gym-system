@@ -211,8 +211,13 @@ export async function fetchMensalidades(params = {}) {
 // ============ PAGAMENTOS ============
 // chaveIdempotencia: reenviar a mesma chave com os mesmos dados devolve o
 // pagamento original sem criar outro (GS-07 P1).
+const PAGAMENTO_TIMEOUT_MS = Number(import.meta.env.VITE_PAGAMENTO_TIMEOUT_MS) || 15000;
+
 export async function registrarPagamento(payload, chaveIdempotencia = null) {
-  const config = chaveIdempotencia ? { headers: { 'Idempotency-Key': chaveIdempotencia } } : undefined;
+  // Timeout explicito: sem ele a tela poderia ficar presa em "Pagando...".
+  // O reenvio apos timeout usa a mesma chave (utils/tentativaPagamento).
+  const config = { timeout: PAGAMENTO_TIMEOUT_MS };
+  if (chaveIdempotencia) config.headers = { 'Idempotency-Key': chaveIdempotencia };
   const response = await api.post('/pagamentos', payload, config);
   return response.data;
 }

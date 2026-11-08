@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, CalendarPlus, CreditCard, Edit3, Phone, ShieldCheck, UserRound } from "lucide-react";
 import { useNavigate, useParams } from "react-router-dom";
 import ToastNotification from "../../components/ToastNotification";
@@ -19,6 +19,12 @@ import Table from "../../components/ui/Table";
 import { TabButton, Tabs } from "../../components/ui/Tabs";
 import { UI_PERMISSIONS, userHasUiPermission } from "../../utils/permissions";
 import { getApiErrorMessage } from "../../utils/getApiErrorMessage";
+import {
+  abrirTentativa,
+  encerrarTentativa,
+  falhaSemConfirmacao,
+  tentativaPendente,
+} from "../../utils/tentativaPagamento";
 
 function formatarData(data) {
   if (!data) return "-";
@@ -124,6 +130,10 @@ export default function PerfilPage() {
   const [totalAcessos, setTotalAcessos] = useState(0);
   const [toastMsg, setToastMsg] = useState(null);
   const [carregandoPagamentoId, setCarregandoPagamentoId] = useState(null);
+  // Trava sincrona contra clique duplo: o estado do React so atualiza no
+  // proximo render, entao dois cliques rapidos passariam pelo `disabled`.
+  const pagamentosEmAndamento = useRef(new Set());
+  const [, setVersaoTentativas] = useState(0);
   const [simulandoAcesso, setSimulandoAcesso] = useState(false);
 
   async function carregarAluno() {
@@ -183,22 +193,37 @@ export default function PerfilPage() {
   const canLancamentoManualMensalidade = canRegistrarPagamento;
 
   async function pagarMensalidade(mensalidade) {
-    try {
-      setCarregandoPagamentoId(mensalidade.id);
-      // Quita o saldo em aberto (pagamentos parciais anteriores ja contam).
-      const saldo = mensalidade.saldo_em_aberto ?? mensalidade.valor_cobrado;
-      await registrarPagamento({
-        mensalidade_id: mensalidade.id,
-        valor_pago: saldo,
-        data_pagamento: new Date().toISOString().slice(0, 10),
-      });
+    if (pagamentosEmAndamento.current.has(mensalidade.id)) return;
+    pagamentosEmAndamento.current.add(mensalidade.id);
+    setCarregandoPagamentoId(mensalidade.id);
 
-      setToastMsg("Pagamento registrado com sucesso.");
+    // Quita o saldo em aberto (pagamentos parciais anteriores ja contam).
+    const saldo = Number(mensalidade.saldo_em_aberto ?? mensalidade.valor_cobrado);
+    const tentativa = abrirTentativa(mensalidade.id, {
+      mensalidade_id: mensalidade.id,
+      valor_pago: saldo,
+      data_pagamento: new Date().toISOString().slice(0, 10),
+    });
+
+    try {
+      const resultado = await registrarPagamento(tentativa.payload, tentativa.chave);
+      encerrarTentativa(mensalidade.id);
+      setToastMsg(resultado?.idempotente
+        ? "Pagamento ja registrado anteriormente; nenhum valor foi lancado de novo."
+        : "Pagamento registrado com sucesso.");
       await Promise.all([carregarAluno(), carregarMensalidades()]);
     } catch (error) {
-      setToastMsg(getApiErrorMessage(error));
+      if (falhaSemConfirmacao(error)) {
+        setToastMsg("Sem confirmacao do servidor. Clique em \"Reenviar pagamento\": o mesmo pedido sera reenviado sem duplicar.");
+      } else {
+        encerrarTentativa(mensalidade.id);
+        setToastMsg(getApiErrorMessage(error));
+        await carregarMensalidades();
+      }
     } finally {
+      pagamentosEmAndamento.current.delete(mensalidade.id);
       setCarregandoPagamentoId(null);
+      setVersaoTentativas((v) => v + 1);
     }
   }
 
@@ -400,14 +425,23 @@ export default function PerfilPage() {
                     <td>{badgeMensalidade(mensalidade.status)}</td>
                     <td>{mensalidade.observacoes || "-"}</td>
                     <td>
-                      {mensalidade.status === "em_aberto" && canRegistrarPagamento ? (
+                      {["em_aberto", "parcial", "vencido"].includes(mensalidade.status) && canRegistrarPagamento ? (
                         <Button
                           size="sm"
                           variant="success"
                           onClick={() => pagarMensalidade(mensalidade)}
                           disabled={carregandoPagamentoId === mensalidade.id}
+                          aria-busy={carregandoPagamentoId === mensalidade.id}
+                          data-testid={`pagar-mensalidade-${mensalidade.id}`}
                         >
-                          <CreditCard size={14} /> {carregandoPagamentoId === mensalidade.id ? "Pagando..." : "Pagar"}
+                          <CreditCard size={14} />{" "}
+                          {carregandoPagamentoId === mensalidade.id
+                            ? "Pagando..."
+                            : tentativaPendente(mensalidade.id)
+                              ? "Reenviar pagamento"
+                              : mensalidade.status === "parcial"
+                                ? `Pagar saldo ${formatarMoeda(mensalidade.saldo_em_aberto)}`
+                                : "Pagar"}
                         </Button>
                       ) : mensalidade.status === "em_aberto" ? (
                         <Badge tone="amber">Em aberto</Badge>

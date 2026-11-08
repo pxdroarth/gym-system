@@ -443,6 +443,15 @@ Diagnóstico e plano completos no documento da GS-07 (commit analisado: `bd74c2d
 - As transações do processo passaram a ser serializadas (fila em `dbHelper.runTransaction`): com uma única conexão SQLite, requisições simultâneas falhavam com "cannot start a transaction within a transaction".
 - Validação: `tests/scripts/smoke-p1-pagamentos.js`.
 
+**P1.1 — idempotência na tela e isolamento de transação — feito na branch `gs-07-p1-1-idempotencia-isolamento` (a partir de `ec335b2`):**
+
+- Perfil do aluno: cada tentativa de pagamento recebe uma `Idempotency-Key`. Depois de timeout (15 s, `VITE_PAGAMENTO_TIMEOUT_MS`), falha de rede ou erro 5xx, a tentativa fica guardada na sessão do navegador e o botão vira "Reenviar pagamento", que repete o mesmo pedido com a mesma chave. A tentativa é descartada quando o servidor responde 2xx ou 4xx. O botão fica desabilitado durante a requisição e uma trava síncrona impede o clique duplo. Mensalidades `parcial` passam a ter o botão "Pagar saldo".
+- CORS aceita o header `Idempotency-Key` e expõe `Idempotent-Replayed`.
+- Transações usam uma conexão SQLite dedicada. Gravações de outras requisições vão pela conexão principal: esperam a trava e não são desfeitas pelo rollback da transação. Dentro da transação, as funções globais do `dbHelper` continuam usando a conexão dela; trabalho agendado que roda depois do commit volta para a conexão principal.
+- `ToastNotification` deixou de repetir o aviso a cada re-render da página.
+- Validação: `tests/scripts/smoke-isolamento-transacao.js` (11/11; o mesmo teste falha em 4 itens no `ec335b2`) e `tests/scripts/ui-p1-1-pagamento.py` (clique duplo, falha de rede e timeout pela tela: um pagamento e um lançamento em cada caso).
+- Limite conhecido: no SQLite as gravações continuam serializadas pela trava do arquivo; uma transação mais longa que `SQLITE_BUSY_TIMEOUT_MS` (padrão 5 s) faz a gravação concorrente falhar com `SQLITE_BUSY`. O PostgreSQL resolve com pool de conexões.
+
 **Lote separado:** P11 (fechamento e KPIs pela data correta, incluindo receita líquida de estornos) segue em lote próprio.
 
 **Decisões registradas para o mensal manual:**

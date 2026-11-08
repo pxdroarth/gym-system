@@ -69,8 +69,8 @@ app.use(cors({
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Unit-Id', 'X-Correlation-Id'],
-  exposedHeaders: ['X-Correlation-Id'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Unit-Id', 'X-Correlation-Id', 'Idempotency-Key'],
+  exposedHeaders: ['X-Correlation-Id', 'Idempotent-Replayed'],
 }));
 
 const db = require('./database');

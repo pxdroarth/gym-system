@@ -228,3 +228,15 @@ Valida pela API o pagamento parcial e o estorno por pagamento: mensalidade de R$
 node tests\scripts\smoke-p1-pagamentos.js --base-url=http://localhost:3001 --db=backend\academia.sqlite
 ```
 
+## `smoke-isolamento-transacao.js` (GS-07 P1.1)
+
+Valida em processo que uma gravação de outra requisição fica fora da transação aberta: abre a transação, dispara uma gravação independente, força o rollback e confere que a independente persistiu. Cobre também leitura não confirmada, trabalho agendado após o commit, transações simultâneas e `runTransaction` aninhado. Usa só a tabela temporária `smoke_isolamento_tx`. Base descartável.
+
+```cmd
+node tests\scripts\smoke-isolamento-transacao.js
+```
+
+## `ui-p1-1-pagamento.py` (GS-07 P1.1)
+
+Teste de tela (Playwright para Python) do botão de pagamento do perfil do aluno: clique duplo, resposta perdida por falha de rede e timeout do cliente. Em todos os casos deve existir um único pagamento e um único lançamento. Pré-requisitos e uso no cabeçalho do arquivo; o frontend precisa subir com `VITE_PAGAMENTO_TIMEOUT_MS=2000`.
+
