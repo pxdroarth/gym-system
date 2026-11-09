@@ -43,6 +43,15 @@ async function obterFechamento(ano, mes, client = null, scope = null) {
 }
 
 async function assertPeriodoEditavelPorData(data, operacao, client = null, scope = null) {
+  // S1-P0 (FV-02c): o fechamento e por unidade. Sem escopo, a consulta
+  // pegaria o fechamento de qualquer unidade do mes; por isso falha fechado.
+  if (!scope?.tenant_id || !scope?.unit_id) {
+    throw new AppError(
+      `Escopo de rede/unidade obrigatorio para validar fechamento (${operacao})`,
+      500,
+      'FECHAMENTO_ESCOPO_OBRIGATORIO'
+    );
+  }
   const { ano, mes } = periodoDeData(data);
   const fechamento = await obterFechamento(ano, mes, client, scope);
 

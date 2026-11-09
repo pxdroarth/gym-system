@@ -9,6 +9,7 @@ const correlationId = require('./middlewares/correlationId');
 const operatorContext = require('./middlewares/operatorContext');
 const scopeContext = require('./middlewares/scopeContext');
 const securityHeaders = require('./middlewares/securityHeaders');
+const { servirUploads } = require('./helpers/uploadImagem');
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -79,7 +80,9 @@ async function start() {
   await ensureSchema();
 
   app.use(express.json());
-  app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+  // S1-P0 (FV-05): /uploads so publica imagem permitida (extensao e conteudo);
+  // html, svg, scripts e qualquer outro arquivo na pasta respondem 404.
+  app.use('/uploads', servirUploads(path.join(__dirname, 'uploads')));
   app.use(operatorContext);
   app.use(scopeContext);
 

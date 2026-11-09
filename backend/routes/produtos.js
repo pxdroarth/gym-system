@@ -1,25 +1,26 @@
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
 const path = require('path');
-const fs = require('fs');
 const { runQuery, runGet, runExecute } = require('../dbHelper');
 const { requireScope } = require('../helpers/scope');
+const { assertActiveOperator } = require('../middlewares/requirePermission');
+const { receberImagem, validarImagem, gravarImagem, removerArquivo } = require('../helpers/uploadImagem');
 
 const uploadDir = path.join(__dirname, '../uploads/produtos');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+
+// S1-P0 (FV-05): sessao ativa e escopo de unidade sao exigidos ANTES de ler o
+// corpo multipart; sem isso o arquivo chegava ao disco sem login.
+// A restricao por papel (quem pode criar/editar produto) e o FV-02b, ainda
+// nao executado: aqui nao muda quem pode operar produtos hoje.
+function exigirSessaoComEscopo(req, _res, next) {
+  try {
+    assertActiveOperator(req);
+    requireScope(req);
+    next();
+  } catch (error) {
+    next(error);
+  }
 }
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${Date.now()}${ext}`);
-  },
-});
-
-const upload = multer({ storage });
 
 function parseProdutoPayload(body = {}) {
   return {
@@ -87,34 +88,39 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', upload.single('imagem'), async (req, res) => {
+router.post('/', exigirSessaoComEscopo, receberImagem('imagem'), async (req, res, next) => {
   const payload = parseProdutoPayload(req.body);
   const erro = validarProduto(payload);
   if (erro) return res.status(400).json({ error: erro });
 
-  const imagem = req.file ? `/uploads/produtos/${req.file.filename}` : null;
-
+  let arquivo = null;
   try {
     const scope = requireScope(req);
+    const tipoImagem = validarImagem(req.file);
+
     const existente = await runGet(
       'SELECT id FROM produto WHERE LOWER(nome) = LOWER(?) AND tenant_id = ? AND unit_id = ? LIMIT 1',
       [payload.nome, scope.tenant_id, scope.unit_id]
     );
     if (existente) return res.status(409).json({ error: 'Já existe um produto com esse nome' });
 
+    // A imagem so e gravada depois de todas as validacoes.
+    arquivo = tipoImagem ? await gravarImagem(req.file, tipoImagem, uploadDir, '/uploads/produtos') : null;
+
     const result = await runExecute(
       'INSERT INTO produto (nome, descricao, preco, estoque, imagem, tenant_id, unit_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [payload.nome, payload.descricao, payload.preco, payload.estoque, imagem, scope.tenant_id, scope.unit_id]
+      [payload.nome, payload.descricao, payload.preco, payload.estoque, arquivo ? arquivo.url : null, scope.tenant_id, scope.unit_id]
     );
 
     const criado = await runGet('SELECT * FROM produto WHERE id = ? AND tenant_id = ? AND unit_id = ?', [result.lastID, scope.tenant_id, scope.unit_id]);
-    res.status(201).json(criado);
+    return res.status(201).json(criado);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    await removerArquivo(arquivo?.caminho);
+    return next(error);
   }
 });
 
-router.put('/:id', upload.single('imagem'), async (req, res) => {
+router.put('/:id', exigirSessaoComEscopo, receberImagem('imagem'), async (req, res, next) => {
   const id = parseInt(req.params.id);
   if (!id) return res.status(400).json({ error: 'ID inválido' });
 
@@ -122,15 +128,15 @@ router.put('/:id', upload.single('imagem'), async (req, res) => {
   const erro = validarProduto(payload);
   if (erro) return res.status(400).json({ error: erro });
 
+  let arquivo = null;
   try {
     const scope = requireScope(req);
+    const tipoImagem = validarImagem(req.file);
     const atual = await runGet('SELECT * FROM produto WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
     if (!atual) return res.status(404).json({ error: 'Produto não encontrado' });
 
-    let imagem = atual.imagem;
-    if (req.file) {
-      imagem = `/uploads/produtos/${req.file.filename}`;
-    }
+    arquivo = tipoImagem ? await gravarImagem(req.file, tipoImagem, uploadDir, '/uploads/produtos') : null;
+    const imagem = arquivo ? arquivo.url : atual.imagem;
 
     await runExecute(
       'UPDATE produto SET nome = ?, descricao = ?, preco = ?, estoque = ?, imagem = ? WHERE id = ? AND tenant_id = ? AND unit_id = ?',
@@ -138,9 +144,10 @@ router.put('/:id', upload.single('imagem'), async (req, res) => {
     );
 
     const atualizado = await runGet('SELECT * FROM produto WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
-    res.json(atualizado);
+    return res.json(atualizado);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    await removerArquivo(arquivo?.caminho);
+    return next(error);
   }
 });
 

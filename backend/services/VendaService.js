@@ -10,6 +10,9 @@ async function registrarVenda(payload = {}, actor, scope = null) {
   if (!produto_id || !quantidade) {
     throw new AppError('Campos obrigatorios faltando', 400, 'VENDA_PAYLOAD_INVALIDO');
   }
+  if (!scope?.tenant_id || !scope?.unit_id) {
+    throw new AppError('Escopo de rede/unidade obrigatorio para registrar venda', 403, 'ESCOPO_OBRIGATORIO');
+  }
 
   return runTransaction(async (tx) => {
     const produto = scope?.tenant_id && scope?.unit_id
@@ -25,7 +28,8 @@ async function registrarVenda(payload = {}, actor, scope = null) {
     if (Number(produto.estoque) < qtd) throw new AppError('Estoque insuficiente', 400, 'ESTOQUE_INSUFICIENTE');
 
     const dataVenda = new Date().toISOString().slice(0, 10);
-    await FechamentoMensalService.assertPeriodoEditavelPorData(dataVenda, 'venda de produto', tx);
+    // S1-P0 (FV-02c): fechamento da unidade da venda, nao de qualquer unidade.
+    await FechamentoMensalService.assertPeriodoEditavelPorData(dataVenda, 'venda de produto', tx, scope);
 
     const valor_total = qtd * precoUnit;
     const venda = await tx.run(

@@ -321,7 +321,8 @@ router.put('/:id', async (req, res, next) => {
         await FechamentoMensalService.assertPeriodoEditavelPorData(
           new Date().toISOString().slice(0, 10),
           'mudanca de plano com dependentes',
-          tx
+          tx,
+          scope
         );
       }
 

@@ -21,6 +21,20 @@ function exigirAtor(actor) {
   return actor;
 }
 
+// S1-P0 (FV-02a): toda reversao exige o escopo da operacao. Sem ele, as
+// consultas abaixo buscariam o registro so pelo id, em qualquer Rede.
+function exigirEscopo(scope) {
+  if (!scope?.tenant_id || !scope?.unit_id) {
+    throw new AppError('Escopo de rede/unidade obrigatorio para reversao controlada', 403, 'ESCOPO_OBRIGATORIO');
+  }
+  return { tenant_id: Number(scope.tenant_id), unit_id: Number(scope.unit_id) };
+}
+
+// O registro da reversao leva a Rede/Unidade do escopo, nao a do ator.
+function atorNoEscopo(actor, scope) {
+  return { ...exigirAtor(actor), tenant_id: scope.tenant_id, unit_id: scope.unit_id };
+}
+
 function tipoInverso(tipo) {
   if (tipo === 'receita') return 'despesa';
   if (tipo === 'despesa') return 'receita';
@@ -81,8 +95,9 @@ async function criarLancamentoInverso(tx, { reversao, lancamento, descricao }) {
 }
 
 async function reverterMensalidade(mensalidadeId, payload = {}, actor, scope = null) {
+  scope = exigirEscopo(scope);
   const motivo = exigirMotivo(payload.motivo);
-  const responsavel = exigirAtor(actor);
+  const responsavel = atorNoEscopo(actor, scope);
   const id = Number(mensalidadeId);
   if (!id) throw new AppError('mensalidade_id invalido', 400, 'MENSALIDADE_ID_INVALIDO');
 
@@ -166,8 +181,9 @@ async function reverterMensalidade(mensalidadeId, payload = {}, actor, scope = n
 }
 
 async function reverterVenda(vendaId, payload = {}, actor, scope = null) {
+  scope = exigirEscopo(scope);
   const motivo = exigirMotivo(payload.motivo);
-  const responsavel = exigirAtor(actor);
+  const responsavel = atorNoEscopo(actor, scope);
   const id = Number(vendaId);
   if (!id) throw new AppError('venda_id invalido', 400, 'VENDA_ID_INVALIDO');
 
@@ -246,8 +262,9 @@ async function reverterVenda(vendaId, payload = {}, actor, scope = null) {
 }
 
 async function reverterContaFinanceira(contaId, payload = {}, actor, scope = null) {
+  scope = exigirEscopo(scope);
   const motivo = exigirMotivo(payload.motivo);
-  const responsavel = exigirAtor(actor);
+  const responsavel = atorNoEscopo(actor, scope);
   const id = Number(contaId);
   if (!id) throw new AppError('conta_id invalido', 400, 'CONTA_ID_INVALIDO');
 
@@ -257,6 +274,16 @@ async function reverterContaFinanceira(contaId, payload = {}, actor, scope = nul
       : await tx.get('SELECT * FROM conta_financeira WHERE id = ?', [id]);
     if (!conta || conta.deleted_at) throw new AppError('Conta financeira nao encontrada', 404, 'CONTA_NAO_ENCONTRADA');
     if (conta.reversao_controlada_id) throw new AppError('Conta ja possui reversao controlada', 409, 'CONTA_JA_REVERTIDA');
+    // S1-P0 (FV-02a): lancamento derivado (venda, mensalidade, pagamento,
+    // outra reversao) so se desfaz pelo fluxo de origem. Antes, so a rota
+    // /contas-financeiras/:id/reverter checava; a rota /reversoes nao.
+    if (String(conta.origem || '').trim() !== 'conta_financeira') {
+      throw new AppError(
+        'Lancamento financeiro derivado deve ser alterado pelo fluxo de origem ou reversao apropriada.',
+        409,
+        'CONTA_FINANCEIRA_DERIVADA_PROTEGIDA'
+      );
+    }
 
     await FechamentoMensalService.assertPeriodoEditavelPorData(conta.data_lancamento, 'reversao de conta financeira', tx, scope);
 

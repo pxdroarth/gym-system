@@ -240,3 +240,16 @@ node tests\scripts\smoke-isolamento-transacao.js
 
 Teste de tela (Playwright para Python) do botão de pagamento do perfil do aluno: clique duplo, resposta perdida por falha de rede e timeout do cliente. Em todos os casos deve existir um único pagamento e um único lançamento. Pré-requisitos e uso no cabeçalho do arquivo; o frontend precisa subir com `VITE_PAGAMENTO_TIMEOUT_MS=2000`.
 
+## `smoke-s1-p0.js` (S1-P0 · Contenção)
+
+Valida pela API, com resultado por requisito:
+
+- **FV-02a:** reversões de venda, conta e mensalidade pela Rede B e pela Filial sobre registros da Matriz da Rede A, nas rotas legadas `/reversoes/*` e nas rotas de domínio (404, com estoque, lançamentos, reversões e auditoria inalterados); recepção sem `reversao:executar` (403); lançamento derivado (409); reversões autorizadas continuam funcionando e gravam Rede e Unidade.
+- **FV-05:** uploads recusados (sem login, token inválido, unidade não permitida, HTML disfarçado de PNG, SVG, payload inválido, acima de 2 MB, nome duplicado) não deixam arquivo em disco; PNG e JPEG válidos continuam funcionando; arquivos ativos já existentes em `/uploads` (html, svg, js, html com extensão .png) não são publicados.
+- **FV-02c:** mesmo mês fechado numa unidade e aberto na outra; a venda na unidade fechada é bloqueada sem baixa de estoque e a da unidade aberta segue.
+
+Rode depois do `smoke-identidade` (que cria a Rede B), em base descartável criada com `npm run db:seed:dev` e a API rodando sobre ela. O smoke fecha e reabre o mês corrente e planta arquivos de teste em `backend/uploads/produtos` (removidos no fim).
+
+```cmd
+node tests\scripts\smoke-s1-p0.js --base-url=http://localhost:3001 --db=backend\academia.sqlite
+```
