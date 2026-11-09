@@ -76,6 +76,8 @@ async function redeB() {
 const PNG_1x1 = Buffer.from('89504e470d0a1a0a0000000d4948445200000001000000010806000000' +
   '1f15c4890000000d49444154789c6360000002000154a24f5d0000000049454e44ae426082', 'hex');
 const JPEG_MIN = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(60, 0), Buffer.from([0xff, 0xd9])]);
+// WebP 1x1 sem perdas (RIFF....WEBPVP8L).
+const WEBP_1x1 = Buffer.from('UklGRhoAAABXRUJQVlA4TA0AAAAvAAAAEAcQERGIiP4HAA==', 'base64');
 const HTML = Buffer.from('<html><script>document.title="xss"</script></html>');
 const SVG = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><rect width="1" height="1"/></svg>');
 
@@ -247,6 +249,15 @@ async function negar(label, fotoArgs, chamada, statusEsperado, codigoEsperado) {
   let g = await req('GET', prodFoto?.imagem || '/uploads/produtos/x.png');
   check('imagem publicada: 200, image/png, nosniff, mesmo conteudo',
     g.s === 200 && g.h.get('content-type') === 'image/png' && g.h.get('x-content-type-options') === 'nosniff' && g.buf.equals(PNG_1x1),
+    `${g.s} ${g.h.get('content-type')}`);
+  const antesWebp = arquivosNaPasta();
+  r = await req('POST', '/produtos', { token: owner.token, unit: matriz, form: formProduto(`S1P0 webp ${RUN}`, WEBP_1x1, 'foto.webp', 'image/webp') });
+  const novosWebp = arquivosNaPasta().filter((f) => !antesWebp.includes(f));
+  check('owner, WebP valido -> 201 e 1 arquivo .webp gravado',
+    r.s === 201 && novosWebp.length === 1 && novosWebp[0].endsWith('.webp') && r.j?.imagem === `/uploads/produtos/${novosWebp[0]}`, `${r.s} novos=${novosWebp.join(',')} imagem=${r.j?.imagem}`);
+  g = await req('GET', r.j?.imagem || '/uploads/produtos/x.webp');
+  check('WebP publicado: 200, image/webp, nosniff, mesmo conteudo',
+    g.s === 200 && g.h.get('content-type') === 'image/webp' && g.h.get('x-content-type-options') === 'nosniff' && g.buf.equals(WEBP_1x1),
     `${g.s} ${g.h.get('content-type')}`);
   r = await req('PUT', `/produtos/${prodFoto.id}`, { token: owner.token, unit: matriz, form: formProduto(`S1P0 com foto ${RUN}`, JPEG_MIN, 'nova.jpg', 'image/jpeg') });
   g = await req('GET', r.j?.imagem || '/uploads/produtos/x.jpg');

@@ -5,6 +5,7 @@ const AccessService = require('../../backend/services/AccessService');
 const planosRouter = require('../../backend/routes/planos');
 const errorHandler = require('../../backend/middlewares/errorHandler');
 const { MENSALIDADE_STATUS } = require('../../backend/constants/domainStates');
+const { dataLocalISO } = require('../../backend/utils/dataLocal');
 
 const PREFIX = 'SMOKE_COBERTURA_';
 const RUN_ID = `${Date.now()}`;
@@ -42,8 +43,12 @@ function fail(message, details) {
   process.exitCode = 1;
 }
 
+// Data no fuso da operacao (APP_TIMEZONE, padrao America/Sao_Paulo), o mesmo
+// que o AccessService usa desde a F0. Em UTC, o smoke falhava entre 21h e 24h
+// de Brasilia: a contratacao comecava "amanha" e o acesso de hoje era negado.
 function isoDate(offsetDays = 0) {
-  const date = new Date();
+  const hojeLocal = dataLocalISO();
+  const date = new Date(`${hojeLocal}T12:00:00Z`);
   date.setUTCDate(date.getUTCDate() + offsetDays);
   return date.toISOString().slice(0, 10);
 }
