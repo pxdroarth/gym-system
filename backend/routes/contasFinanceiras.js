@@ -135,9 +135,18 @@ router.put('/:id', async (req, res, next) => {
       if (!before || before.deleted_at) throw new AppError('Conta nao encontrada', 404, 'CONTA_NAO_ENCONTRADA');
       assertContaFinanceiraManual(before);
 
+      // A-06: a edicao mexe no mes de origem (o lancamento sai dele) e no mes
+      // de destino (o lancamento entra nele). Os dois precisam estar abertos na
+      // unidade da operacao; qualquer um fechado recusa antes de gravar.
+      await FechamentoMensalService.assertPeriodoEditavelPorData(
+        before.data_lancamento,
+        'edicao de conta financeira (mes de origem)',
+        tx,
+        scope
+      );
       await FechamentoMensalService.assertPeriodoEditavelPorData(
         data_lancamento || before.data_lancamento,
-        'edicao de conta financeira',
+        'edicao de conta financeira (mes de destino)',
         tx,
         scope
       );

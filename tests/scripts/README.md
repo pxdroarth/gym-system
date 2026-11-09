@@ -253,3 +253,11 @@ Rode depois do `smoke-identidade` (que cria a Rede B), em base descartável cria
 ```cmd
 node tests\scripts\smoke-s1-p0.js --base-url=http://localhost:3001 --db=backend\academia.sqlite
 ```
+
+## `smoke-a06-conta-fechamento.js` (achado A-06)
+
+Valida pela API que a edição de conta financeira confere o mês original e o mês de destino do lançamento, na unidade da operação: fechado → aberto, aberto → fechado e fechado → fechado recusam com `423 PERIODO_FECHADO`, deixando o lançamento intacto e sem auditoria nova; aberto → aberto continua funcionando; o fechamento de uma unidade não afeta a outra. Base descartável criada com `npm run db:seed:dev` e a API rodando sobre ela; o smoke fecha e reabre o mês anterior na Matriz e na Filial.
+
+```cmd
+node tests\scripts\smoke-a06-conta-fechamento.js --base-url=http://localhost:3001 --db=backend\academia.sqlite
+```
