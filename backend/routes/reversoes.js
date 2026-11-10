@@ -40,7 +40,8 @@ router.post('/vendas/:id', requirePermission(PERMISSIONS.REVERSAO_EXECUTAR), asy
   }
 });
 
-router.post('/contas-financeiras/:id', requirePermission(PERMISSIONS.REVERSAO_EXECUTAR), async (req, res, next) => {
+// Conta financeira e do modulo Financeiro: exige o acesso ao modulo alem do estorno.
+router.post('/contas-financeiras/:id', requirePermission(PERMISSIONS.FINANCEIRO_ACESSAR), requirePermission(PERMISSIONS.REVERSAO_EXECUTAR), async (req, res, next) => {
   try {
     const scope = requireScope(req);
     const data = await ReversaoControladaService.reverterContaFinanceira(

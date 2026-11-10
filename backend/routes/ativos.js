@@ -46,12 +46,14 @@ router.put('/:id', async (req, res) => {
     const scope = requireScope(req);
     const { nome, tipo, valor_aquisicao, data_aquisicao, status, observacao } = req.body;
     const { id } = req.params;
-    await runExecute(
+    const result = await runExecute(
       `UPDATE ativo
        SET nome = ?, tipo = ?, valor_aquisicao = ?, data_aquisicao = ?, status = ?, observacao = ?, updated_at = datetime('now')
        WHERE id = ? AND tenant_id = ? AND unit_id = ?`,
       [nome, tipo, valor_aquisicao, data_aquisicao, status, observacao, id, scope.tenant_id, scope.unit_id]
     );
+    // Registro de outra Rede/Unidade (ou inexistente): 404, sem efeito.
+    if (!result.changes) return res.status(404).json({ error: 'Ativo nao encontrado' });
     res.json({ message: 'Ativo atualizado' });
   } catch (e) {
     res.status(500).json({ error: 'Erro ao atualizar ativo' });
@@ -62,7 +64,8 @@ router.delete('/:id', async (req, res) => {
   try {
     const scope = requireScope(req);
     const { id } = req.params;
-    await runExecute('DELETE FROM ativo WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
+    const result = await runExecute('DELETE FROM ativo WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
+    if (!result.changes) return res.status(404).json({ error: 'Ativo nao encontrado' });
     res.json({ message: 'Ativo excluido' });
   } catch (e) {
     res.status(500).json({ error: 'Erro ao excluir ativo' });

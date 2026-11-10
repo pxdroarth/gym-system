@@ -10,6 +10,8 @@ const operatorContext = require('./middlewares/operatorContext');
 const scopeContext = require('./middlewares/scopeContext');
 const securityHeaders = require('./middlewares/securityHeaders');
 const { servirUploads } = require('./helpers/uploadImagem');
+const { requirePermission } = require('./middlewares/requirePermission');
+const { PERMISSIONS } = require('./constants/userRoles');
 
 const app = express();
 const port = process.env.PORT || 3001;
@@ -89,6 +91,10 @@ async function start() {
   const seedPlanoContas = require('./seeds/seedPlanoContas');
   await seedPlanoContas();
   const accessDeviceRoutes = require('./routes/accessDevices');
+  // Modulo Financeiro: sessao ativa (401) e papel com financeiro:acessar (403)
+  // antes de qualquer rota do modulo, inclusive os aliases. Acoes sensiveis
+  // (estorno, fechar, reabrir, sincronizar) exigem tambem a permissao propria.
+  const acessoFinanceiro = requirePermission(PERMISSIONS.FINANCEIRO_ACESSAR);
 
   app.use('/alunos/:alunoId/access-credentials', accessDeviceRoutes.alunoCredentialsRouter);
   app.use('/alunos', require('./routes/alunos'));
@@ -105,19 +111,19 @@ async function start() {
   app.use('/vendasProdutos', require('./routes/vendasProdutos'));
   app.use('/vendas-produtos', require('./routes/vendasProdutos'));
 
-  app.use('/dashboard/financeiro', require('./routes/dashboardFinanceiro'));
+  app.use('/dashboard/financeiro', acessoFinanceiro, require('./routes/dashboardFinanceiro'));
   app.use('/tenant-dashboard', require('./routes/tenantDashboard'));
-  app.use('/financeiro/ativos', require('./routes/ativos'));
-  app.use('/financeiro/orcamento', require('./routes/orcamento'));
+  app.use('/financeiro/ativos', acessoFinanceiro, require('./routes/ativos'));
+  app.use('/financeiro/orcamento', acessoFinanceiro, require('./routes/orcamento'));
   app.use('/auth', require('./routes/auth'));
   app.use('/onboarding', require('./routes/onboarding'));
   app.use('/tenants', require('./routes/tenants'));
   app.use('/units', require('./routes/units'));
-  app.use('/planoContas', require('./routes/planoContas'));
-  app.use('/plano-contas', require('./routes/planoContas'));
-  app.use('/contasFinanceiras', require('./routes/contasFinanceiras'));
-  app.use('/contas-financeiras', require('./routes/contasFinanceiras'));
-  app.use('/fechamento-mensal', require('./routes/fechamentoMensal'));
+  app.use('/planoContas', acessoFinanceiro, require('./routes/planoContas'));
+  app.use('/plano-contas', acessoFinanceiro, require('./routes/planoContas'));
+  app.use('/contasFinanceiras', acessoFinanceiro, require('./routes/contasFinanceiras'));
+  app.use('/contas-financeiras', acessoFinanceiro, require('./routes/contasFinanceiras'));
+  app.use('/fechamento-mensal', acessoFinanceiro, require('./routes/fechamentoMensal'));
   app.use('/reversoes', require('./routes/reversoes'));
   app.use('/audit-logs', require('./routes/auditLogs'));
   app.use('/usuarios-internos', require('./routes/usuariosInternos'));

@@ -50,12 +50,14 @@ router.put('/:id', async (req, res) => {
     const scope = requireScope(req);
     const { ano, mes, tipo, valor_previsto, descricao } = req.body;
     const { id } = req.params;
-    await runExecute(
+    const result = await runExecute(
       `UPDATE orcamento
        SET ano = ?, mes = ?, tipo = ?, valor_previsto = ?, descricao = ?, updated_at = datetime('now')
        WHERE id = ? AND tenant_id = ? AND unit_id = ?`,
       [ano, mes, tipo, valor_previsto, descricao, id, scope.tenant_id, scope.unit_id]
     );
+    // Registro de outra Rede/Unidade (ou inexistente): 404, sem efeito.
+    if (!result.changes) return res.status(404).json({ error: 'Orcamento nao encontrado' });
     res.json({ message: 'Orcamento atualizado' });
   } catch (e) {
     res.status(500).json({ error: 'Erro ao atualizar orcamento' });
@@ -66,7 +68,8 @@ router.delete('/:id', async (req, res) => {
   try {
     const scope = requireScope(req);
     const { id } = req.params;
-    await runExecute('DELETE FROM orcamento WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
+    const result = await runExecute('DELETE FROM orcamento WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
+    if (!result.changes) return res.status(404).json({ error: 'Orcamento nao encontrado' });
     res.json({ message: 'Orcamento excluido' });
   } catch (e) {
     res.status(500).json({ error: 'Erro ao excluir orcamento' });

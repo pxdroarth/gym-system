@@ -22,6 +22,10 @@ const PERMISSIONS = Object.freeze({
   USUARIOS_ALTERAR_UNIDADES: 'usuarios:alterar_unidades',
   FECHAMENTO_FECHAR: 'fechamento:fechar',
   FECHAMENTO_REABRIR: 'fechamento:reabrir',
+  // Acesso ao modulo Financeiro (dashboard, contas, plano de contas, ativos,
+  // orcamento e fechamento). Mesma regra do frontend (NAV_FINANCEIRO):
+  // platform_admin, owner, admin e financeiro.
+  FINANCEIRO_ACESSAR: 'financeiro:acessar',
   FINANCEIRO_SINCRONIZAR: 'financeiro:sincronizar',
   PAGAMENTOS_REGISTRAR: 'pagamentos:registrar',
   REVERSAO_EXECUTAR: 'reversao:executar',
@@ -54,6 +58,7 @@ const ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.ALUNOS_ALTERAR_PLANO_COM_DEPENDENTES,
   ],
   [USER_ROLES.FINANCEIRO]: [
+    PERMISSIONS.FINANCEIRO_ACESSAR,
     PERMISSIONS.REVERSAO_EXECUTAR,
   ],
   [USER_ROLES.RECEPCAO]: [],

@@ -261,3 +261,18 @@ Valida pela API que a edição de conta financeira confere o mês original e o m
 ```cmd
 node tests\scripts\smoke-a06-conta-fechamento.js --base-url=http://localhost:3001 --db=backend\academia.sqlite
 ```
+
+## `smoke-financeiro-isolamento.js` (S1 · Financeiro)
+
+Cria pelo onboarding duas academias fictícias (Alfa e Beta), cada uma com uma unidade e usuários owner, financeiro, recepção, gestor e operador, e valida pela API:
+
+- **R1 isolamento:** listagens só com dados próprios; unidade da outra Rede no `X-Unit-Id` → 403; registro da outra Rede pelo ID → 404, sem efeito.
+- **R2 acesso ao Financeiro:** sem sessão → 401; recepção, gestor e operador → 403 em dashboard e indicadores, contas, plano de contas, ativos, orçamento e análise do fechamento (com aliases); recepção segue consultando alunos e registrando entrada.
+- **R3 categoria:** conta com plano de contas de outra Rede → 422, sem gravar; categoria própria funciona; nome da categoria só aparece quando ela é da Rede do lançamento, inclusive em registro antigo; lançamentos automáticos e contrapartidas sem categoria válida ficam sem categoria, com valor e origem preservados.
+- **R4 estorno e fechamento:** recepção → 403 ao estornar; financeiro estorna no próprio escopo, recebe 403 ao fechar e ao reabrir; owner fecha e reabre; negativas preservam pagamento e fechamento.
+
+Use **apenas base descartável**: para simular um registro antigo, o smoke grava uma linha direto na base.
+
+```cmd
+node tests\scripts\smoke-financeiro-isolamento.js --base-url=http://localhost:3001 --db=backend\academia.sqlite
+```

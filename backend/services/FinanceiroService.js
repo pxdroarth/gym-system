@@ -41,8 +41,23 @@ async function isPeriodoEditavel(data, operacao, db, scope) {
   }
 }
 
+// Categoria (plano de contas) so vale se for da mesma Rede do lancamento.
+// Sem categoria valida da Rede, o lancamento fica sem categoria (null); valor
+// e origem nao mudam. Usada nos lancamentos automaticos e nas contrapartidas.
+async function categoriaDaRede(planoContasId, tenantId, client = null) {
+  const id = Number(planoContasId);
+  if (!id || !tenantId) return null;
+  const db = clientOrDefault(client);
+  const row = await db.get('SELECT id FROM plano_contas WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+  return row ? row.id : null;
+}
+
 async function upsertLancamentoFinanceiro(lancamento, client = null) {
   const db = clientOrDefault(client);
+  lancamento = {
+    ...lancamento,
+    plano_contas_id: await categoriaDaRede(lancamento.plano_contas_id, lancamento.tenant_id, db),
+  };
   const hasScope = Boolean(lancamento.tenant_id && lancamento.unit_id);
   const existente = hasScope
     ? await db.get(
@@ -260,6 +275,7 @@ async function sincronizarFinanceiro(scope, client = null) {
 }
 
 module.exports = {
+  categoriaDaRede,
   upsertLancamentoFinanceiro,
   reconciliarLancamentoAgregadoMensalidade,
   sincronizarFinanceiro,

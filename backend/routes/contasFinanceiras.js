@@ -16,6 +16,20 @@ function validarCamposObrigatorios(body, campos) {
   return null;
 }
 
+// Categoria informada precisa ser da Rede da operacao. Checada na mesma
+// transacao da gravacao; categoria de outra Rede recusa sem gravar.
+async function assertCategoriaDaRede(tx, planoContasId, scope) {
+  if (planoContasId === undefined || planoContasId === null || planoContasId === '') return null;
+  const id = Number(planoContasId);
+  const row = Number.isInteger(id) && id > 0
+    ? await tx.get('SELECT id FROM plano_contas WHERE id = ? AND tenant_id = ?', [id, scope.tenant_id])
+    : null;
+  if (!row) {
+    throw new AppError('Categoria (plano de contas) invalida para esta rede', 422, 'PLANO_CONTAS_INVALIDO');
+  }
+  return row.id;
+}
+
 function assertContaFinanceiraManual(conta) {
   if (String(conta?.origem || '').trim() === 'conta_financeira') return;
 
@@ -60,7 +74,7 @@ router.get('/', async (req, res, next) => {
     const rows = await runQuery(`
       SELECT cf.*, pc.nome AS plano_nome
       FROM conta_financeira cf
-      LEFT JOIN plano_contas pc ON cf.plano_contas_id = pc.id
+      LEFT JOIN plano_contas pc ON cf.plano_contas_id = pc.id AND pc.tenant_id = cf.tenant_id
       ${where}
       ORDER BY cf.data_lancamento DESC, cf.id DESC
       LIMIT ? OFFSET ?
@@ -69,7 +83,6 @@ router.get('/', async (req, res, next) => {
     const countRow = await runGet(`
       SELECT COUNT(*) AS total
       FROM conta_financeira cf
-      LEFT JOIN plano_contas pc ON cf.plano_contas_id = pc.id
       ${where}
     `, params);
 
@@ -94,12 +107,13 @@ router.post('/', async (req, res, next) => {
     const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
     const criada = await runTransaction(async (tx) => {
       await FechamentoMensalService.assertPeriodoEditavelPorData(data_lancamento, 'criacao de conta financeira', tx, scope);
+      const categoria = await assertCategoriaDaRede(tx, plano_contas_id, scope);
 
       const result = await tx.run(`
         INSERT INTO conta_financeira
         (descricao, tipo, valor, data_lancamento, status, plano_contas_id, observacao, origem, tenant_id, unit_id, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'conta_financeira', ?, ?, datetime('now'), datetime('now'))
-      `, [descricao, tipo, valor, data_lancamento, status, plano_contas_id || null, observacao || null, scope.tenant_id, scope.unit_id]);
+      `, [descricao, tipo, valor, data_lancamento, status, categoria, observacao || null, scope.tenant_id, scope.unit_id]);
 
       const after = await tx.get('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [result.lastID, scope.tenant_id, scope.unit_id]);
       await AuditService.logAction({
@@ -150,13 +164,14 @@ router.put('/:id', async (req, res, next) => {
         tx,
         scope
       );
+      const categoria = await assertCategoriaDaRede(tx, plano_contas_id, scope);
 
       await tx.run(`
         UPDATE conta_financeira SET
           descricao = ?, tipo = ?, valor = ?, data_lancamento = ?, status = ?,
           plano_contas_id = ?, observacao = ?, updated_at = datetime('now')
         WHERE id = ?
-      `, [descricao, tipo, valor, data_lancamento, status, plano_contas_id || null, observacao || null, id]);
+      `, [descricao, tipo, valor, data_lancamento, status, categoria, observacao || null, id]);
 
       const after = await tx.get('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
       await AuditService.logAction({

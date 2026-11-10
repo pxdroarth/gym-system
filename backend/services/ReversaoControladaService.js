@@ -67,6 +67,10 @@ async function criarLancamentoInverso(tx, { reversao, lancamento, descricao }) {
 
   // Reversao controlada nao apaga efeito financeiro anterior: ela cria a
   // contrapartida auditavel que preserva rastreabilidade contabil.
+  // A contrapartida so herda a categoria se ela for da Rede do lancamento.
+  const { categoriaDaRede } = require('./FinanceiroService');
+  const tenantLancamento = lancamento.tenant_id || reversao.tenant_id || null;
+  const categoria = await categoriaDaRede(lancamento.plano_contas_id, tenantLancamento, tx);
   const result = await tx.run(
     `INSERT INTO conta_financeira
       (descricao, tipo, valor, data_lancamento, status, plano_contas_id, observacao, origem, origem_id, tenant_id, unit_id, created_at, updated_at)
@@ -77,7 +81,7 @@ async function criarLancamentoInverso(tx, { reversao, lancamento, descricao }) {
       Number(lancamento.valor || 0),
       new Date().toISOString().slice(0, 10),
       'pago',
-      lancamento.plano_contas_id || null,
+      categoria,
       `Reversao controlada de ${lancamento.origem || 'conta'} ${lancamento.origem_id || lancamento.id}`,
       'reversao_controlada',
       reversao.id,

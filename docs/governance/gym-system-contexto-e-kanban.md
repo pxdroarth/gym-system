@@ -1,0 +1,151 @@
+# Gym System · Contexto e Kanban da reformulação
+
+## Como usar este arquivo
+
+Coloque este arquivo em `docs/governance/gym-system-contexto-e-kanban.md` no repositório `C:\Projetos\gym-system`. Versione as decisões e os aceites junto do projeto. Para revisar com o ChatGPT, compartilhe a versão atual deste arquivo e o resumo do último lote. Os detalhes técnicos e as evidências continuam nos documentos, no histórico e nos testes do repositório.
+
+**Para preparar o próximo prompt no Claude Code**
+
+```text
+Leia docs/governance/gym-system-contexto-e-kanban.md. Confira o estado atual do repositório em modo leitura. Identifique o próximo lote com dependências e regras resolvidas. Entregue só o prompt desse lote, com escopo, critérios de aceite e testes. Se houver um bloqueio, diga qual decisão ou evidência falta.
+```
+
+**Para executar um lote no Claude Code**
+
+```text
+Leia docs/governance/gym-system-contexto-e-kanban.md. Execute somente o L01 conforme o prompt desse lote. Registre o andamento e os resultados no quadro. Entregue o diff e a evidência para minha revisão. Eu faço a integração pelo CMD.
+```
+
+Troque `L01` pelo ID autorizado na execução seguinte.
+
+## Contexto estável
+
+- **Objetivo.** Evoluir o Gym System para um SaaS de academias. O primeiro piloto é de uma academia com uma unidade. Matriz e Filial entram no piloto multiunidade. O escopo também inclui assinatura SaaS, integrações, recorrência do aluno, catraca e relatórios.
+- **Referência histórica.** O diagnóstico foi feito na `main` do commit `89903bd`. Nesse ponto, o backend usa Node.js e Express, o frontend usa React e Vite, e a base de desenvolvimento é SQLite. Confira branch, commit, estado do trabalho e documentação antes de assumir que uma regra ou pendência continua igual.
+- **Rede e unidade.** Rede é o tenant. Matriz e Filial são unidades da mesma rede. Teste isolamento com duas redes fictícias, mesmo no piloto de uma única unidade por academia.
+- **GS-02.** O alvo multiunidade tem um cadastro e uma matrícula por aluno na rede. A unidade do contrato recebe a mensalidade e registra o valor em seu caixa e fechamento. O plano define onde a pessoa pode treinar. A visita fica registrada na unidade visitada. A migração preserva o histórico dos cadastros, contratos, pagamentos e entradas.
+- **Regressões financeiras.** Preserve os pagamentos parciais, a proteção contra cobrança duplicada em reenvios, o estorno por pagamento e o bloqueio A-06 da edição de conta em mês de origem ou de destino fechado.
+- **Dois fluxos de cobrança.** A plataforma cobra a assinatura do SaaS da academia. A academia recebe a mensalidade do aluno. Cada fluxo tem seu próprio ciclo e seus registros financeiros, mesmo quando usa o mesmo provedor.
+- **Encaixe das integrações.** O Gym System tem um catálogo interno. Configurar, ativar, trocar e desligar seguem um fluxo comum. Pagamento, catraca e demais categorias têm contratos próprios. Cada fornecedor entra por um adaptador. Use configuração e credenciais no escopo da rede ou da plataforma, conforme quem opera a conexão.
+- **Troca de gateway.** Cada cobrança registra o fornecedor e a conexão que a emitiram. Use a conexão ativa para novas cobranças e a de origem para conciliar ou estornar cobranças anteriores. Valide a desativação com pendências em sandbox.
+- **Relatórios.** No L22, comece pelo fechamento de caixa. Imprimir ou salvar como PDF usa o layout A4 da tela de impressão. CSV ou Excel serve à análise. O relatório mantém o escopo, os filtros e os totais exibidos, inclusive em várias páginas.
+
+### Decisões a confirmar antes dos lotes afetados
+
+| Lote | Ponto para decisão do dono do produto |
+| --- | --- |
+| L02 | DN-3. Permissões por ação para recepção, gestor, financeiro e responsáveis por estorno, fechamento e reabertura. |
+| L03–L04 | Regras ainda abertas da renovação manual, vencimento, cancelamento, correções após fechamento e vendas. Consulte a GS-07 e os registros de decisão antes de formular opções. |
+| L07–L09 | Tratamento de cadastros duplicados, seleção das unidades do plano, momento em que mudanças afetam um ciclo pago, dependentes e transferência de unidade do contrato. |
+| L11–L12 | Oferta SaaS, ativação, atraso, suspensão e primeiro gateway. |
+| L16, L18–L21 | Segundo fornecedor, política de recorrência do aluno, modelo de catraca e conduta durante indisponibilidade. |
+
+Registre cada decisão com data, cenário, regra aprovada e lotes afetados. Quando uma escolha já constar dos requisitos aprovados, referencie o registro existente.
+
+## Fluxo de trabalho
+
+**Fila** aguarda dependências ou refinamento. **Pronto** tem escopo, decisões e aceite definidos. **Em execução** começa após sua autorização. **Em revisão** já tem diff e evidências. **Concluído** exige sua aprovação e o registro do commit ou da integração acordada. **Bloqueado** registra o motivo e a condição para retomar. Trabalhe em um lote por vez entre execução e revisão.
+
+**RACI no projeto solo.** Você executa e aprova como responsável A/R. Claude Code apoia o levantamento, a implementação autorizada e os testes. ChatGPT pode preparar prompts, organizar o quadro e revisar evidências. Você decide as regras, homologa a entrega e faz commit e push pelo CMD.
+
+**Antes.** Leia este arquivo e as fontes do lote. Registre `git status -sb`, a branch e o commit. Confira o estado real do código e os testes. Combine a branch do lote, use base descartável ou sandbox e trate decisões abertas antes de implementar a parte afetada.
+
+**Durante.** No modo execução, mova apenas o lote autorizado para Em execução. Preserve alterações locais do usuário e dados operacionais. Para correções, reproduza primeiro quando possível e rode o mesmo cenário depois. Para regras novas, valide o caminho permitido, o bloqueado e as regressões pertinentes. Mantenha credenciais fora dos prompts, diffs e evidências.
+
+**Depois.** Entregue arquivos alterados, resumo do diff, comandos e resultados dos testes, pendências e evidências do aceite. Registre a branch e atualize para Em revisão. Se uma dependência impedir a entrega, marque Bloqueado e descreva a condição para retomar. O dono confirma o aceite, integra e registra a conclusão.
+
+## Kanban inicial
+
+O L01 foi executado em 10/11/2026 e está em revisão, aguardando o aceite do dono (ver o registro de execução). Os rascunhos do L02 ao L04 ficam na fila até o aceite das dependências e a definição das regras pertinentes. As dependências abaixo organizam o trabalho. Ajuste a ordem quando houver evidência ou decisão que justifique a mudança.
+
+| ID | Lote | Depende de | Estado | Aceite resumido |
+| --- | --- | --- | --- | --- |
+| L01 | Isolamento e acesso ao Financeiro | Base do diagnóstico | Em revisão | Duas redes isoladas na API. Papel e categoria de conta validados no servidor. |
+| L02 | Permissões operacionais por função | L01, DN-3 | Fila | A matriz aprovada de ações por perfil bate com a API e com as telas. |
+| L03 | Contrato, renovação manual e entrada | L02, decisões da GS-07 | Fila | Aluno contrata, paga, renova e tem acesso decidido conforme a cobertura. |
+| L04 | Contas, venda, estoque e fechamento | L02–L03, regras financeiras | Fila | Validação A-13, vendas e movimentações deixam saldo, estoque e fechamento conciliáveis. |
+| L05 | Homologação do piloto de uma unidade | L01–L04 | Fila | Fluxo de cadastro ao fechamento demonstrado com dados fictícios e perfis da operação. |
+| L06 | Modelo da matrícula única e unidade do contrato | L05, GS-02 | Fila | Identidade única dentro de cada rede e vínculo explícito do contrato à unidade. |
+| L07 | Migração dos cadastros existentes | L06 | Fila | Conflitos revisáveis e totais, vínculos e histórico reconciliados em ensaio. |
+| L08 | Unidades do plano e direitos por ciclo | L06, regra de vigência | Fila | Cobertura do titular e dependentes segue as unidades e o ciclo aprovados. |
+| L09 | Visita à filial e aceite multiunidade | L07–L08 | Fila | Uma mensalidade no caixa da unidade do contrato e visita na unidade autorizada. |
+| L10 | Base dos conectores | L05, contratos das categorias | Fila | Adaptadores registrados por tipo, com configuração e credenciais no escopo correto. |
+| L11 | Ativação e ciclo da assinatura SaaS | L09, oferta e política de ativação | Fila | Ativação, atraso e encerramento seguem os estados comerciais aprovados. |
+| L12 | Primeiro gateway e webhooks da assinatura SaaS | L10–L11 | Fila | Aviso autenticado e repetido gera uma baixa no fluxo e na rede corretos, em sandbox. |
+| L13 | Ensaio da migração do banco | L09, modelo alvo | Fila | IDs, totais e isolamento reconciliados em PostgreSQL, com procedimento de reversão. |
+| L14 | Exportação de dados, backup e restauração | L13 | Fila | Exportação autorizada e restauração ensaiada em ambiente isolado. |
+| L15 | Preparação da publicação e monitoramento | L12–L14 | Fila | Ambiente de homologação, publicação e reversão documentadas, com sinais de operação monitoráveis. |
+| L16 | Segundo conector de referência | L10, L12, fornecedor escolhido | Fila | Outra categoria, como mensagens ou ERP, usa o fluxo comum de conectores. |
+| L17 | Gestão de conectores por academia | L12, L16 | Fila | Duas redes ativam, trocam e desligam conexões. Cobranças novas e anteriores seguem a conexão adequada. |
+| L18 | Cobrança recorrente do aluno | L03, L12, L17 | Fila | Pagamento confirmado atualiza uma vez a mensalidade e a cobertura do aluno no escopo do contrato. |
+| L19 | Conciliação, falhas e cancelamento da recorrência | L18 | Fila | Falha, reenvio, estorno e cancelamento têm efeitos financeiros e de cobertura verificáveis. |
+| L20 | Integração da catraca piloto | L09, L17, equipamento definido | Fila | Dispositivo cadastrado na unidade aplica a decisão de acesso e registra entradas. |
+| L21 | Indisponibilidade e conciliação das entradas | L20 | Fila | A política de indisponibilidade funciona e reenvios geram um único evento. |
+| L22 | Relatórios, impressão e aceite final | L15, L17, L19, L21 | Fila | Tela, papel, PDF e planilha apresentam escopo e totais consistentes. Fluxos acordados homologados. |
+
+## L01 · Prompt pronto para execução
+
+> No Gym System, use duas academias fictícias, cada uma com uma unidade, em base descartável. Confira a branch e o commit. O diagnóstico de referência é o `89903bd`. Reproduza a leitura ou alteração indevida de dados financeiros por uma conta da recepção e o vínculo de uma conta a uma categoria de outra rede.
+>
+> Aplique no backend a regra de acesso ao módulo financeiro já adotada pela interface para `platform_admin`, `owner`, `admin` e `financeiro`. Verifique dashboard e indicadores, contas, plano de contas, ativos, orçamento, análise do fechamento e aliases. Preserve a autorização específica de estorno, fechamento e reabertura. Valide `plano_contas_id` no escopo da rede e na transação da gravação. Na leitura, mostre o nome da categoria somente quando pertencer à rede do lançamento, inclusive em registros legados. Nos lançamentos automáticos e estornos, quando faltar categoria válida da própria rede, preserve valor e origem e registre o lançamento sem categoria.
+>
+> Em ambos os sentidos, valide listagens restritas à rede. A seleção de unidade de outra rede recebe 403 e o acesso direto a um registro externo no próprio escopo recebe 404. Verifique 401 sem sessão e 403 para perfis sem acesso ao módulo. A recepção pode atender alunos e registrar entradas no seu escopo. Categorias da própria rede funcionam. A recepção recebe 403 no estorno. O perfil `financeiro` pode estornar no próprio escopo e recebe 403 ao reabrir. Um perfil autorizado consegue reabrir um período da própria unidade. As recusas por perfil, categoria externa ou escopo preservam dados, saldos e o fechamento.
+>
+> Rode o mesmo teste antes e depois e os smokes de identidade, S1-P0, pagamentos P1 e A-06. Atualize a cobertura de autorização das rotas afetadas. Entregue diff, comandos e evidências para revisão. Registre GS-02 e decisões de mudança de papéis da DN-3 como lotes separados.
+
+## L02 a L04 · Rascunhos para revisar quando chegarem à vez
+
+### L02 · Permissões operacionais por função
+
+> Confirme o aceite do L01. Compare a matriz DN-3, a visibilidade na interface e as verificações reais nas rotas. Se faltar decisão sobre um papel, descreva o cenário e as opções para o dono aprovar. Com a matriz aprovada, ajuste as rotas operacionais necessárias, incluindo produtos e estoque. Teste leitura e mutações autorizadas e recusadas por perfil, em duas redes fictícias. Cubra estorno, fechamento e reabertura no escopo da unidade. Confira que as recusas deixam os registros intactos e atualize a matriz e a cobertura da API.
+
+### L03 · Contrato, renovação manual e entrada
+
+> Confirme o aceite do L02 e consulte as decisões da GS-07. Mapeie, em uma única unidade, contratação, geração de mensalidade manual, pagamento, início e fim da cobertura, renovação e decisão de entrada. Corrija as lacunas confirmadas para o piloto segundo as regras aprovadas. Teste cobrança em aberto, pagamento parcial, quitação, ciclo vencido, renovação e efeito de estorno no acesso conforme a política registrada. Valide pelo fluxo normal da aplicação. Registre qualquer regra sem decisão como bloqueio do trecho afetado.
+
+### L04 · Contas, vendas, estoque e fechamento
+
+> Confirme o aceite do L03. Reproduza e trate as validações A-13 confirmadas, incluindo a edição de conta com `data_lancamento` ausente ou inválida. Use o contrato de erros da API. Verifique a venda com baixa de estoque e lançamento de receita, as reversões previstas e a proteção de período fechado. Corrija os defeitos reproduzidos dentro das regras financeiras aprovadas. Teste que tentativas recusadas preservam estoque, lançamentos e fechamento. Rode os smokes de pagamentos e A-06 e registre o que precisa de decisão em lote próprio.
+
+## Modelo para preparar um novo prompt
+
+```text
+Lote e objetivo
+Base atual, dependências e decisão de produto aplicável
+Mudança autorizada e limites do lote
+Fluxo normal de uso e critérios de aceite
+Testes e regressões, com comandos para repetir
+Evidências esperadas, branch e devolução para revisão do dono
+```
+
+## Registro de execução e aceite
+
+Para cada entrega, registre ID do lote, data, branch, commit-base, arquivos alterados, testes executados, resultados, pendências e decisão do dono. Após integrar, registre o commit resultante e atualize o estado no quadro. Na primeira rodada, use o L01 como entrada e preencha o registro com os resultados reais da execução.
+
+### L01 · Isolamento e acesso ao Financeiro
+
+- **Estado:** Em revisão desde 10/11/2026. Aguarda aceite, commit e push do dono.
+- **Branch e base:** `s1-financeiro-isolamento`, criada a partir da `main` no commit `89903bd`. Alterações sem commit.
+- **Arquivos alterados:** `backend/constants/userRoles.js`, `backend/server.js`, `backend/routes/contasFinanceiras.js`, `backend/routes/ativos.js`, `backend/routes/orcamento.js`, `backend/routes/reversoes.js`, `backend/services/FinanceiroService.js`, `backend/services/ReversaoControladaService.js`, `docs/governance/rbac-route-coverage.md`, `tests/scripts/README.md`, `tests/scripts/smoke-financeiro-isolamento.js` (novo) e este arquivo.
+- **Regra aplicada:** permissão `financeiro:acessar` (`platform_admin`, `owner`, `admin`, `financeiro`) em dashboard e indicadores, contas, plano de contas, ativos, orçamento e fechamento, com os aliases. Estorno, fechar, reabrir e sincronizar mantêm a permissão própria. `plano_contas_id` validado na Rede, na transação da gravação (`422 PLANO_CONTAS_INVALIDO`). Nome da categoria só aparece quando ela é da Rede do lançamento. Lançamentos automáticos e contrapartidas de estorno sem categoria válida da Rede ficam sem categoria, com valor e origem preservados. Ativos e orçamento de outra Rede pelo ID respondem `404`.
+- **Teste do lote** (`smoke-financeiro-isolamento.js`, duas academias fictícias com uma unidade cada, base descartável, 10/11/2026):
+
+| Requisito | Antes (`89903bd`) | Depois |
+| --- | --- | --- |
+| R1 Isolamento entre Redes | 48/56 | 56/56 |
+| R2 Acesso ao Financeiro (401, 403, recepção operando) | 5/20 | 20/20 |
+| R3 Categoria de outra Rede | 3/12 | 12/12 |
+| R4 Estorno, fechamento e reabertura | 10/10 | 10/10 |
+
+- **Regressão (depois):** `smoke-identidade` 71/71, `smoke-s1-p0` 33/33, 31/31 e 12/12, `smoke-p1-pagamentos` 42/42, `smoke-a06-conta-fechamento` 18/18, checagem HTTP da GS-01 sem falhas, nenhum erro 500.
+- **Comandos:** em `tests/scripts/README.md`, seção `smoke-financeiro-isolamento.js`.
+- **Pendências fora do lote:** mudanças de papéis da DN-3 (L02), GS-02 (L06 a L09), categorias de receita lançadas em contas de despesa na Rede do seed (A-10, a tratar no L04) e a `matriz-permissoes.md`, que ainda não descreve o papel `financeiro` (L02).
+- **Decisão do dono:** pendente.
+- **Commit resultante:** a preencher após a integração.
+
+## Fontes para a revisão técnica
+
+- `docs/governance/requisitos-base.md` para requisitos, decisões e lotes anteriores.
+- `docs/governance/matriz-permissoes.md` e `docs/governance/rbac-route-coverage.md` para papéis e cobertura de rotas.
+- `docs/governance/error-contracts.md` e `tests/scripts/README.md` para erros e testes reproduzíveis.
+- Código, histórico Git e evidências recentes para confirmar o estado implementado.

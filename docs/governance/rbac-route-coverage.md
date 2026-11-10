@@ -43,20 +43,16 @@ Domínios prioritários nessa categoria:
 
 - Alunos: [backend/routes/alunos.js](/C:/sistema-academia-main/backend/routes/alunos.js)
 - Mensalidades: [backend/routes/mensalidades.js](/C:/sistema-academia-main/backend/routes/mensalidades.js), exceto `reverter`
-- Pagamentos: [backend/routes/pagamentos.js](/C:/sistema-academia-main/backend/routes/pagamentos.js)
-- Dashboard financeiro canônico: [backend/routes/dashboardFinanceiro.js](/C:/sistema-academia-main/backend/routes/dashboardFinanceiro.js)
-- Contas financeiras: [backend/routes/contasFinanceiras.js](/C:/sistema-academia-main/backend/routes/contasFinanceiras.js), exceto `reverter`
+- Pagamentos: [backend/routes/pagamentos.js](/C:/sistema-academia-main/backend/routes/pagamentos.js), exceto registrar (`pagamentos:registrar`) e estornar (`reversao:executar`)
 - Vendas: [backend/routes/vendasProdutos.js](/C:/sistema-academia-main/backend/routes/vendasProdutos.js), exceto `reverter`
-- Fechamento mensal: [backend/routes/fechamentoMensal.js](/C:/sistema-academia-main/backend/routes/fechamentoMensal.js), em `analisar` e `fechar`
 - Acessos: [backend/routes/acessos.js](/C:/sistema-academia-main/backend/routes/acessos.js), exceto liberação manual
 - Plano associado/vínculos: [backend/routes/planoAssociado.js](/C:/sistema-academia-main/backend/routes/planoAssociado.js)
 
 Outros domínios no mesmo padrão:
 
 - Produtos
-- Ativos
-- Orçamento
-- Plano de contas
+
+O módulo Financeiro saiu desta categoria (ver seção 4, "Módulo Financeiro").
 
 ### 4. Protegidas por `requirePermission`
 
@@ -90,7 +86,35 @@ Rotas com guarda explícita de permissão:
   - `POST /vendasProdutos/:id/reverter`
   - `POST /contasFinanceiras/:id/reverter`
 - Fechamento mensal:
-  - `POST /fechamento-mensal/:ano/:mes/reabrir`
+  - `POST /fechamento-mensal/:ano/:mes/fechar` (`fechamento:fechar`)
+  - `POST /fechamento-mensal/:ano/:mes/reabrir` (`fechamento:reabrir`)
+
+#### Módulo Financeiro (`financeiro:acessar`)
+
+Montado em [backend/server.js](../../backend/server.js) com `requirePermission(PERMISSIONS.FINANCEIRO_ACESSAR)` antes do router, o que cobre todas as rotas e aliases do módulo. Sem sessão: `401`. Papel sem a permissão: `403`. A regra é a mesma do frontend (`NAV_FINANCEIRO`): `platform_admin`, `owner`, `admin` e `financeiro`. `gestor`, `recepcao` e `operador_acesso` não acessam.
+
+| Montagem | Rotas | Permissão adicional por ação |
+|---|---|---|
+| `/dashboard/financeiro` | `GET /`, `GET /kpis` | `POST /sincronizar`: `financeiro:sincronizar` |
+| `/contas-financeiras`, `/contasFinanceiras` | `GET`, `POST`, `PUT /:id`, `PATCH /:id/status`, `DELETE /:id` | `POST /:id/reverter` e `DELETE` de conta paga: `reversao:executar` |
+| `/plano-contas`, `/planoContas` | `GET`, `POST`, `PUT /:id`, `DELETE /:id` | — |
+| `/financeiro/ativos` | `GET`, `POST`, `PUT /:id`, `DELETE /:id` | — |
+| `/financeiro/orcamento` | `GET`, `POST`, `PUT /:id`, `DELETE /:id` | — |
+| `/fechamento-mensal` | `GET /:ano/:mes/analisar` | `fechar`: `fechamento:fechar`; `reabrir`: `fechamento:reabrir` |
+| `/reversoes/contas-financeiras/:id` | — | `financeiro:acessar` + `reversao:executar` |
+
+Escopo dos dados:
+
+- **Plano de contas: compartilhado por Rede.** As categorias são filtradas só por `tenant_id`; todas as unidades da mesma Rede veem e usam as mesmas categorias.
+- **Contas financeiras, ativos, orçamento e fechamento mensal: Rede e Unidade.** Filtram por `tenant_id` e `unit_id` da sessão; cada unidade vê e altera apenas os próprios registros, e o fechamento de uma unidade não afeta as demais. O dashboard e os indicadores seguem o mesmo escopo.
+- Registro de outra Rede pelo ID (ou, nos domínios por unidade, de outra unidade): `404`, sem efeito. Ativos e orçamento passaram a responder `404` quando nada foi alterado.
+- Unidade de outra Rede no `X-Unit-Id`: `403 UNIT_FORBIDDEN`.
+
+Categoria: `plano_contas_id` de conta financeira precisa ser da Rede da operação, conferido na mesma transação da gravação (`422 PLANO_CONTAS_INVALIDO`, sem gravar). A listagem só mostra o nome da categoria quando ela é da Rede do lançamento. Lançamentos automáticos e contrapartidas de estorno só herdam categoria da mesma Rede; sem categoria válida, ficam sem categoria, com valor e origem preservados.
+
+Validação: `tests/scripts/smoke-financeiro-isolamento.js`.
+
+Papéis com permissão (constants/userRoles.js): `financeiro:acessar` em `platform_admin`, `owner`, `admin` e `financeiro`; `reversao:executar` em `platform_admin`, `owner`, `admin` e `financeiro`; `fechamento:fechar` e `fechamento:reabrir` em `platform_admin`, `owner` e `admin`.
 
 ### 5. Com checagem manual de papel/permissão
 
@@ -149,16 +173,14 @@ Impacto atual:
 ### Mensalidades e pagamentos
 
 - criação, listagem, atualização e exclusão dependem de escopo
-- reversão exige permissão explícita
-- pagamento não tem permissão fina própria hoje
+- reversão e estorno de pagamento exigem `reversao:executar`
+- registrar pagamento exige `pagamentos:registrar`
 
 ### Financeiro
 
-- `contasFinanceiras.js` depende de escopo, com permissão explícita só em reversão
-- [backend/routes/dashboardFinanceiro.js](/C:/sistema-academia-main/backend/routes/dashboardFinanceiro.js):
-  - `GET /dashboard/financeiro` e `GET /dashboard/financeiro/kpis` dependem de escopo
-  - `POST /dashboard/financeiro/sincronizar` exige `requirePermission(PERMISSIONS.FINANCEIRO_SINCRONIZAR)` e chama `requireScope(req)` dentro da rota
-- `backend/routes/financeiro.js` e as rotas `/financeiro/*` legadas foram removidos
+- todo o módulo exige `financeiro:acessar` (ver seção 4, "Módulo Financeiro")
+- estorno, sincronização, fechar e reabrir exigem também a permissão própria da ação
+- `backend/routes/financeiro.js` e as rotas `/financeiro/*` legadas antigas foram removidos; `/financeiro/ativos` e `/financeiro/orcamento` são as rotas atuais
 
 ### Vendas
 
@@ -167,8 +189,9 @@ Impacto atual:
 
 ### Fechamento mensal
 
-- `analisar` e `fechar` dependem de escopo
-- `reabrir` exige permissão explícita
+- `analisar` exige `financeiro:acessar`
+- `fechar` exige `financeiro:acessar` + `fechamento:fechar`
+- `reabrir` exige `financeiro:acessar` + `fechamento:reabrir`
 
 ### Acesso / liberação manual
 
@@ -219,10 +242,8 @@ Risco residual:
 Exemplos:
 - alunos
 - mensalidades
-- pagamentos
-- contas financeiras
 - vendas
-- fechamento mensal (`fechar`)
+- produtos e estoque (FV-02b, depende da DN-3)
 
 Risco:
 - qualquer operador autenticado com unidade válida pode executar ações além do papel desejado, se o domínio não tiver outras travas internas
@@ -252,8 +273,9 @@ Risco:
    - `POST /dashboard/financeiro/sincronizar`
 2. Em seguida, separar por domínio quais operações deveriam continuar apenas com escopo e quais precisam de permissão explícita.
 3. Migrar primeiro domínios mais sensíveis:
-   - financeiro
-   - fechamento mensal
-   - pagamentos
+   - financeiro (feito: `financeiro:acessar` no módulo inteiro)
+   - fechamento mensal (feito)
+   - pagamentos (registrar e estornar já têm permissão própria)
+   - produtos e estoque (FV-02b, depende da DN-3)
    - alunos com impacto financeiro
 4. Só depois reduzir checks manuais espalhados, aproximando tudo de helpers centrais sem mudar o comportamento em lote.
