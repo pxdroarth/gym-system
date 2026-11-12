@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { runQuery, runGet, runExecute, runTransaction } = require('../dbHelper');
+const { runQuery, runGet, runTransaction } = require('../dbHelper');
 const AuditService = require('../services/AuditService');
 const FechamentoMensalService = require('../services/FechamentoMensalService');
 const VinculoService = require('../services/VinculoService');
-const { PERMISSIONS } = require('../constants/userRoles');
-const { assertPermission } = require('../middlewares/requirePermission');
+const { PERMISSIONS, USER_ROLES } = require('../constants/userRoles');
+const { assertPermission, requirePermission } = require('../middlewares/requirePermission');
 const { actorWithScope, requireScope } = require('../helpers/scope');
 
 function toISODate(d) {
@@ -194,7 +194,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', requirePermission(PERMISSIONS.ALUNOS_EDITAR), async (req, res, next) => {
   try {
     const scope = requireScope(req);
     let { nome, status, dia_vencimento, plano_id, telefone, data_nascimento } = req.body || {};
@@ -221,20 +221,30 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'data_nascimento inválida' });
     }
 
-    const statusFinal = (status || 'ativo') === 'inativo' ? 'inativo' : 'ativo';
-    const last = await runGet(`SELECT MAX(matricula) AS ultima FROM aluno WHERE tenant_id = ? AND unit_id = ?`, [scope.tenant_id, scope.unit_id]);
-    const novaMatricula = (Number(last?.ultima) || 1000) + 1;
-
-    const result = await runExecute(
-      `INSERT INTO aluno (matricula, nome, status, dia_vencimento, plano_id, telefone, data_nascimento, tenant_id, unit_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [novaMatricula, String(nome).trim(), statusFinal, dv, planoIdFinal, telefone || null, dataNascISO, scope.tenant_id, scope.unit_id]
-    );
-
-    const criado = await runGet(`SELECT * FROM aluno WHERE id = ? AND tenant_id = ? AND unit_id = ?`, [result.lastID, scope.tenant_id, scope.unit_id]);
+    const statusFinal = req.operator.papel === USER_ROLES.RECEPCAO
+      ? 'ativo'
+      : ((status || 'ativo') === 'inativo' ? 'inativo' : 'ativo');
+    const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
+    const criado = await runTransaction(async (tx) => {
+      const last = await tx.get(
+        'SELECT MAX(matricula) AS ultima FROM aluno WHERE tenant_id = ? AND unit_id = ?',
+        [scope.tenant_id, scope.unit_id]
+      );
+      const novaMatricula = (Number(last?.ultima) || 1000) + 1;
+      const result = await tx.run(
+        `INSERT INTO aluno (matricula, nome, status, dia_vencimento, plano_id, telefone, data_nascimento, tenant_id, unit_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [novaMatricula, String(nome).trim(), statusFinal, dv, planoIdFinal, telefone || null, dataNascISO, scope.tenant_id, scope.unit_id]
+      );
+      await AuditService.logAction({
+        actor, action: 'cadastrar_aluno', module: 'alunos', recordType: 'aluno',
+        recordId: result.lastID, tenant_id: scope.tenant_id, unit_id: scope.unit_id,
+      }, tx);
+      return tx.get('SELECT * FROM aluno WHERE id = ?', [result.lastID]);
+    });
     res.status(201).json(criado);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 });
 
@@ -265,7 +275,7 @@ router.get('/:id/debito', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', requirePermission(PERMISSIONS.ALUNOS_EDITAR), async (req, res, next) => {
   const id = parseInt(req.params.id);
   if (!id) return res.status(400).json({ error: 'ID inválido' });
 
@@ -313,6 +323,11 @@ router.put('/:id', async (req, res, next) => {
       const mudouPlano = Number(antes.plano_id) !== planoIdFinal;
       const mudouPlanoComDependentes = mudouPlano && dependentes.length > 0;
 
+      const mudouStatus = status !== undefined && antes.status !== statusFinal;
+      const mudouVencimento = Number(antes.dia_vencimento) !== dv;
+      if (mudouStatus || mudouVencimento) {
+        assertPermission(req, PERMISSIONS.ALUNOS_ALTERAR_STATUS_VENCIMENTO);
+      }
       if (mudouPlano) {
         assertPermission(req, PERMISSIONS.ALUNOS_ALTERAR_PLANO_COM_DEPENDENTES);
       }
@@ -330,7 +345,7 @@ router.put('/:id', async (req, res, next) => {
         `UPDATE aluno
            SET nome = ?, status = ?, dia_vencimento = ?, plano_id = ?, telefone = ?, data_nascimento = ?
          WHERE id = ?`,
-        [String(nome).trim(), statusFinal, dv, planoIdFinal, telefone || null, dataNascISO, id]
+        [String(nome).trim(), status === undefined ? antes.status : statusFinal, dv, planoIdFinal, telefone || null, dataNascISO, id]
       );
 
       if (result.changes === 0) return null;

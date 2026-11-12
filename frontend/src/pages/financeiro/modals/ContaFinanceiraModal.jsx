@@ -17,6 +17,7 @@ export default function ContaFinanceiraModal({ aberto, conta, onClose, onSalvo }
     plano_contas_id: "",
     observacao: "",
   });
+  const contaPaga = conta?.status === "pago";
   const [planos, setPlanos] = useState([]);
   const [erro, setErro] = useState(null);
   const [salvando, setSalvando] = useState(false);
@@ -77,7 +78,7 @@ export default function ContaFinanceiraModal({ aberto, conta, onClose, onSalvo }
       <div className="finance-modal-grid">
         <div className="finance-modal-panel">
           <h3 className="finance-modal-panel__title">Dados do lançamento</h3>
-          <p className="finance-modal-panel__copy">O fluxo de criação e edição continua exatamente igual, com o mesmo payload e os mesmos serviços.</p>
+          <p className="finance-modal-panel__copy">{contaPaga ? "Alterar tipo, valor, data ou status de conta paga exige reversão aprovada." : "Informe os dados da conta."}</p>
 
           <div className="grid grid-cols-1 gap-3 mt-4">
             <Input
@@ -86,12 +87,13 @@ export default function ContaFinanceiraModal({ aberto, conta, onClose, onSalvo }
               value={form.descricao}
               onChange={(event) => setForm({ ...form, descricao: event.target.value })}
             />
-            <Select label="Tipo" value={form.tipo} onChange={(event) => setForm({ ...form, tipo: event.target.value })}>
+            <Select label="Tipo" disabled={contaPaga} value={form.tipo} onChange={(event) => setForm({ ...form, tipo: event.target.value })}>
               <option value="despesa">Despesa</option>
               <option value="receita">Receita</option>
             </Select>
             <Input
               label="Valor"
+              disabled={contaPaga}
               type="number"
               placeholder="Valor"
               value={form.valor}
@@ -99,11 +101,12 @@ export default function ContaFinanceiraModal({ aberto, conta, onClose, onSalvo }
             />
             <Input
               label="Data de Lançamento"
+              disabled={contaPaga}
               type="date"
               value={form.data_lancamento}
               onChange={(event) => setForm({ ...form, data_lancamento: event.target.value })}
             />
-            <Select label="Status" value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
+            <Select label="Status" disabled={contaPaga} value={form.status} onChange={(event) => setForm({ ...form, status: event.target.value })}>
               <option value="pendente">Pendente</option>
               <option value="pago">Pago</option>
             </Select>

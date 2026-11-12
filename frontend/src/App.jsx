@@ -1,5 +1,7 @@
 import React from "react";
 import { BrowserRouter as Router, Navigate, Route, Routes } from "react-router-dom";
+import RoleGate from "./components/auth/RoleGate";
+import { UI_PERMISSIONS } from "./utils/permissions";
 import ProtectedRoute from "./components/auth/ProtectedRoute";
 import Layout from "./components/Layout";
 import ToastProvider from "./components/ui/ToastProvider";
@@ -35,8 +37,8 @@ function App() {
               <Route path="/dashboard" element={<Dashboard />} />
 
               <Route path="/alunos" element={<AlunosPage />} />
-              <Route path="/alunos/novo" element={<FormAlunoPage />} />
-              <Route path="/alunos/editar/:id" element={<FormAlunoPage />} />
+              <Route path="/alunos/novo" element={<RoleGate permission={UI_PERMISSIONS.ALUNOS_EDITAR} fallback={<Navigate to="/alunos" replace />}><FormAlunoPage /></RoleGate>} />
+              <Route path="/alunos/editar/:id" element={<RoleGate permission={UI_PERMISSIONS.ALUNOS_EDITAR} fallback={<Navigate to="/alunos" replace />}><FormAlunoPage /></RoleGate>} />
               <Route path="/alunos/:id" element={<PerfilPage />} />
 
               <Route path="/planos" element={<PlanosPage />} />

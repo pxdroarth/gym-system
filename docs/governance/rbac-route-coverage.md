@@ -4,7 +4,24 @@
 
 Mapear como as rotas de negócio do backend estão protegidas hoje, sem alterar comportamento, para orientar uma padronização incremental futura.
 
+## L02 · Cobertura da DN-3
+
+| Rota ou fluxo | Guarda e escopo |
+| --- | --- |
+| `POST /alunos`, `PUT /alunos/:id` | `alunos:editar` na unidade. Edição compara status, vencimento e plano antes de gravar. A guarda de associações vale nos aliases já existentes. |
+| `POST /mensalidades/padrao` | `mensalidades:emitir_padrao` e unidade do aluno. Cálculo e deduplicação na transação. O corpo indica o aluno. |
+| `POST /mensalidades`, `PUT`, `PATCH /:id/status`, `DELETE` | `mensalidades:gerenciar`. Desconto excepcional em criação exige permissão e motivo. Edição comum não concede desconto. |
+| `PATCH /mensalidades/:id/desconto` | `mensalidades:desconto`. Motivo, cobrança em aberto sem pagamento, período editável e auditoria. |
+| `POST /pagamentos` | `pagamentos:registrar` inclui recepção e gestor. Mantém escopo, saldo, pagamento parcial e chave de idempotência. |
+| Estorno e reversões de pagamentos, mensalidades, vendas e contas | Guardas anteriores continuam validando papel e escopo. A gravação exige aprovação e está bloqueada com `409 REVERSAO_APROVACAO_NECESSARIA`. Abrange aliases e exclusão de conta paga. Edição comum de conta paga não pode neutralizar valor, tipo, data ou status. |
+| `/fechamento-mensal/:ano/:mes` | Conferência com Financeiro. Fechar exige admin ou dono na unidade. Reabrir exige dono, motivo e auditoria. Política master pendente. |
+| `/tenant-dashboard/resumo` | Relatório filtrado pelos vínculos do admin. Integral requer `relatorios:rede_integral`. |
+| `POST/PUT/DELETE /planos`, `/plano-contas` e `/planoContas` | Permissões distintas de catálogo e financeiro da Rede, disponíveis ao dono. O fluxo combinado Contratar/Renovar usa permissão própria de operação. |
+| `DELETE /usuarios-internos/:id/vinculo-unidade` | Admin ou dono, com vínculo na unidade selecionada, escopo e hierarquia GS-03. Revoga sessões após desativar o vínculo local. |
+
 ## Categorias encontradas
+
+A tabela do L02 acima prevalece nos domínios alterados pela DN-3. A separação por ação de produtos e estoque (FV-02b) continua em aberto neste registro.
 
 ### 1. Públicas
 
@@ -213,17 +230,11 @@ Impacto atual:
 
 ## Riscos prioritários
 
-### 1. `planos.js` está fora do padrão atual
+### 1. `planos.js` · cobertura do catálogo
 
 - [backend/routes/planos.js](/C:/sistema-academia-main/backend/routes/planos.js)
 
-Hoje:
-- não usa `requireScope`
-- não usa `requirePermission`
-- não checa `req.operator`
-
-Risco:
-- domínio de negócio com cobertura de autorização aparentemente inexistente
+As rotas de leitura resolvem o escopo. As mutações do catálogo exigem permissão de Rede. A comercialização de plano exclusivo ainda depende do modelo de distribuição.
 
 ### 2. `POST /dashboard/financeiro/sincronizar` é rota sensível e deve permanecer auditada
 

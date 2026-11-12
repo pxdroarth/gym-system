@@ -5,19 +5,23 @@ function number(value) {
   return Number(value || 0);
 }
 
-async function resumoConsolidado(tenantId) {
+async function resumoConsolidado(tenantId, unitIds) {
   const id = Number(tenantId);
   if (!id) throw new AppError('tenant_id nao resolvido', 400, 'TENANT_ID_INVALIDO');
 
   const tenant = await runGet('SELECT id, nome, documento, status, plano_comercial, onboarding_status FROM tenant WHERE id = ?', [id]);
   if (!tenant) throw new AppError('Tenant nao encontrado', 404, 'TENANT_NAO_ENCONTRADO');
 
+  const ids = unitIds || [];
+  const unidadeFiltro = unitIds ? `AND id IN (${ids.map(() => '?').join(', ')})` : '';
+  const registroFiltro = unitIds ? `AND unit_id IN (${ids.map(() => '?').join(', ')})` : '';
+
   const unidades = await runQuery(
     `SELECT id, nome, codigo, status, is_matriz
      FROM unit
-     WHERE tenant_id = ?
+     WHERE tenant_id = ? ${unidadeFiltro}
      ORDER BY is_matriz DESC, nome COLLATE NOCASE`,
-    [id]
+    [id, ...ids]
   );
 
   const financeiro = await runGet(
@@ -26,18 +30,18 @@ async function resumoConsolidado(tenantId) {
        COALESCE(SUM(CASE WHEN tipo = 'despesa' AND status = 'pago' THEN valor ELSE 0 END), 0) AS despesas,
        COALESCE(SUM(CASE WHEN tipo = 'despesa' AND status = 'pendente' THEN valor ELSE 0 END), 0) AS despesas_pendentes
      FROM conta_financeira
-     WHERE tenant_id = ?
+     WHERE tenant_id = ? ${registroFiltro}
        AND COALESCE(deleted_at, '') = ''`,
-    [id]
+    [id, ...ids]
   );
 
   const totais = await runGet(
     `SELECT
-       (SELECT COUNT(*) FROM aluno WHERE tenant_id = ? AND COALESCE(status, 'ativo') = 'ativo') AS alunos_ativos,
-       (SELECT COUNT(*) FROM produto WHERE tenant_id = ?) AS produtos,
-       (SELECT COUNT(*) FROM venda_produto WHERE tenant_id = ? AND COALESCE(deleted_at, '') = '') AS vendas,
+       (SELECT COUNT(*) FROM aluno WHERE tenant_id = ? ${registroFiltro} AND COALESCE(status, 'ativo') = 'ativo') AS alunos_ativos,
+       (SELECT COUNT(*) FROM produto WHERE tenant_id = ? ${registroFiltro}) AS produtos,
+       (SELECT COUNT(*) FROM venda_produto WHERE tenant_id = ? ${registroFiltro} AND COALESCE(deleted_at, '') = '') AS vendas,
        (SELECT COUNT(*) FROM usuario_tenant WHERE tenant_id = ? AND status = 'ativo') AS usuarios_vinculados`,
-    [id, id, id, id]
+    [id, ...ids, id, ...ids, id, ...ids, id]
   );
 
   const porUnidade = await runQuery(
@@ -67,9 +71,9 @@ async function resumoConsolidado(tenantId) {
            AND COALESCE(cf.deleted_at, '') = ''
        ) AS despesas
      FROM unit u
-     WHERE u.tenant_id = ?
+     WHERE u.tenant_id = ? ${unidadeFiltro.replace('AND id', 'AND u.id')}
      ORDER BY u.is_matriz DESC, u.nome COLLATE NOCASE`,
-    [id]
+    [id, ...ids]
   );
 
   const receitas = number(financeiro?.receitas);
@@ -77,13 +81,13 @@ async function resumoConsolidado(tenantId) {
 
   return {
     tenant,
-    escopo: 'tenant_consolidado_readonly',
+    escopo: unitIds ? 'unidades_autorizadas_readonly' : 'tenant_consolidado_readonly',
     totais: {
       unidades: unidades.length,
       alunos_ativos: number(totais?.alunos_ativos),
       produtos: number(totais?.produtos),
       vendas: number(totais?.vendas),
-      usuarios_vinculados: number(totais?.usuarios_vinculados),
+      ...(!unitIds && { usuarios_vinculados: number(totais?.usuarios_vinculados) }),
       receitas,
       despesas,
       despesas_pendentes: number(financeiro?.despesas_pendentes),

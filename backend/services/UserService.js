@@ -153,7 +153,7 @@ function describeTarget(user, links, ctx) {
 }
 
 // Retorna null se pode gerenciar, ou o AppError que impede.
-function manageBlock(ctx, user, target, { roleOrStatus = false } = {}) {
+function manageBlock(ctx, user, target, { roleOrStatus = false, unitOnly = false } = {}) {
   const operator = ctx.operator;
   if (Number(user.id) === Number(operator.id)) {
     return new AppError('Nao e permitido alterar o proprio usuario por esta tela', 403, 'USUARIO_AUTOGESTAO_BLOQUEADA');
@@ -168,7 +168,7 @@ function manageBlock(ctx, user, target, { roleOrStatus = false } = {}) {
   if (rank(user.papel) > rank(operator.papel)) {
     return new AppError('Papel do usuario esta acima do papel do operador', 403, 'HIERARQUIA_INSUFICIENTE');
   }
-  if (target.tenantUnits.some((l) => !ctx.unitIds.has(Number(l.unit_id)))) {
+  if (!unitOnly && target.tenantUnits.some((l) => !ctx.unitIds.has(Number(l.unit_id)))) {
     return new AppError('Usuario possui unidades fora das que o operador gerencia', 403, 'USUARIO_FORA_DAS_UNIDADES_GERENCIAVEIS');
   }
   if (roleOrStatus && target.otherTenantIds.size > 0) {
@@ -271,6 +271,9 @@ async function listarUsuarios(operator, scope, query = {}) {
       unidades: (ctx.platform && !query.tenant_id ? target.activeUnits : target.tenantUnits).map(unitView),
       gerenciavel: !block,
       papel_status_editavel: !roleBlock,
+      vinculo_local_desativavel: !ctx.platform
+        && !manageBlock(ctx, user, target, { unitOnly: true })
+        && target.tenantUnits.some((link) => Number(link.unit_id) === ctx.scopeUnitId),
       motivo_bloqueio: roleBlock ? roleBlock.code : null,
     });
   }
@@ -559,7 +562,43 @@ async function alterarUnidades(id, payload = {}, operator, scope) {
   });
 }
 
+async function desativarVinculoLocal(id, operator, scope) {
+  return runTransaction(async (tx) => {
+    const ctx = await resolveContext(operator, scope, null, tx);
+    if (ctx.platform) throw new AppError('Use a politica de suporte para esta acao', 403, 'PERMISSAO_NEGADA');
+    const { user, target } = await loadTarget(tx, ctx, id, { unitOnly: true });
+    const unitId = Number(scope.unit_id);
+    assertUnitsManageable(ctx, [unitId]);
+    const vinculo = target.tenantUnits.find((link) => Number(link.unit_id) === unitId);
+    if (!vinculo) throw new AppError('Vinculo ativo nao encontrado nesta unidade', 404, 'USUARIO_VINCULO_NAO_ENCONTRADO');
+
+    await tx.run(
+      `UPDATE usuario_unit SET status = ?, is_default = 0, updated_by = ?, updated_at = datetime('now')
+       WHERE usuario_id = ? AND unit_id = ?`,
+      [USER_SCOPE_STATUS.INATIVO, String(operator.id), user.id, unitId]
+    );
+    const actor = auditActor(operator, ctx);
+    await AuditService.logAction({
+      actor,
+      action: 'desativar_vinculo_unidade',
+      module: 'usuarios_internos',
+      recordType: 'usuario_interno',
+      recordId: user.id,
+      before: { status: USER_SCOPE_STATUS.ATIVO },
+      after: { status: USER_SCOPE_STATUS.INATIVO },
+      tenant_id: ctx.tenantId,
+      unit_id: unitId,
+    }, tx);
+    await AuthService.revokeActiveSessionsForUser(user.id, actor, {
+      action: 'auth_sessions_revoked_by_unit_change',
+      reason: 'desativacao_de_vinculo_local',
+      metadata: { affected_user_id: user.id, removidas: [unitId] },
+    }, tx);
+  });
+}
+
 module.exports = {
+  desativarVinculoLocal,
   listarUsuarios,
   opcoes,
   criarUsuario,

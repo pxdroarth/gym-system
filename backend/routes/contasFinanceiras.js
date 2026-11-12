@@ -164,6 +164,10 @@ router.put('/:id', async (req, res, next) => {
         tx,
         scope
       );
+      if (before.status === 'pago' && (status !== 'pago' || Number(valor) !== Number(before.valor)
+        || tipo !== before.tipo || data_lancamento !== before.data_lancamento)) {
+        throw new AppError('Conta paga exige reversao aprovada', 409, 'REVERSAO_APROVACAO_NECESSARIA');
+      }
       const categoria = await assertCategoriaDaRede(tx, plano_contas_id, scope);
 
       await tx.run(`
@@ -209,6 +213,10 @@ router.patch('/:id/status', async (req, res, next) => {
       assertContaFinanceiraManual(before);
 
       await FechamentoMensalService.assertPeriodoEditavelPorData(before.data_lancamento, 'alteracao de status de conta financeira', tx, scope);
+
+      if (before.status === 'pago' && status !== 'pago') {
+        throw new AppError('Conta paga exige reversao aprovada', 409, 'REVERSAO_APROVACAO_NECESSARIA');
+      }
 
       await tx.run(
         'UPDATE conta_financeira SET status = ?, updated_at = datetime(\'now\') WHERE id = ?',

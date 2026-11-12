@@ -222,7 +222,7 @@ node tests\scripts\smoke-f0-acesso-datas.js
 
 ## `smoke-p1-pagamentos.js` (GS-07 P1)
 
-Valida pela API o pagamento parcial e o estorno por pagamento: mensalidade de R$ 80, paga 50 (saldo 30), 31 recusado, paga 30 (quitada), reenvio com a mesma chave sem duplicar, estorno dos 30 (volta a parcial, 50 pagos, 30 em aberto, mesma competência), 403 para quem não tem `reversao:executar`, 404 de outra unidade e concorrência (dois pagamentos simultâneos sobre o mesmo saldo; a mesma chave em paralelo). Com `--db`, confere também lançamentos, reversão e auditoria na base (somente leitura). Use base descartável criada com `npm run db:seed:dev` e a API rodando sobre ela.
+Valida pela API o pagamento parcial e o estorno por pagamento: mensalidade de R$ 80, paga 50 (saldo 30), 31 recusado, paga 30 (quitada), reenvio com a mesma chave sem duplicar, recusa de estorno direto dos 30 (quitação e competência preservadas, sem contrapartida), 403 para quem não tem `reversao:executar`, 404 de outra unidade e concorrência (dois pagamentos simultâneos sobre o mesmo saldo; a mesma chave em paralelo). Com `--db`, confere também lançamentos, reversão e auditoria na base (somente leitura). Use base descartável criada com `npm run db:seed:dev` e a API rodando sobre ela.
 
 ```cmd
 node tests\scripts\smoke-p1-pagamentos.js --base-url=http://localhost:3001 --db=backend\academia.sqlite
@@ -244,7 +244,7 @@ Teste de tela (Playwright para Python) do botão de pagamento do perfil do aluno
 
 Valida pela API, com resultado por requisito:
 
-- **FV-02a:** reversões de venda, conta e mensalidade pela Rede B e pela Filial sobre registros da Matriz da Rede A, nas rotas legadas `/reversoes/*` e nas rotas de domínio (404, com estoque, lançamentos, reversões e auditoria inalterados); recepção sem `reversao:executar` (403); lançamento derivado (409); reversões autorizadas continuam funcionando e gravam Rede e Unidade.
+- **FV-02a:** reversões de venda, conta e mensalidade pela Rede B e pela Filial sobre registros da Matriz da Rede A, nas rotas legadas `/reversoes/*` e nas rotas de domínio (404, com estoque, lançamentos, reversões e auditoria inalterados); recepção sem `reversao:executar` (403); lançamento derivado (409); execução direta aguarda aprovação e deixa estoque, saldos e auditoria intactos.
 - **FV-05:** uploads recusados (sem login, token inválido, unidade não permitida, HTML disfarçado de PNG, SVG, payload inválido, acima de 2 MB, nome duplicado) não deixam arquivo em disco; PNG, JPEG e WebP válidos continuam funcionando; arquivos ativos já existentes em `/uploads` (html, svg, js, html com extensão .png) não são publicados.
 - **FV-02c:** mesmo mês fechado numa unidade e aberto na outra; a venda na unidade fechada é bloqueada sem baixa de estoque e a da unidade aberta segue.
 
@@ -268,11 +268,37 @@ Cria pelo onboarding duas academias fictícias (Alfa e Beta), cada uma com uma u
 
 - **R1 isolamento:** listagens só com dados próprios; unidade da outra Rede no `X-Unit-Id` → 403; registro da outra Rede pelo ID → 404, sem efeito.
 - **R2 acesso ao Financeiro:** sem sessão → 401; recepção, gestor e operador → 403 em dashboard e indicadores, contas, plano de contas, ativos, orçamento e análise do fechamento (com aliases); recepção segue consultando alunos e registrando entrada.
-- **R3 categoria:** conta com plano de contas de outra Rede → 422, sem gravar; categoria própria funciona; nome da categoria só aparece quando ela é da Rede do lançamento, inclusive em registro antigo; lançamentos automáticos e contrapartidas sem categoria válida ficam sem categoria, com valor e origem preservados.
-- **R4 estorno e fechamento:** recepção → 403 ao estornar; financeiro estorna no próprio escopo, recebe 403 ao fechar e ao reabrir; owner fecha e reabre; negativas preservam pagamento e fechamento.
+- **R3 categoria:** conta com plano de contas de outra Rede → 422, sem gravar; categoria própria funciona; nome da categoria só aparece quando ela é da Rede do lançamento, inclusive em registro antigo; lançamentos automáticos sem categoria válida ficam sem categoria, com valor e origem preservados. Reversões sem aprovação não geram contrapartida.
+- **R4 estorno e fechamento:** recepção → 403 ao estornar; financeiro recebe 409 no estorno direto e 403 ao fechar e ao reabrir. Owner fecha e reabre com motivo; negativas preservam pagamento e fechamento.
 
 Use **apenas base descartável**: para simular um registro antigo, o smoke grava uma linha direto na base.
 
 ```cmd
 node tests\scripts\smoke-financeiro-isolamento.js --base-url=http://localhost:3001 --db=backend\academia.sqlite
 ```
+
+## `smoke-l02.js` (DN-3 · Permissões operacionais)
+
+Use base descartável semeada e rode após `smoke-identidade.js`. O parâmetro `--db` é obrigatório e deve apontar para o mesmo SQLite que a API usa. O smoke lê o banco sem escrever diretamente. Não rode outras operações nessa base durante as comparações.
+
+```cmd
+node tests/scripts/smoke-l02.js --base-url=http://localhost:3001 --db=backend/academia.sqlite
+node tests/scripts/smoke-l02-ciclos.js
+```
+
+- **HTTP e SQLite.** Três requisições simultâneas ao mesmo processo da API, para o mesmo aluno e ciclo, devem devolver uma criação e duas reutilizações. No banco, confira uma cobrança, um lançamento pendente do mesmo valor, nenhum pagamento criado e uma única auditoria de emissão concluída. A transação SQLite serializa a operação nessa configuração. Esta evidência não cobre múltiplas instâncias da API.
+- **Recusas.** Emissão e desconto comparam as linhas de mensalidade, pagamento e conta financeira antes e depois. As respostas de recusa ficam no log HTTP. O teste verifica separadamente que não houve evento de operação concluída em `audit_log`. Não exige a criação de um evento de auditoria para cada tentativa negada.
+- **Relógio controlado.** O smoke de ciclos chama o serviço real e usa o SQLite da cópia descartável onde o script roda. Ele injeta instantes de referência no relógio de negócio e mantém a conversão para São Paulo. Com plano de R$ 100 e vencimento dia 31, a primeira cobrança em 27/02/2025 cobre um dia de um ciclo de 28 dias (R$ 3,57). Em 28/02/2024, cobre um dia de um ciclo de 29 dias (R$ 3,45). O próximo vencimento cai no último dia de fevereiro, a virada para março reutiliza a cobrança daquele ciclo, e o vencimento volta ao dia 31 em março. As datas e os valores esperados são explícitos. Este smoke exercita o serviço em sequência.
+- **Reemissão proporcional.** No smoke de ciclos, o dono cancela a cobrança de 27/02/2025 sem pagamento e a recepção reemite na mesma data. O teste exige R$ 3,57 com vencimento em 27/02, reutilização da substituta em nova tentativa, preservação do histórico cancelado e um único lançamento a receber ativo.
+- **Catálogo da Rede.** O smoke HTTP cadastra titulares na Matriz e na Filial com o mesmo plano individual e verifica a edição apenas do nome pelo dono. Um plano familiar com titular e dois dependentes na Filial impede a redução para duas pessoas a partir da Matriz. A redução é aceita após encerrar um vínculo. O teste preserva a recusa de edição pelo admin e a recusa de exclusão de plano em uso em outra unidade.
+
+### Adaptações dos smokes anteriores pela DN-3
+
+| Smoke | Mudança e regra aprovada | Cobertura que ficou pendente |
+| --- | --- | --- |
+| `smoke-s1-p0.js` | Reversão direta agora exige aprovação. Testa `409` e estado preservado na venda, conta e mensalidade legada, nos aliases e na exclusão de conta paga. A reabertura da preparação usa o dono com motivo obrigatório. As verificações de upload, escopo e venda em mês fechado continuam. | Reversão executada após aprovação, consumo único da aprovação, reposição de estoque, contrapartida e trilha dos atores e da unidade. |
+| `smoke-p1-pagamentos.js` | O lançamento de R$ 80 da fixture fornece motivo para valor excepcional. Estorno direto bloqueado mantém os dois pagamentos, a competência e R$ 80 líquidos, sem contrapartida ou auditoria de execução. Parcial, saldo, idempotência e concorrência de pagamentos continuam testados. | Estorno aprovado dos R$ 30, preservação dos R$ 50, saldo reaberto de R$ 30, contrapartida, novo pagamento e recusa de segunda execução. |
+| `smoke-a06-conta-fechamento.js` | O dono reabre as unidades da fixture com motivo, conforme a DN-3. As verificações A-06 de meses de origem e destino e de isolamento permanecem. | A interface nova de fechamento é de outro sublote. A regra A-06 mantém sua cobertura neste smoke. |
+| `smoke-financeiro-isolamento.js` | Financeiro pode conferir, mas o estorno direto fica bloqueado e não gera contrapartida. Reabertura exige dono com motivo. A Rede Beta agora fecha e reabre de fato seu período, com status e unidade verificados, antes de confirmar que o período da Alfa permaneceu intacto. Os testes de categorias de Rede para leitura e lançamentos automáticos continuam. | Contrapartida de execução aprovada preserva valor e origem e usa somente categoria válida da própria Rede, inclusive nos registros legados. |
+
+Os estornos permanecem bloqueados até o fluxo de solicitação, aprovação e execução. A execução positiva e a contrapartida financeira são critérios do sublote, ainda sem validação nesta rodada.

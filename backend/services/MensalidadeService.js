@@ -7,6 +7,8 @@ const FinanceiroService = require('./FinanceiroService');
 const crypto = require('crypto');
 const { paraCentavos, deCentavos } = require('../utils/dinheiro');
 const { dataLocalISO } = require('../utils/dataLocal');
+const { isPlanoAvulso } = require('./PlanoPolicyService');
+const { calcularPreviewContratacaoRenovacao } = require('./CoberturaService');
 
 function clientOrDefault(client) {
   return client || { get: runGet, all: runQuery, run: runExecute };
@@ -207,6 +209,90 @@ async function criarMensalidade(payload = {}, scope = null, client = null) {
   return db.get('SELECT * FROM mensalidade WHERE id = ?', [result.lastID]);
 }
 
+// Datas civis em UTC evitam que o fuso do processo altere a ancora do ciclo.
+function vencimentoAncorado(data, dia, deslocamento = 0) {
+  const [ano, mes] = data.split('-').map(Number);
+  const ultimoDia = new Date(Date.UTC(ano, mes + deslocamento, 0)).getUTCDate();
+  return new Date(Date.UTC(ano, mes - 1 + deslocamento, Math.min(dia, ultimoDia)))
+    .toISOString().slice(0, 10);
+}
+
+async function emitirMensalidadePadrao(alunoId, actor, scope) {
+  if (!Number.isInteger(Number(alunoId)) || Number(alunoId) < 1) {
+    throw new AppError('Informe um aluno valido', 400, 'ALUNO_ID_INVALIDO');
+  }
+
+  return runTransaction(async (tx) => {
+    const aluno = await tx.get(
+      'SELECT * FROM aluno WHERE id = ? AND tenant_id = ? AND unit_id = ?',
+      [Number(alunoId), scope.tenant_id, scope.unit_id]
+    );
+    if (!aluno) throw new AppError('Aluno nao encontrado', 404, 'ALUNO_NAO_ENCONTRADO');
+    const plano = await tx.get('SELECT * FROM plano WHERE id = ? AND tenant_id = ?', [aluno.plano_id, scope.tenant_id]);
+    const dia = Number(aluno.dia_vencimento);
+    if (aluno.status !== 'ativo' || !plano || !isPlanoAvulso(plano) || !Number.isInteger(dia) || dia < 1 || dia > 31) {
+      throw new AppError('Aluno sem plano mensal manual ativo e vencimento valido', 409, 'ALUNO_SEM_PLANO_MENSAL_ATIVO');
+    }
+    await validarAlunoCobravel(aluno.id, scope, tx);
+
+    const hoje = dataLocalISO();
+    const mesAtual = vencimentoAncorado(hoje, dia);
+    const deslocamento = hoje < mesAtual ? -1 : 0;
+    const inicioCiclo = vencimentoAncorado(hoje, dia, deslocamento);
+    const proximoVencimento = vencimentoAncorado(hoje, dia, deslocamento + 1);
+    const fimCiclo = new Date(Date.parse(proximoVencimento) - 86400000).toISOString().slice(0, 10);
+    const parametros = [aluno.id, scope.tenant_id, scope.unit_id];
+    const anterior = await tx.get(
+      `SELECT * FROM mensalidade
+       WHERE aluno_id = ? AND tenant_id = ? AND unit_id = ? AND deleted_at IS NULL
+         AND status != ?
+         AND DATE(COALESCE(NULLIF(NULLIF(data_inicio, ''), '0000-00-00'), vencimento)) <= DATE(?)
+         AND DATE(COALESCE(NULLIF(NULLIF(data_fim, ''), '0000-00-00'), vencimento)) >= DATE(?)
+       ORDER BY id DESC LIMIT 1`,
+      [...parametros, MENSALIDADE_STATUS.CANCELADO, fimCiclo, inicioCiclo]
+    );
+    if (anterior) return { mensalidade: anterior, criada: false };
+
+    // Uma cobrança cancelada não inicia o contrato nem tira o proporcional da primeira emissão.
+    const historico = await tx.get(
+      `SELECT id FROM mensalidade
+       WHERE aluno_id = ? AND tenant_id = ? AND unit_id = ?
+         AND COALESCE(status, '') != ?
+       LIMIT 1`,
+      [...parametros, MENSALIDADE_STATUS.CANCELADO]
+    );
+    const inicio = historico ? inicioCiclo : hoje;
+    const preview = calcularPreviewContratacaoRenovacao({ aluno, plano, data_inicio: inicio });
+    const dias = (Date.parse(proximoVencimento) - Date.parse(inicio)) / 86400000;
+    const diasCiclo = (Date.parse(proximoVencimento) - Date.parse(inicioCiclo)) / 86400000;
+    const base = Math.round(paraCentavos(preview.valor_base) * dias / diasCiclo);
+    const valor = Math.round(paraCentavos(preview.valor_cobrado) * dias / diasCiclo);
+    if (valor <= 0) throw new AppError('Valor da cobranca invalido', 400, 'VALOR_COBRADO_INVALIDO');
+
+    await FechamentoMensalService.assertPeriodoEditavelPorData(inicio, 'emissao de mensalidade padrao', tx, scope);
+    const result = await tx.run(
+      `INSERT INTO mensalidade
+        (aluno_id, plano_id, valor_cobrado, desconto_aplicado, status, data_inicio, data_fim, vencimento, tenant_id, unit_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [aluno.id, plano.id, deCentavos(valor), deCentavos(base - valor), MENSALIDADE_STATUS.EM_ABERTO,
+        inicio, fimCiclo, inicio, scope.tenant_id, scope.unit_id]
+    );
+    const mensalidade = await tx.get('SELECT * FROM mensalidade WHERE id = ?', [result.lastID]);
+    await FinanceiroService.reconciliarLancamentoAgregadoMensalidade(mensalidade, tx);
+    await AuditService.logAction({
+      actor,
+      action: 'emitir_mensalidade_padrao',
+      module: 'mensalidades',
+      recordType: 'mensalidade',
+      recordId: mensalidade.id,
+      after: mensalidade,
+      tenant_id: scope.tenant_id,
+      unit_id: scope.unit_id,
+    }, tx);
+    return { mensalidade, criada: true };
+  });
+}
+
 async function listarMensalidades(filtros = {}, scope = null) {
   let sql = `
     SELECT m.*, a.nome AS aluno_nome, p.nome AS plano_nome
@@ -306,44 +392,54 @@ async function listarAlunosComMensalidades(scope = null) {
   return alunos;
 }
 
-async function atualizarMensalidade(id, payload = {}, scope = null) {
+async function atualizarMensalidade(id, payload = {}, scope = null, actor = null) {
   const mensalidadeId = Number(id);
   if (!mensalidadeId) throw new AppError('ID invalido', 400, 'MENSALIDADE_ID_INVALIDO');
 
-  const atual = scope?.tenant_id && scope?.unit_id
-    ? await runGet('SELECT * FROM mensalidade WHERE id = ? AND tenant_id = ? AND unit_id = ?', [mensalidadeId, scope.tenant_id, scope.unit_id])
-    : await runGet('SELECT * FROM mensalidade WHERE id = ?', [mensalidadeId]);
-  if (!atual || atual.deleted_at) throw new AppError('Mensalidade nao encontrada', 404, 'MENSALIDADE_NAO_ENCONTRADA');
-
-  const valor = toMoney(payload.valor_cobrado ?? atual.valor_cobrado);
-  const desconto = toMoney(payload.desconto_aplicado ?? atual.desconto_aplicado) ?? 0;
-  const venc = isISODate(payload.vencimento || atual.vencimento)
-    ? (payload.vencimento || atual.vencimento)
-    : atual.vencimento;
-  const statusNormalizado = payload.status ? validarStatusMensalidade(payload.status) : atual.status;
-
-  // P10: a edicao so muda cobertura e observacoes quando esses campos vem no
-  // payload. Antes, toda edicao recalculava a cobertura pela regra de 30 dias
-  // (desfazendo pacotes e contratacoes) e apagava observacoes nao enviadas.
-  const pedeInicio = hasOwn(payload, 'data_inicio');
-  const pedeFim = hasOwn(payload, 'data_fim');
-  let inicioCiclo = atual.data_inicio;
-  let dataFim = atual.data_fim;
-  if (pedeInicio || pedeFim) {
-    inicioCiclo = pedeInicio ? payload.data_inicio : atual.data_inicio;
-    dataFim = pedeFim ? payload.data_fim : atual.data_fim;
-    if (!isISODate(inicioCiclo) || !isISODate(dataFim) || inicioCiclo > dataFim) {
-      throw new AppError(
-        'data_inicio e data_fim devem ser datas AAAA-MM-DD com data_inicio <= data_fim',
-        400,
-        'MENSALIDADE_COBERTURA_INVALIDA'
-      );
-    }
-  }
-  const observacoes = hasOwn(payload, 'observacoes') ? (payload.observacoes ?? '') : atual.observacoes;
-
   return runTransaction(async (tx) => {
+    const atual = scope?.tenant_id && scope?.unit_id
+      ? await tx.get('SELECT * FROM mensalidade WHERE id = ? AND tenant_id = ? AND unit_id = ?', [mensalidadeId, scope.tenant_id, scope.unit_id])
+      : await tx.get('SELECT * FROM mensalidade WHERE id = ?', [mensalidadeId]);
+    if (!atual || atual.deleted_at) throw new AppError('Mensalidade nao encontrada', 404, 'MENSALIDADE_NAO_ENCONTRADA');
+
+    const valor = toMoney(payload.valor_cobrado ?? atual.valor_cobrado);
+    const desconto = toMoney(payload.desconto_aplicado ?? atual.desconto_aplicado) ?? 0;
+    const venc = isISODate(payload.vencimento || atual.vencimento)
+      ? (payload.vencimento || atual.vencimento)
+      : atual.vencimento;
+    const statusNormalizado = payload.status ? validarStatusMensalidade(payload.status) : atual.status;
+
+    // P10: a edicao so muda cobertura e observacoes quando esses campos vem no
+    // payload. Antes, toda edicao recalculava a cobertura pela regra de 30 dias
+    // (desfazendo pacotes e contratacoes) e apagava observacoes nao enviadas.
+    const pedeInicio = hasOwn(payload, 'data_inicio');
+    const pedeFim = hasOwn(payload, 'data_fim');
+    let inicioCiclo = atual.data_inicio;
+    let dataFim = atual.data_fim;
+    if (pedeInicio || pedeFim) {
+      inicioCiclo = pedeInicio ? payload.data_inicio : atual.data_inicio;
+      dataFim = pedeFim ? payload.data_fim : atual.data_fim;
+      if (!isISODate(inicioCiclo) || !isISODate(dataFim) || inicioCiclo > dataFim) {
+        throw new AppError(
+          'data_inicio e data_fim devem ser datas AAAA-MM-DD com data_inicio <= data_fim',
+          400,
+          'MENSALIDADE_COBERTURA_INVALIDA'
+        );
+      }
+    }
+    const observacoes = hasOwn(payload, 'observacoes') ? (payload.observacoes ?? '') : atual.observacoes;
+
+    if (actor) {
+      await FechamentoMensalService.assertPeriodoEditavelPorData(atual.vencimento, 'edicao de mensalidade', tx, scope);
+    }
     await FechamentoMensalService.assertPeriodoEditavelPorData(venc, 'edicao de mensalidade', tx, scope);
+    if (actor && (valor < Number(atual.valor_cobrado) || desconto > Number(atual.desconto_aplicado || 0))) {
+      throw new AppError('Use o fluxo de desconto excepcional', 409, 'USAR_DESCONTO_EXCEPCIONAL');
+    }
+    if (actor && isMensalidadeComEfeitoPago(atual.status)
+      && (valor !== Number(atual.valor_cobrado) || (statusNormalizado !== atual.status && statusNormalizado !== MENSALIDADE_STATUS.CANCELADO))) {
+      throw new AppError('Mensalidade com pagamento exige reversao aprovada', 409, 'REVERSAO_APROVACAO_NECESSARIA');
+    }
 
     if (payload.status && statusNormalizado === MENSALIDADE_STATUS.CANCELADO) {
       await neutralizarLancamentosDerivadosCancelaveis(tx, atual, scope);
@@ -357,6 +453,56 @@ async function atualizarMensalidade(id, payload = {}, scope = null) {
     );
 
     return tx.get('SELECT * FROM mensalidade WHERE id = ?', [mensalidadeId]);
+  });
+}
+
+function motivoDesconto(motivo) {
+  const texto = typeof motivo === 'string' ? motivo.trim() : '';
+  if (!texto) throw new AppError('Informe o motivo do desconto', 400, 'MOTIVO_OBRIGATORIO');
+  return texto;
+}
+
+async function concederDesconto(id, payload, actor, scope) {
+  const desconto = paraCentavos(payload.desconto);
+  const valorEsperado = paraCentavos(payload.valor_cobrado_esperado);
+  const motivo = motivoDesconto(payload.motivo);
+  if (desconto === null || desconto <= 0 || valorEsperado === null || valorEsperado <= 0) {
+    throw new AppError('Informe um desconto valido', 400, 'DESCONTO_INVALIDO');
+  }
+  return runTransaction(async (tx) => {
+    const before = await tx.get(
+      'SELECT * FROM mensalidade WHERE id = ? AND tenant_id = ? AND unit_id = ? AND deleted_at IS NULL',
+      [id, scope.tenant_id, scope.unit_id]
+    );
+    if (!before) throw new AppError('Mensalidade nao encontrada', 404, 'MENSALIDADE_NAO_ENCONTRADA');
+    if (valorEsperado !== paraCentavos(before.valor_cobrado)) {
+      throw new AppError('O valor da cobranca mudou. Atualize antes de conceder o desconto.', 409, 'DESCONTO_VALOR_ALTERADO');
+    }
+    const valor = valorEsperado - desconto;
+    if (!['em_aberto', 'vencido'].includes(before.status) || valor <= 0 || before.reversao_controlada_id) {
+      throw new AppError('Desconto requer cobranca em aberto e saldo positivo', 409, 'DESCONTO_NAO_APLICAVEL');
+    }
+    const pagamento = await tx.get('SELECT id FROM pagamento WHERE mensalidade_id = ? LIMIT 1', [before.id]);
+    if (pagamento) throw new AppError('Cobranca com pagamento nao pode receber desconto', 409, 'DESCONTO_NAO_APLICAVEL');
+    await FechamentoMensalService.assertPeriodoEditavelPorData(before.vencimento, 'desconto excepcional', tx, scope);
+    const lancamentos = await listarLancamentosDerivadosAtivos(tx, before, scope);
+    for (const lancamento of lancamentos) {
+      if (isLancamentoPago(lancamento)) {
+        throw new AppError('Cobranca com lancamento pago nao pode receber desconto', 409, 'DESCONTO_NAO_APLICAVEL');
+      }
+      await FechamentoMensalService.assertPeriodoEditavelPorData(lancamento.data_lancamento, 'desconto excepcional', tx, scope);
+      await tx.run('UPDATE conta_financeira SET valor = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [deCentavos(valor), lancamento.id]);
+    }
+    await tx.run(
+      'UPDATE mensalidade SET valor_cobrado = ?, desconto_aplicado = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [deCentavos(valor), deCentavos((paraCentavos(before.desconto_aplicado) || 0) + desconto), before.id]
+    );
+    const after = await tx.get('SELECT * FROM mensalidade WHERE id = ?', [before.id]);
+    await AuditService.logAction({
+      actor, action: 'conceder_desconto_excepcional', module: 'mensalidades', recordType: 'mensalidade',
+      recordId: before.id, before, after, metadata: { motivo }, tenant_id: scope.tenant_id, unit_id: scope.unit_id,
+    }, tx);
+    return after;
   });
 }
 
@@ -648,6 +794,9 @@ async function registrarPagamento(payload = {}, actor, scope = null, client = nu
 
 module.exports = {
   criarMensalidade,
+  emitirMensalidadePadrao,
+  concederDesconto,
+  motivoDesconto,
   listarMensalidades,
   listarMensalidadesPorAluno,
   listarAlunosComMensalidades,

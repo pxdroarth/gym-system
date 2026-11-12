@@ -188,24 +188,22 @@ async function negar(label, fotoArgs, chamada, statusEsperado, codigoEsperado) {
   await negar('owner reverte lancamento DERIVADO da venda por /reversoes/contas-financeiras', fv,
     () => req('POST', `/reversoes/contas-financeiras/${lancVendaA.id}`, { token: owner.token, unit: matriz, body: { motivo: 'derivado' } }), 409, 'CONTA_FINANCEIRA_DERIVADA_PROTEGIDA');
 
-  // autorizadas continuam funcionando
-  let antes = await q1('SELECT estoque FROM produto WHERE id = ?', [prodA.id]);
-  let r = await req('POST', `/reversoes/vendas/${vendaA.id}`, { token: financeiro.token, body: { motivo: 'S1P0: devolucao autorizada' } });
-  let depois = await q1('SELECT estoque FROM produto WHERE id = ?', [prodA.id]);
-  const revV = r.j?.data?.reversao;
-  check('financeiro (Matriz) reverte venda por /reversoes/vendas -> 200', r.s === 200, `${r.s} ${r.code || ''}`);
-  check('estoque volta as 2 unidades', depois.estoque === antes.estoque + 2, `${antes.estoque} -> ${depois.estoque}`);
-  check('reversao grava a Rede e a Unidade da operacao', revV && Number(revV.tenant_id) > 0 && Number(revV.unit_id) === matriz, revV && { tenant_id: revV.tenant_id, unit_id: revV.unit_id });
-  check('lancamento inverso de R$ 50 criado', r.j?.data?.lancamento_inverso && Number(r.j.data.lancamento_inverso.valor) === 50, r.j?.data?.lancamento_inverso?.valor);
-  r = await req('POST', `/reversoes/contas-financeiras/${contaA}`, { token: owner.token, unit: matriz, body: { motivo: 'S1P0: conta manual' } });
-  check('owner reverte conta manual por /reversoes/contas-financeiras -> 200', r.s === 200 && Number(r.j?.data?.reversao?.unit_id) === matriz, `${r.s} ${r.code || ''}`);
-  r = await req('POST', `/reversoes/mensalidades/${mensA.id}`, { token: owner.token, unit: matriz, body: { motivo: 'S1P0: mensalidade legada' } });
-  check('owner reverte mensalidade legada por /reversoes/mensalidades -> 200', r.s === 200 && r.j?.data?.mensalidade?.status === 'em_reversao_controlada', `${r.s} ${r.code || r.j?.data?.mensalidade?.status}`);
-  const vendaA2 = await vender(matriz, prodA.id, 1);
-  r = await req('POST', `/vendas-produtos/${vendaA2.id}/reverter`, { token: owner.token, unit: matriz, body: { motivo: 'S1P0: rota nova' } });
-  check('rota nova /vendas-produtos/:id/reverter continua funcionando -> 200', r.s === 200, `${r.s} ${r.code || ''}`);
-  r = await req('POST', `/vendas-produtos/${vendaA2.id}/reverter`, { token: owner.token, unit: matriz, body: { motivo: 'de novo' } });
-  check('segunda reversao da mesma venda -> 409 VENDA_JA_REVERTIDA', r.s === 409 && r.code === 'VENDA_JA_REVERTIDA', `${r.s} ${r.code}`);
+  // A DN-3 retirou a execucao direta. As fotos comprovam ausencia de efeitos.
+  const bloqueio = 'REVERSAO_APROVACAO_NECESSARIA';
+  const motivo = { motivo: 'Solicitacao sem aprovacao registrada' };
+  await negar('financeiro nao reverte venda sem aprovacao', fv,
+    () => req('POST', `/reversoes/vendas/${vendaA.id}`, { token: financeiro.token, body: motivo }), 409, bloqueio);
+  await negar('owner nao reverte conta manual sem aprovacao', fc,
+    () => req('POST', `/reversoes/contas-financeiras/${contaA}`, { token: owner.token, unit: matriz, body: motivo }), 409, bloqueio);
+  await negar('owner nao exclui conta paga sem aprovacao', fc,
+    () => req('DELETE', `/contasFinanceiras/${contaA}`, { token: owner.token, unit: matriz, body: motivo }), 409, bloqueio);
+  await negar('owner nao reverte mensalidade legada sem aprovacao', fm,
+    () => req('POST', `/reversoes/mensalidades/${mensA.id}`, { token: owner.token, unit: matriz, body: motivo }), 409, bloqueio);
+  for (const rota of ['vendas-produtos', 'vendasProdutos']) {
+    await negar(`${rota} respeita aprovacao`, fv,
+      () => req('POST', `/${rota}/${vendaA.id}/reverter`, { token: owner.token, unit: matriz, body: motivo }), 409, bloqueio);
+  }
+  let r;
 
   // =====================================================================
   requisito('FV-05 upload');
@@ -306,14 +304,14 @@ async function negar(label, fotoArgs, chamada, statusEsperado, codigoEsperado) {
   check(`setup: ${mes}/${ano} fechado na Matriz (Unidade A)`, r.s === 200 && String(r.j?.fechamento?.status).startsWith('fechado'), `${r.s} ${r.j?.fechamento?.status}`);
   await tentativaVenda('venda na Matriz com o mes fechado na Matriz', matriz, prodM.id, 423, 'PERIODO_FECHADO');
   await tentativaVenda('venda na Filial (Unidade B, mes aberto)', filial, prodF.id, 201);
-  r = await req('POST', `/fechamento-mensal/${ano}/${mes}/reabrir`, { token: owner.token, unit: matriz });
+  r = await req('POST', `/fechamento-mensal/${ano}/${mes}/reabrir`, { token: owner.token, unit: matriz, body: { motivo: 'Conferencia no smoke L02' } });
   check('setup: Matriz reaberta', r.s === 200, r.s);
 
   r = await req('POST', `/fechamento-mensal/${ano}/${mes}/fechar`, { token: owner.token, unit: filial });
   check(`setup: ${mes}/${ano} fechado so na Filial`, r.s === 200, r.s);
   await tentativaVenda('venda na Filial com o mes fechado na Filial', filial, prodF.id, 423, 'PERIODO_FECHADO');
   await tentativaVenda('venda na Matriz (mes aberto na Matriz, fechado na Filial)', matriz, prodM.id, 201);
-  r = await req('POST', `/fechamento-mensal/${ano}/${mes}/reabrir`, { token: owner.token, unit: filial });
+  r = await req('POST', `/fechamento-mensal/${ano}/${mes}/reabrir`, { token: owner.token, unit: filial, body: { motivo: 'Conferencia no smoke L02' } });
   check('setup: Filial reaberta (base volta ao estado aberto)', r.s === 200, r.s);
 
   // ---------- resumo ----------

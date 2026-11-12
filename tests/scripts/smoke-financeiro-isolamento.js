@@ -14,9 +14,9 @@
 //      lancamento (inclusive registro antigo); lancamentos automaticos e
 //      contrapartidas sem categoria valida ficam sem categoria, com valor e
 //      origem preservados;
-//   R4 estorno e fechamento: recepcao 403 ao estornar; financeiro estorna no
-//      proprio escopo e recebe 403 ao reabrir; owner reabre; negativas
-//      preservam pagamento e fechamento.
+//   R4 estorno e fechamento: recepcao 403 ao estornar; financeiro recebe 409
+//      no estorno direto e 403 para fechar/reabrir; owner reabre com motivo;
+//      negativas preservam pagamento e fechamento.
 //
 // Pre-requisitos: base DESCARTAVEL (`npm run db:seed:dev`) e a API rodando sobre
 // ela. Para simular um registro antigo (R3), o smoke grava UMA linha direto na
@@ -273,15 +273,15 @@ const fotoConta = (id) => q1('SELECT * FROM conta_financeira WHERE id = ?', [id]
     check(`${a.tag}: lancamento da venda sem categoria de outra Rede, valor 60 e origem preservados`, (await catOk(lv)) && lv.valor === 60 && lv.origem === 'venda_produto', lv);
     check(`${a.tag}: lancamento do pagamento sem categoria de outra Rede, valor 80 e origem preservados`, (await catOk(lp)) && lp.valor === 80 && lp.origem === 'pagamento_mensalidade', lp);
   }
-  // Contrapartida de estorno de um registro antigo com categoria de outra Rede.
+  const fotoContrapartidas = () => q1("SELECT COUNT(*) AS n FROM conta_financeira WHERE origem = 'reversao_controlada'");
+  const antesContrapartidas = await fotoContrapartidas();
   r = await req('POST', `/contas-financeiras/${antigoId}/reverter`, { token: beta.owner.token, body: { motivo: 'S1 fin: contrapartida' } });
-  const inv = r.j?.data?.lancamento_inverso;
-  check('contrapartida do estorno do registro antigo: sem categoria da Alfa, valor 45, origem reversao_controlada',
-    r.s === 200 && inv && inv.plano_contas_id == null && Number(inv.valor) === 45 && inv.origem === 'reversao_controlada', `${r.s} ${inv ? JSON.stringify({ plano: inv.plano_contas_id, valor: inv.valor, origem: inv.origem }) : r.code}`);
+  check('conta antiga nao gera contrapartida sem aprovacao',
+    r.s === 409 && r.code === 'REVERSAO_APROVACAO_NECESSARIA', `${r.s} ${r.code}`);
   r = await req('POST', `/vendas-produtos/${beta.venda}/reverter`, { token: beta.owner.token, body: { motivo: 'S1 fin: venda' } });
-  const invV = r.j?.data?.lancamento_inverso;
-  const catInvV = invV?.plano_contas_id == null || (await q1('SELECT 1 AS ok FROM plano_contas WHERE id = ? AND tenant_id = ?', [invV.plano_contas_id, beta.tenant]));
-  check('contrapartida do estorno da venda da Beta: categoria nula ou da Beta, valor 60', r.s === 200 && catInvV && Number(invV.valor) === 60, `${r.s} ${invV ? invV.plano_contas_id : r.code}`);
+  check('venda nao gera contrapartida sem aprovacao',
+    r.s === 409 && r.code === 'REVERSAO_APROVACAO_NECESSARIA' && (await fotoContrapartidas()).n === antesContrapartidas.n,
+    `${r.s} ${r.code}`);
 
   // =====================================================================
   requisito('R4 estorno e fechamento');
@@ -295,7 +295,7 @@ const fotoConta = (id) => q1('SELECT * FROM conta_financeira WHERE id = ?', [id]
     r = await req('POST', `/pagamentos/${beta.pagamento}/estornar`, { token: alfa.financeiro.token, body: { motivo: 'outra rede' } });
     check('financeiro da Alfa estorna pagamento da Beta -> 404', r.s === 404, `${r.s} ${r.code || ''}`);
     r = await req('POST', `/pagamentos/${alfa.pagamento}/estornar`, { token: alfa.financeiro.token, body: { motivo: 'S1 fin: estorno autorizado' } });
-    check('financeiro estorna pagamento da propria unidade -> 200', r.s === 200 && r.j?.status_mensalidade === 'em_aberto', `${r.s} ${r.code || r.j?.status_mensalidade}`);
+    check('financeiro aguarda aprovacao, pagamento preservado', r.s === 409 && r.code === 'REVERSAO_APROVACAO_NECESSARIA' && antes === await fotoPag(), `${r.s} ${r.code || r.j?.status_mensalidade}`);
 
     const [ano, mes] = [Number(hoje.slice(0, 4)), Number(hoje.slice(5, 7))];
     const fotoFech = async () => JSON.stringify(await q1('SELECT status, reaberto_em FROM fechamento_mensal WHERE ano = ? AND mes = ? AND unit_id = ?', [ano, mes, alfa.unit]));
@@ -304,13 +304,17 @@ const fotoConta = (id) => q1('SELECT * FROM conta_financeira WHERE id = ?', [id]
     r = await req('POST', `/fechamento-mensal/${ano}/${mes}/fechar`, { token: alfa.owner.token });
     check('owner fecha o periodo da propria unidade -> 200', r.s === 200 && String(r.j?.fechamento?.status).startsWith('fechado'), `${r.s} ${r.j?.fechamento?.status}`);
     antes = await fotoFech();
-    r = await req('POST', `/fechamento-mensal/${ano}/${mes}/reabrir`, { token: alfa.financeiro.token });
+    r = await req('POST', `/fechamento-mensal/${ano}/${mes}/reabrir`, { token: alfa.financeiro.token, body: { motivo: 'Conferencia no smoke L02' } });
     check('financeiro tenta reabrir -> 403, fechamento preservado', r.s === 403 && antes === await fotoFech(), `${r.s} ${r.code || ''}`);
-    r = await req('POST', `/fechamento-mensal/${ano}/${mes}/reabrir`, { token: alfa.recepcao.token });
+    r = await req('POST', `/fechamento-mensal/${ano}/${mes}/reabrir`, { token: alfa.recepcao.token, body: { motivo: 'Conferencia no smoke L02' } });
     check('recepcao tenta reabrir -> 403, fechamento preservado', r.s === 403 && antes === await fotoFech(), `${r.s} ${r.code || ''}`);
-    r = await req('POST', `/fechamento-mensal/${ano}/${mes}/reabrir`, { token: beta.owner.token });
-    check('owner da Beta reabre o mes (na propria unidade) sem afetar a Alfa', antes === await fotoFech(), `${r.s} ${r.code || ''}`);
-    r = await req('POST', `/fechamento-mensal/${ano}/${mes}/reabrir`, { token: alfa.owner.token });
+    r = await req('POST', `/fechamento-mensal/${ano}/${mes}/fechar`, { token: beta.owner.token, unit: beta.unit });
+    check('owner da Beta fecha o mes na propria unidade', r.s === 200 && String(r.j?.fechamento?.status).startsWith('fechado'), `${r.s} ${r.code || ''}`);
+    r = await req('POST', `/fechamento-mensal/${ano}/${mes}/reabrir`, { token: beta.owner.token, unit: beta.unit, body: { motivo: 'Conferencia no smoke L02' } });
+    check('owner da Beta reabre o mes na propria unidade sem afetar a Alfa',
+      r.s === 200 && r.j?.status === 'reaberto' && Number(r.j?.unit_id) === beta.unit && antes === await fotoFech(),
+      `${r.s} ${r.code || ''}`);
+    r = await req('POST', `/fechamento-mensal/${ano}/${mes}/reabrir`, { token: alfa.owner.token, body: { motivo: 'Conferencia no smoke L02' } });
     check('owner reabre o periodo da propria unidade -> 200', r.s === 200 && r.j?.status === 'reaberto', `${r.s} ${r.j?.status || r.code}`);
   }
 

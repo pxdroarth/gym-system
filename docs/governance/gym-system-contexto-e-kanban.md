@@ -34,7 +34,7 @@ Troque `L01` pelo ID autorizado na execução seguinte.
 
 | Lote | Ponto para decisão do dono do produto |
 | --- | --- |
-| L02 | DN-3. Permissões por ação para recepção, gestor, financeiro e responsáveis por estorno, fechamento e reabertura. |
+| L02 | DN-3 aprovada em 10/11/2026. Veja [requisitos e estados da entrega](requisitos-base.md#dn-3--permissões-operacionais-do-l02). |
 | L03–L04 | Regras ainda abertas da renovação manual, vencimento, cancelamento, correções após fechamento e vendas. Consulte a GS-07 e os registros de decisão antes de formular opções. |
 | L07–L09 | Tratamento de cadastros duplicados, seleção das unidades do plano, momento em que mudanças afetam um ciclo pago, dependentes e transferência de unidade do contrato. |
 | L11–L12 | Oferta SaaS, ativação, atraso, suspensão e primeiro gateway. |
@@ -56,12 +56,12 @@ Registre cada decisão com data, cenário, regra aprovada e lotes afetados. Quan
 
 ## Kanban inicial
 
-O L01 foi executado em 10/11/2026 e está em revisão, aguardando o aceite do dono (ver o registro de execução). Os rascunhos do L02 ao L04 ficam na fila até o aceite das dependências e a definição das regras pertinentes. As dependências abaixo organizam o trabalho. Ajuste a ordem quando houver evidência ou decisão que justifique a mudança.
+O dono aprovou o L01, integrado em `ba5e23c`. O L02 segue para revisão da implementação e das evidências. L03 e L04 dependem dos aceites e regras de seus fluxos. As dependências abaixo organizam o trabalho. Ajuste a ordem quando houver evidência ou decisão que justifique a mudança.
 
 | ID | Lote | Depende de | Estado | Aceite resumido |
 | --- | --- | --- | --- | --- |
-| L01 | Isolamento e acesso ao Financeiro | Base do diagnóstico | Em revisão | Duas redes isoladas na API. Papel e categoria de conta validados no servidor. |
-| L02 | Permissões operacionais por função | L01, DN-3 | Fila | A matriz aprovada de ações por perfil bate com a API e com as telas. |
+| L01 | Isolamento e acesso ao Financeiro | Base do diagnóstico | Concluído (`ba5e23c`) | Duas redes isoladas na API. Papel e categoria de conta validados no servidor. |
+| L02 | Permissões operacionais por função | L01, DN-3 | Em revisão | A matriz aprovada de ações por perfil bate com a API e com as telas. |
 | L03 | Contrato, renovação manual e entrada | L02, decisões da GS-07 | Fila | Aluno contrata, paga, renova e tem acesso decidido conforme a cobertura. |
 | L04 | Contas, venda, estoque e fechamento | L02–L03, regras financeiras | Fila | Validação A-13, vendas e movimentações deixam saldo, estoque e fechamento conciliáveis. |
 | L05 | Homologação do piloto de uma unidade | L01–L04 | Fila | Fluxo de cadastro ao fechamento demonstrado com dados fictícios e perfis da operação. |
@@ -97,7 +97,7 @@ O L01 foi executado em 10/11/2026 e está em revisão, aguardando o aceite do do
 
 ### L02 · Permissões operacionais por função
 
-> Confirme o aceite do L01. Compare a matriz DN-3, a visibilidade na interface e as verificações reais nas rotas. Se faltar decisão sobre um papel, descreva o cenário e as opções para o dono aprovar. Com a matriz aprovada, ajuste as rotas operacionais necessárias, incluindo produtos e estoque. Teste leitura e mutações autorizadas e recusadas por perfil, em duas redes fictícias. Cubra estorno, fechamento e reabertura no escopo da unidade. Confira que as recusas deixam os registros intactos e atualize a matriz e a cobertura da API.
+> Aplique a [DN-3 aprovada](requisitos-base.md#dn-3--permissões-operacionais-do-l02) nas rotas e telas existentes. Teste ações permitidas e recusadas em duas Redes fictícias e preserve o escopo da unidade. Registre o estado de cada fluxo e os sublotes necessários.
 
 ### L03 · Contrato, renovação manual e entrada
 
@@ -124,7 +124,7 @@ Para cada entrega, registre ID do lote, data, branch, commit-base, arquivos alte
 
 ### L01 · Isolamento e acesso ao Financeiro
 
-- **Estado:** Em revisão desde 10/11/2026. Aguarda aceite, commit e push do dono.
+- **Estado:** Concluído, com aprovação do dono em 10/11/2026.
 - **Branch e base:** `s1-financeiro-isolamento`, criada a partir da `main` no commit `89903bd`. Alterações sem commit.
 - **Arquivos alterados:** `backend/constants/userRoles.js`, `backend/server.js`, `backend/routes/contasFinanceiras.js`, `backend/routes/ativos.js`, `backend/routes/orcamento.js`, `backend/routes/reversoes.js`, `backend/services/FinanceiroService.js`, `backend/services/ReversaoControladaService.js`, `docs/governance/rbac-route-coverage.md`, `tests/scripts/README.md`, `tests/scripts/smoke-financeiro-isolamento.js` (novo) e este arquivo.
 - **Regra aplicada:** permissão `financeiro:acessar` (`platform_admin`, `owner`, `admin`, `financeiro`) em dashboard e indicadores, contas, plano de contas, ativos, orçamento e fechamento, com os aliases. Estorno, fechar, reabrir e sincronizar mantêm a permissão própria. `plano_contas_id` validado na Rede, na transação da gravação (`422 PLANO_CONTAS_INVALIDO`). Nome da categoria só aparece quando ela é da Rede do lançamento. Lançamentos automáticos e contrapartidas de estorno sem categoria válida da Rede ficam sem categoria, com valor e origem preservados. Ativos e orçamento de outra Rede pelo ID respondem `404`.
@@ -140,8 +140,18 @@ Para cada entrega, registre ID do lote, data, branch, commit-base, arquivos alte
 - **Regressão (depois):** `smoke-identidade` 71/71, `smoke-s1-p0` 33/33, 31/31 e 12/12, `smoke-p1-pagamentos` 42/42, `smoke-a06-conta-fechamento` 18/18, checagem HTTP da GS-01 sem falhas, nenhum erro 500.
 - **Comandos:** em `tests/scripts/README.md`, seção `smoke-financeiro-isolamento.js`.
 - **Pendências fora do lote:** mudanças de papéis da DN-3 (L02), GS-02 (L06 a L09), categorias de receita lançadas em contas de despesa na Rede do seed (A-10, a tratar no L04) e a `matriz-permissoes.md`, que ainda não descreve o papel `financeiro` (L02).
-- **Decisão do dono:** pendente.
-- **Commit resultante:** a preencher após a integração.
+- **Decisão do dono:** L01 aprovado.
+- **Commit resultante:** `ba5e23c`, presente em `main` e na referência local de `origin/main`.
+
+### L02 · Permissões operacionais por função
+
+- **Estado:** Em revisão em 10/11/2026. Branch `codex/l02-permissoes-operacionais`, base `ba5e23c`. Implementação e evidências aguardam revisão do dono.
+- **Regra de produto:** [DN-3 aprovada, cobertura e dependências](requisitos-base.md#dn-3--permissões-operacionais-do-l02). [Matriz por ação](matriz-permissoes.md#8-dn-3-aprovada--ações-e-escopo) e [cobertura de rotas](rbac-route-coverage.md#l02--cobertura-da-dn-3).
+- **Sublotes:** aprovação de estorno e novas telas de caixa no L04. Solicitações de desconto e campanhas após os fluxos de cobrança do L03, antes de liberar campanhas. Catálogo local em L08 e entrada multiunidade em L08–L09. Concessões explícitas de alcance de Rede e controles master antes da publicação no L15. Cada dependência tem critérios de aceite na DN-3.
+- **Evidência final em base descartável com Node 22.19.0:** L02 HTTP e SQLite 111/111, L02 ciclos com relógio controlado 18/18, identidade 71/71, S1-P0 37/37 + 30/30 + 12/12, P1 41/41, isolamento de transação 11/11, A-06 18/18, isolamento financeiro 102/102, F0 20/20 e cobertura 6/6. Build de produção do frontend aprovado. A verificação em Edge das telas e do bloqueio por URL direta pertence à rodada anterior.
+- **Correções em revisão:** reemitir a primeira cobrança padrão após cancelamento sem pagamento no mesmo dia mantém o proporcional e o vencimento. O cancelamento e o lançamento baixado ficam no histórico. O limite do plano é avaliado por titular e seus dependentes quando o dono o reduz. O teste cobre edição do nome entre unidades e exclusão recusada para plano em uso na Filial.
+- **Limite da evidência:** três emissões simultâneas para o mesmo aluno e ciclo chegaram a um único processo da API, no mesmo SQLite. A prova inclui uma cobrança, um lançamento a receber e nenhum pagamento criado pela emissão. O teste de datas chama o serviço real em sequência com relógio de negócio controlado. Concorrência entre instâncias está fora da rodada. [Comandos, adaptação dos smokes e casos pendentes](../../tests/scripts/README.md#smoke-l02js-dn-3--permissões-operacionais).
+- **Liberação:** estornos permanecem bloqueados até a entrega do fluxo de solicitação, aprovação e execução. O aceite desse fluxo precisa demonstrar execução positiva e contrapartida financeira. A homologação do piloto continua no L05, após os aceites operacionais de L03 e L04.
 
 ## Fontes para a revisão técnica
 

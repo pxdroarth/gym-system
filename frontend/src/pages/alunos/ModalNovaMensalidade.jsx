@@ -27,6 +27,7 @@ export default function ModalNovaMensalidade({ open, aluno, onClose, onSuccess }
     valor_cobrado: '',
     desconto_aplicado: 0,
     observacoes: '',
+    motivo_desconto: '',
   });
   const [carregando, setCarregando] = useState(false);
 
@@ -48,6 +49,7 @@ export default function ModalNovaMensalidade({ open, aluno, onClose, onSuccess }
         valor_cobrado: form.valor_cobrado ? Number(form.valor_cobrado) : undefined,
         desconto_aplicado: Number(form.desconto_aplicado || 0),
         observacoes: form.observacoes,
+        motivo_desconto: form.motivo_desconto,
       });
 
       toast.success('Mensalidade registrada com sucesso!');
@@ -91,6 +93,7 @@ export default function ModalNovaMensalidade({ open, aluno, onClose, onSuccess }
           onChange={handleChange}
           step="0.01"
         />
+        <Input label="Motivo do desconto excepcional" name="motivo_desconto" value={form.motivo_desconto} onChange={handleChange} />
         <label className="ui-field">
           <span className="ui-field__label">Observações</span>
           <textarea

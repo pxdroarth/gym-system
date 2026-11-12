@@ -1,3 +1,5 @@
+import RoleGate from "../../components/auth/RoleGate";
+import { UI_PERMISSIONS } from "../../utils/permissions";
 import React, { useEffect, useMemo, useState } from "react";
 import { CheckCircle2, CircleSlash, Search, Users, WalletCards } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
@@ -124,9 +126,9 @@ export default function AlunosPage() {
         title="Alunos"
         subtitle="Cadastro, situação operacional e acompanhamento de mensalidades por unidade."
         actions={
-          <Button as={Link} to="/alunos/novo" variant="primary">
-            + Novo Aluno
-          </Button>
+          <RoleGate permission={UI_PERMISSIONS.ALUNOS_EDITAR}>
+            <Button as={Link} to="/alunos/novo" variant="primary">+ Novo Aluno</Button>
+          </RoleGate>
         }
       />
 

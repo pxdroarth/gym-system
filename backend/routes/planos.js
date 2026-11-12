@@ -4,8 +4,9 @@ const { runQuery, runGet, runExecute, runTransaction } = require('../dbHelper');
 const AppError = require('../errors/AppError');
 const AuditService = require('../services/AuditService');
 const { actorWithScope, requireScope } = require('../helpers/scope');
-const { requirePermission } = require('../middlewares/requirePermission');
+const { assertPermission, requirePermission } = require('../middlewares/requirePermission');
 const { PERMISSIONS } = require('../constants/userRoles');
+const { VINCULO_STATUS } = require('../constants/domainStates');
 const {
   calcularPreviewContratacaoRenovacao,
   buscarCoberturaPagaSobreposta,
@@ -42,12 +43,13 @@ function buildPolicyInput(body = {}, current = {}) {
 }
 
 function normalizePlanoPayload(body = {}, current = {}) {
-  const nome = String(body.nome || '').trim();
-  const valor_base = Number(body.valor_base);
-  const descricao = body.descricao ? String(body.descricao).trim() : null;
-  const duracao_em_dias = Number(body.duracao_em_dias || 30);
-  const compartilhado = Number(body.compartilhado ? 1 : 0);
-  const quantidade_max_pessoas = Number(body.quantidade_max_pessoas || 1);
+  const dados = { ...current, ...body };
+  const nome = String(dados.nome || '').trim();
+  const valor_base = Number(dados.valor_base);
+  const descricao = dados.descricao ? String(dados.descricao).trim() : null;
+  const duracao_em_dias = Number(dados.duracao_em_dias || 30);
+  const compartilhado = Number(dados.compartilhado ? 1 : 0);
+  const quantidade_max_pessoas = Number(dados.quantidade_max_pessoas || 1);
   const policyInput = buildPolicyInput(body, current);
   const policy = normalizarPoliticaPlano(policyInput);
 
@@ -150,7 +152,7 @@ router.post('/preview-cobertura', async (req, res, next) => {
 
 router.post(
   '/contratar-renovar',
-  requirePermission(PERMISSIONS.PLANOS_GERENCIAR),
+  requirePermission(PERMISSIONS.PLANOS_CONTRATAR_RENOVAR),
   requirePermission(PERMISSIONS.PAGAMENTOS_REGISTRAR),
   async (req, res, next) => {
   try {
@@ -228,6 +230,10 @@ router.post(
         );
       }
 
+      const motivoDesconto = preview.desconto_manual > 0 || preview.valor_base < Number(plano.valor_base)
+        ? MensalidadeService.motivoDesconto(req.body?.motivo_desconto)
+        : null;
+
       const coberturaSobreposta = await buscarCoberturaPagaSobreposta({
         aluno_id: aluno.id,
         scope,
@@ -268,6 +274,15 @@ router.post(
         vencimento: preview.data_inicio,
         observacoes: buildObservacoesContratacao(req.body),
       }, scope, tx);
+
+      if (motivoDesconto) {
+        assertPermission(req, PERMISSIONS.MENSALIDADES_DESCONTO);
+        await AuditService.logAction({
+          actor, action: 'conceder_desconto_excepcional', module: 'mensalidades', recordType: 'mensalidade',
+          recordId: mensalidade.id, after: mensalidade, metadata: { motivo: motivoDesconto },
+          tenant_id: scope.tenant_id, unit_id: scope.unit_id,
+        }, tx);
+      }
 
       const pagamento = await MensalidadeService.registrarPagamento({
         mensalidade_id: mensalidade.id,
@@ -403,52 +418,63 @@ router.put('/:id', requirePermission(PERMISSIONS.PLANOS_GERENCIAR), async (req, 
 
   try {
     const scope = requireScope(req);
-    const atual = await runGet('SELECT * FROM plano WHERE id = ? AND tenant_id = ?', [id, scope.tenant_id]);
-    if (!atual) return res.status(404).json({ error: 'Plano não encontrado para atualizar' });
+    const atualizado = await runTransaction(async (tx) => {
+      const atual = await tx.get('SELECT * FROM plano WHERE id = ? AND tenant_id = ?', [id, scope.tenant_id]);
+      if (!atual) throw new AppError('Plano não encontrado para atualizar', 404, 'PLANO_NAO_ENCONTRADO');
 
-    const payload = normalizePlanoPayload(req.body, atual);
-    const erro = validarPlano(payload);
-    if (erro) return res.status(400).json({ error: erro });
+      const payload = normalizePlanoPayload(req.body, atual);
+      const erro = validarPlano(payload);
+      if (erro) throw new AppError(erro, 400, 'PLANO_INVALIDO');
 
-    const ocupacao = await runGet(
-      `SELECT COUNT(*) AS total FROM aluno WHERE plano_id = ? AND status = 'ativo' AND tenant_id = ? AND unit_id = ?`,
-      [id, scope.tenant_id, scope.unit_id]
-    );
+      if (payload.quantidade_max_pessoas < Number(atual.quantidade_max_pessoas || 1)) {
+        const grupoAcimaDoLimite = await tx.get(
+          `SELECT titular.id
+           FROM aluno AS titular
+           JOIN plano_associado AS vinculo
+             ON vinculo.responsavel_id = titular.id
+             AND vinculo.tenant_id = titular.tenant_id
+             AND vinculo.unit_id = titular.unit_id
+           WHERE titular.plano_id = ? AND titular.tenant_id = ?
+             AND COALESCE(vinculo.status, 'ativo') != ?
+           GROUP BY titular.id
+           HAVING 1 + COUNT(*) > ?
+           LIMIT 1`,
+          [id, scope.tenant_id, VINCULO_STATUS.ENCERRADO, payload.quantidade_max_pessoas]
+        );
+        if (grupoAcimaDoLimite) {
+          throw new AppError('O novo limite não comporta um titular e seus dependentes vinculados', 400, 'LIMITE_VINCULOS');
+        }
+      }
 
-    if ((ocupacao?.total || 0) > payload.quantidade_max_pessoas) {
-      return res.status(400).json({
-        error: 'Não é possível reduzir quantidade_max_pessoas abaixo do total atual de alunos ativos neste plano'
-      });
-    }
+      await tx.run(
+        `UPDATE plano
+         SET nome = ?, valor_base = ?, descricao = ?, duracao_em_dias = ?, compartilhado = ?, quantidade_max_pessoas = ?,
+             tipo_cobranca = ?, exige_pagamento_ato = ?, gera_divida_automatica = ?,
+             gera_cobertura_apos_pagamento = ?, permite_renovacao_avulsa = ?, desconto_percentual = ?
+         WHERE id = ? AND tenant_id = ?`,
+        [
+          payload.nome,
+          payload.valor_base,
+          payload.descricao,
+          payload.duracao_em_dias,
+          payload.compartilhado,
+          payload.quantidade_max_pessoas,
+          payload.tipo_cobranca,
+          payload.exige_pagamento_ato,
+          payload.gera_divida_automatica,
+          payload.gera_cobertura_apos_pagamento,
+          payload.permite_renovacao_avulsa,
+          payload.desconto_percentual,
+          id,
+          scope.tenant_id,
+        ]
+      );
 
-    await runExecute(
-      `UPDATE plano
-       SET nome = ?, valor_base = ?, descricao = ?, duracao_em_dias = ?, compartilhado = ?, quantidade_max_pessoas = ?,
-           tipo_cobranca = ?, exige_pagamento_ato = ?, gera_divida_automatica = ?,
-           gera_cobertura_apos_pagamento = ?, permite_renovacao_avulsa = ?, desconto_percentual = ?
-       WHERE id = ? AND tenant_id = ?`,
-      [
-        payload.nome,
-        payload.valor_base,
-        payload.descricao,
-        payload.duracao_em_dias,
-        payload.compartilhado,
-        payload.quantidade_max_pessoas,
-        payload.tipo_cobranca,
-        payload.exige_pagamento_ato,
-        payload.gera_divida_automatica,
-        payload.gera_cobertura_apos_pagamento,
-        payload.permite_renovacao_avulsa,
-        payload.desconto_percentual,
-        id,
-        scope.tenant_id,
-      ]
-    );
-
-    const atualizado = await runGet('SELECT * FROM plano WHERE id = ? AND tenant_id = ?', [id, scope.tenant_id]);
+      return tx.get('SELECT * FROM plano WHERE id = ? AND tenant_id = ?', [id, scope.tenant_id]);
+    });
     res.json(atualizado);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error instanceof AppError ? error.statusCode : 500).json({ error: error.message });
   }
 });
 
@@ -459,8 +485,8 @@ router.delete('/:id', requirePermission(PERMISSIONS.PLANOS_GERENCIAR), async (re
   try {
     const scope = requireScope(req);
     const alunosAtivos = await runGet(
-      'SELECT COUNT(*) AS total FROM aluno WHERE plano_id = ? AND tenant_id = ? AND unit_id = ?',
-      [id, scope.tenant_id, scope.unit_id]
+      'SELECT COUNT(*) AS total FROM aluno WHERE plano_id = ? AND tenant_id = ?',
+      [id, scope.tenant_id]
     );
     if ((alunosAtivos?.total || 0) > 0) {
       return res.status(400).json({ error: 'Não é possível excluir um plano vinculado a alunos' });

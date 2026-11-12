@@ -225,9 +225,11 @@ export default function ContasFinanceirasPage() {
                         <Button size="sm" variant="secondary" onClick={() => abrirModal(conta)}>
                           Editar
                         </Button>
-                        <Button size="sm" variant="danger" onClick={() => excluirConta(conta.id)}>
-                          Excluir
-                        </Button>
+                        {conta.status !== "pago" && (
+                          <Button size="sm" variant="danger" onClick={() => excluirConta(conta.id)}>
+                            Excluir
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>

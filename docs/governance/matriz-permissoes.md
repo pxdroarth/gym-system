@@ -74,6 +74,10 @@ Administrador operacional da academia. Tem acesso amplo à operação da própri
 
 Não acessa onboarding global da plataforma. Não administra múltiplas Redes fora do seu escopo.
 
+### financeiro
+
+Confere o fechamento da unidade, acessa o módulo Financeiro e concede desconto excepcional no próprio escopo, com motivo. A execução de estorno pelo financeiro depende da aprovação registrada no fluxo da DN-3.
+
 ### gerente
 
 Perfil de gestão operacional intermediária. Pode acompanhar operação, alunos, mensalidades, produtos e vendas.
@@ -84,7 +88,7 @@ Financeiro completo deve ser restrito ou parcial conforme decisão de negócio. 
 
 Perfil de atendimento diário. Pode consultar/cadastrar alunos e apoiar rotinas operacionais.
 
-Não deve acessar financeiro completo. Não deve acessar Histórico de Atividades completo. Registro de pagamento é uma decisão sensível: se permitido, deve ser operacional, limitado e auditado. Enquanto não houver decisão final, permanece como pendente.
+Não deve acessar financeiro completo. Não deve acessar Histórico de Atividades completo. Pode emitir cobrança padrão calculada pelo servidor e receber pagamentos auditados. Alterações posteriores de plano, vencimento, status e vínculos exigem permissão específica.
 
 ### operador_acesso
 
@@ -97,21 +101,21 @@ Não deve acessar financeiro. Não deve registrar pagamento por padrão. Não de
 | Módulo | platform_admin | owner | admin | gerente | recepção | operador_acesso | Observações |
 |---|---|---|---|---|---|---|---|
 | Dashboard operacional | Total | Escopo Rede | Escopo Rede/Unidade | Escopo Unidade | Leitura/Operação limitada | Leitura limitada | Dashboard comum não deve expor financeiro restrito. |
-| Consolidado da Rede | Total | Leitura / Escopo Rede | Leitura / Escopo Rede | Leitura / Pendente | Não permitido | Não permitido | Consolidado é somente leitura. |
+| Consolidado da Rede | Relatório das unidades autorizadas | Leitura / Rede integral | Leitura / unidades autorizadas | Não permitido | Não permitido | Não permitido | Integral exige permissão de Rede. |
 | Onboarding da Rede | Total | Não permitido | Não permitido | Não permitido | Não permitido | Não permitido | Onboarding é interno da plataforma. |
 | Usuários internos | Total | Escopo Rede | Escopo das suas Unidades | Não permitido | Não permitido | Não permitido | Alterar papel/status/unidades é ação crítica. Regras na seção 7.1 (GS-03). |
 | Alunos | Total | Escopo Rede | Escopo Rede/Unidade | Escopo Unidade | Operação limitada | Leitura limitada | Recepção pode cadastrar/consultar conforme fluxo operacional. |
 | Perfil do aluno | Total | Escopo Rede | Escopo Rede/Unidade | Escopo Unidade | Operação limitada | Leitura limitada | Operador deve ver apenas o necessário para acesso. |
-| Planos | Total | Escopo Rede | Escopo Rede/Unidade | Leitura / Pendente | Leitura | Não permitido | Edição de plano é administrativa. |
+| Planos | Leitura | Gestão do catálogo compartilhado | Leitura | Leitura | Leitura | Não permitido | Catálogo exclusivo por unidade depende de L08. |
 | Associações/vínculos | Total | Escopo Rede | Escopo Rede/Unidade | Escopo Unidade | Operação limitada | Não permitido | Impacta acesso e mensalidade. |
 | Mensalidades | Total | Escopo Rede | Escopo Rede/Unidade | Escopo Unidade | Operação limitada | Leitura limitada | Cancelamento é ação crítica. |
-| Pagamentos | Total | Escopo Rede | Escopo Rede/Unidade | Pendente | Pendente | Não permitido | Recepção/gerente exigem decisão final. |
+| Pagamentos | Escopo vinculado | Unidade autorizada | Unidade autorizada | Receber na unidade | Receber na unidade | Não permitido | Estorno segue a DN-3. |
 | Produtos | Total | Escopo Rede | Escopo Rede/Unidade | Escopo Unidade | Operação limitada | Não permitido | Alteração de estoque é sensível. |
 | Vendas | Total | Escopo Rede | Escopo Rede/Unidade | Escopo Unidade | Operação limitada | Não permitido | Cancelamento/reversão exige auditoria. |
 | Financeiro | Total / Observação produção | Escopo Rede | Escopo Rede/Unidade / Pendente | Pendente | Não permitido | Não permitido | Módulo restrito. |
-| Plano de contas | Total / Observação produção | Escopo Rede | Escopo Rede/Unidade / Pendente | Não permitido | Não permitido | Não permitido | Configuração financeira sensível. |
+| Plano de contas | Leitura | Gestão de Rede | Leitura; gestão depende de autorização de Rede | Não permitido | Não permitido | Não permitido | Financeiro consulta categorias. |
 | Contas financeiras | Total / Observação produção | Escopo Rede | Escopo Rede/Unidade / Pendente | Pendente | Não permitido | Não permitido | Pagar conta financeira é ação crítica. |
-| Fechamento mensal | Total / Observação produção | Escopo Rede | Pendente | Não permitido | Não permitido | Não permitido | Reabrir fechamento exige decisão final. |
+| Fechamento mensal | Análise no escopo vinculado; política de suporte pendente | Analisar, fechar e reabrir | Analisar e fechar | Não permitido | Não permitido | Não permitido | Financeiro analisa. Reabertura exige motivo. |
 | Acessos | Total | Escopo Rede | Escopo Rede/Unidade | Escopo Unidade | Operação limitada | Operação limitada | Operação deve respeitar regra de mensalidade/status. |
 | Liberação manual de acesso | Total | Escopo Rede | Escopo Rede/Unidade | Pendente | Pendente | Operação limitada | Deve gerar Auditoria. |
 | Histórico de Atividades | Total | Leitura / Escopo Rede | Leitura / Escopo Rede/Unidade | Não permitido | Não permitido | Não permitido | Módulo visual somente leitura. |
@@ -132,11 +136,11 @@ Não deve acessar financeiro. Não deve registrar pagamento por padrão. Não de
 | alterar unidades autorizadas de usuário | platform_admin, owner, admin | Global/Rede/Unidade | Sim | Adicionar/remover unidade revoga sessões do usuário afetado (GS-03). |
 | cadastrar aluno | owner, admin, gerente, recepção | Rede/Unidade | Sim | Recepção deve operar em escopo limitado. |
 | editar aluno | owner, admin, gerente, recepção | Rede/Unidade | Sim | Campos sensíveis podem exigir restrição futura. |
-| alterar plano | owner, admin | Rede/Unidade | Sim | Gerente é pendente. |
-| criar mensalidade | owner, admin, gerente | Rede/Unidade | Sim | Recepção é pendente se fluxo operacional exigir. |
-| pagar mensalidade | owner, admin | Rede/Unidade | Sim | Recepção/gerente pendentes; se permitido, limitar e auditar. |
+| alterar catálogo de planos compartilhado | owner | Rede | Sim | Gestão por unidade depende de catálogo local. |
+| emitir mensalidade padrão | owner, admin, gestor, recepção | Unidade autorizada | Sim | Valor, vencimento e cobertura calculados pelo servidor. |
+| pagar mensalidade | owner, admin, gestor, recepção | Unidade autorizada | Sim | Recebimento pelo fluxo de pagamentos. |
 | cancelar mensalidade | owner, admin | Rede/Unidade | Sim | Ação sensível; deve respeitar fechamento mensal. |
-| reverter pagamento | owner, admin | Rede/Unidade | Sim | Quem pode executar reversão controlada ainda exige decisão final. |
+| reverter pagamento | gestor solicita, owner/admin aprova, financeiro executa | Unidade autorizada | Sim | Execução direta bloqueada até o fluxo aprovado. |
 | registrar venda | owner, admin, gerente, recepção | Rede/Unidade | Sim | Recepção pode operar venda se o fluxo estiver autorizado. |
 | cancelar/reverter venda | owner, admin | Rede/Unidade | Sim | Reversão/cancelamento é sensível. |
 | alterar estoque | owner, admin, gerente | Rede/Unidade | Sim | Recepção não deve alterar estoque por padrão. |
@@ -145,10 +149,10 @@ Não deve acessar financeiro. Não deve registrar pagamento por padrão. Não de
 | acessar financeiro | platform_admin, owner, admin | Global/Rede/Unidade | Sim | Platform_admin global em produção é decisão pendente. |
 | criar conta financeira | owner, admin | Rede/Unidade | Sim | Gerente é pendente. |
 | pagar conta financeira | owner, admin | Rede/Unidade | Sim | Ação financeira sensível. |
-| reabrir fechamento mensal | owner, admin / Pendente | Rede/Unidade | Sim | Decisão final pendente. |
+| reabrir fechamento mensal | owner | Unidade autorizada | Sim | Motivo obrigatório. Política master pendente. |
 | liberar acesso manualmente | platform_admin, owner, admin, operador_acesso | Rede/Unidade | Sim | Gerente/recepção pendentes conforme operação. |
 | ver Histórico de Atividades | platform_admin, owner, admin | Global/Rede/Unidade | Não altera dados | Somente leitura; bloqueado para perfis operacionais. |
-| ver Consolidado da Rede | platform_admin, owner, admin | Global/Rede | Não altera dados | Somente leitura. |
+| ver Consolidado da Rede | owner integral; admin e platform_admin em unidades autorizadas | Rede/Unidade | Somente leitura | Integral exige alcance explícito de Rede. |
 
 ## 7. Regras de segurança por perfil
 
@@ -185,17 +189,28 @@ Decisões assumidas na GS-03, a validar com o produto: admin pode criar/editar o
 
 Vínculos antigos de origem não confirmada: ver `vinculos-escopo-legado.md`.
 
-## 8. Pendências de decisão
+## 8. DN-3 aprovada · ações e escopo
 
-- Recepção pode ou não registrar pagamento?
+Esta tabela detalha as decisões aprovadas da DN-3 e o estado da implementação. Gerente corresponde a `gestor` e caixa corresponde a `recepcao`. Para ações de unidade, o ator seleciona uma unidade à qual está vinculado.
+
+| Ação | Regra aprovada e cobertura atual |
+| --- | --- |
+| Cadastro inicial e edição básica | Recepção, gestor, admin e dono. Status, vencimento e plano pós-cadastro exigem permissão de campos sensíveis. Gestão de associações usa a permissão específica existente. |
+| Emitir padrão e receber | Recepção, gestor, admin e dono na unidade. Lançamento excepcional, edição de valores e cancelamento têm guardas próprias; recebimento usa a API de pagamentos. |
+| Conceder desconto excepcional | Gestor, financeiro, admin e dono. Motivo obrigatório e registro da ação. Caixa poderá solicitar quando o fluxo próprio estiver disponível. |
+| Estornar | Gestor solicita, dono ou admin da unidade aprova e financeiro executa. Execução direta bloqueada até o fluxo de aprovação. |
+| Analisar, fechar e reabrir | Financeiro, admin e dono analisam. Admin e dono fecham. Dono reabre com motivo. Telas novas e política master dependem de sublotes. |
+| Catálogo compartilhado, categorias de Rede e Consolidado integral | Permissões distintas de Rede. L02 concede ao dono. Admin recebe relatório das suas unidades. Concessão de alcance integral ou escrita compartilhada a admin depende de autorização explícita de Rede. |
+| Plano exclusivo | Admin com permissão de catálogo da unidade, após cadastro e distribuição de planos locais. A autorização comercial e a autorização de entrada têm regras distintas. |
+| Desativar vínculo local | Admin e dono podem desativar o vínculo da unidade selecionada conforme escopo e hierarquia. As sessões do usuário são revogadas e os demais vínculos são preservados. |
+| Campanhas e suporte master | Regras aprovadas, fluxos pendentes. Consulte a [DN-3 nos requisitos](requisitos-base.md#dn-3--permissões-operacionais-do-l02). |
+
+### Pendências fora das decisões aprovadas da DN-3
+
 - Gerente vê financeiro completo, resumo financeiro ou nenhum financeiro?
 - `platform_admin` em produção pode ver financeiro de todas as Redes ou apenas suporte técnico sem visibilidade financeira global?
 - `owner` e `admin` terão exatamente o mesmo acesso financeiro?
-- Quem pode reabrir fechamento mensal?
-- Quem pode executar reversão controlada?
 - Admin pode criar Unidade/Matriz/Filial ou isso fica restrito a owner/platform_admin?
-- Gerente pode criar/editar planos ou apenas consultar?
-- Recepção pode criar mensalidade ou apenas consultar/encaminhar pagamento?
 - Liberação manual de acesso será permitida para recepção/gerente ou somente operador_acesso/admin/owner?
 
 ## 9. Critérios de aceite

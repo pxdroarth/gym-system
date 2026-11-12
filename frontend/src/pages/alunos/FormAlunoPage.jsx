@@ -18,6 +18,7 @@ export default function FormAlunoPage() {
   const navigate = useNavigate();
   const isNovo = !id || id === "novo";
   const { user } = useAuth();
+  const canAlterarStatusVencimento = userHasUiPermission(user, UI_PERMISSIONS.ALUNOS_ALTERAR_STATUS_VENCIMENTO);
   const canAlterarPlano = userHasUiPermission(user, UI_PERMISSIONS.ALUNOS_ALTERAR_PLANO_COM_DEPENDENTES);
 
   const [form, setForm] = useState({
@@ -164,7 +165,7 @@ export default function FormAlunoPage() {
 
         <div>
           <label className="font-semibold">Status:</label>
-          <select name="status" value={form.status} onChange={handleChange} className="w-full border rounded px-4 py-2">
+          <select name="status" value={form.status} onChange={handleChange} disabled={!canAlterarStatusVencimento} className="w-full border rounded px-4 py-2">
             <option value="ativo">Ativo</option>
             <option value="inativo">Inativo</option>
           </select>
@@ -172,7 +173,7 @@ export default function FormAlunoPage() {
 
         <div>
           <label className="font-semibold">Dia de Vencimento:</label>
-          <input type="number" name="dia_vencimento" value={form.dia_vencimento} onChange={handleChange} min={1} max={31} required className="w-full border rounded px-4 py-2" />
+          <input type="number" name="dia_vencimento" value={form.dia_vencimento} onChange={handleChange} disabled={!isNovo && !canAlterarStatusVencimento} min={1} max={31} required className="w-full border rounded px-4 py-2" />
         </div>
 
         <div>
@@ -206,7 +207,7 @@ export default function FormAlunoPage() {
         </div>
 
         {!canAlterarPlano && (
-          <div className="text-sm text-gray-500">Vincular dependente a outro responsÃ¡vel exige permissÃ£o especÃ­fica.</div>
+          <div className="text-sm text-gray-500">Vincular dependente a outro responsável exige permissão específica.</div>
         )}
 
         {!ehResponsavel && canAlterarPlano && (

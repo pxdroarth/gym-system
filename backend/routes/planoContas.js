@@ -1,6 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { runQuery, runExecute } = require('../dbHelper');
+const { PERMISSIONS } = require('../constants/userRoles');
+const { requirePermission } = require('../middlewares/requirePermission');
+const gerenciarCategorias = requirePermission(PERMISSIONS.PLANO_CONTAS_GERENCIAR_REDE);
 const { requireScope } = require('../helpers/scope');
 
 router.get('/', async (req, res) => {
@@ -16,7 +19,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-router.post('/', async (req, res) => {
+router.post('/', gerenciarCategorias, async (req, res) => {
   const { nome, tipo, descricao, quantidade_sugerida, dia_sugerido } = req.body;
   if (!nome || !tipo) return res.status(400).json({ erro: 'Nome e tipo sao obrigatorios' });
 
@@ -39,7 +42,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-router.put('/:id', async (req, res) => {
+router.put('/:id', gerenciarCategorias, async (req, res) => {
   const id = parseInt(req.params.id);
   const { nome, tipo, descricao, quantidade_sugerida, dia_sugerido } = req.body;
   if (!nome || !tipo) return res.status(400).json({ erro: 'Nome e tipo sao obrigatorios' });
@@ -68,7 +71,7 @@ router.put('/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', gerenciarCategorias, async (req, res) => {
   const { id } = req.params;
   try {
     const scope = requireScope(req);

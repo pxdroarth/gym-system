@@ -63,7 +63,7 @@ export default function TenantOverviewPage() {
     >
       <div className="governance-shell">
         <PageHeader
-          title="Consolidado da Rede"
+          title={data?.escopo === "unidades_autorizadas_readonly" ? "Relatório das unidades autorizadas" : "Consolidado da Rede"}
           subtitle="Indicadores executivos por unidade."
           actions={<Badge tone="blue">Somente leitura</Badge>}
         />

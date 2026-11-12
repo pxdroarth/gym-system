@@ -41,7 +41,16 @@ function tipoInverso(tipo) {
   return 'despesa';
 }
 
+function exigirAprovacaoReversao() {
+  throw new AppError(
+    'A reversao exige solicitacao, aprovacao e execucao registradas.',
+    409,
+    'REVERSAO_APROVACAO_NECESSARIA'
+  );
+}
+
 async function criarRegistroReversao(tx, { modulo, tipo, registroId, motivo, actor, metadata }) {
+  exigirAprovacaoReversao();
   const result = await tx.run(
     `INSERT INTO reversao_controlada
       (modulo, tipo, registro_origem_id, motivo, actor_id, actor_name, metadata_json, tenant_id, unit_id, created_at)

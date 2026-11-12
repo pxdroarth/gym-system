@@ -1,5 +1,5 @@
 // Smoke GS-07 P1: pagamentos parciais, saldo em centavos, idempotencia e
-// estorno por pagamento.
+// bloqueio de estorno direto enquanto o fluxo de aprovacao estiver pendente.
 //
 // Pre-requisitos: backend rodando sobre uma base DESCARTAVEL criada com
 // `npm run db:seed:dev`. O smoke cria um aluno "SMOKE P1 ..." e mensalidades.
@@ -11,8 +11,8 @@
 //
 // Cenario (pedido da GS-07 P1): mensalidade de R$ 80; paga 50 -> saldo 30;
 // 31 recusado; paga 30 -> quitada; reenvio com a mesma chave nao duplica;
-// estorno dos 30 -> parcial com 50 pagos e 30 em aberto na mesma competencia;
-// usuario sem reversao:executar recebe 403 ao estornar.
+// estorno direto dos 30 -> 409, quitação e competência preservadas, sem
+// contrapartida; usuário sem reversao:executar recebe 403 ao estornar.
 
 const path = require('path');
 
@@ -97,7 +97,7 @@ async function pagamentosDoAluno(owner, unit, alunoId) {
   const vencimento = `${hoje.slice(0, 7)}-10`;
   r = await req('POST', '/mensalidades', {
     token: owner.token, unit,
-    body: { aluno_id: aluno.id, plano_id: plano.id, vencimento, valor_cobrado: 80 },
+    body: { aluno_id: aluno.id, plano_id: plano.id, vencimento, valor_cobrado: 80, motivo_desconto: 'Valor da fixture P1' },
   });
   const mensalidade = unwrap(r);
   check('setup: mensalidade de R$ 80 criada', r.status === 201 && Number(mensalidade?.valor_cobrado) === 80,
@@ -159,26 +159,24 @@ async function pagamentosDoAluno(owner, unit, alunoId) {
   pags = await pagamentosDoAluno(owner, unit, aluno.id);
   check('tentativas recusadas nao estornaram nada', pags.every((p) => !p.estornado_em), JSON.stringify(pags.map((p) => p.estornado_em)));
 
-  // ---------- 6. estorno dos 30 ----------
+  // ---------- 6. estorno sem aprovacao ----------
   r = await req('POST', `/pagamentos/${p30.id}/estornar`, { token: owner.token, unit, body: { motivo: 'smoke P1: estorno do pagamento de 30' } });
-  const est = r.json;
-  check('estorno dos R$ 30: 200, mensalidade volta a parcial', r.status === 200 && est?.status_mensalidade === 'parcial', `${r.status} ${r.code || est?.status_mensalidade}`);
-  check('estorno: 50 pagos e 30 em aberto', est?.total_pago === 50 && est?.saldo_em_aberto === 30, `pago=${est?.total_pago} saldo=${est?.saldo_em_aberto}`);
+  check('estorno direto bloqueado ate aprovacao', r.status === 409 && r.code === 'REVERSAO_APROVACAO_NECESSARIA', `${r.status} ${r.code}`);
   m = await mensalidadeAtual(owner, unit, aluno.id, mensalidade.id);
   check('mesma competencia (vencimento, inicio e fim inalterados)',
     m && m.vencimento === competencia.vencimento && m.data_inicio === competencia.data_inicio && m.data_fim === competencia.data_fim,
     JSON.stringify({ antes: competencia, depois: m && { vencimento: m.vencimento, data_inicio: m.data_inicio, data_fim: m.data_fim } }));
-  check('listagem: status parcial, saldo 30', m?.status === 'parcial' && Number(m?.saldo_em_aberto) === 30, `${m?.status} ${m?.saldo_em_aberto}`);
+  check('listagem: status pago e saldo preservados', m?.status === 'pago' && Number(m?.saldo_em_aberto) === 0, `${m?.status} ${m?.saldo_em_aberto}`);
   pags = await pagamentosDoAluno(owner, unit, aluno.id);
   const pg50 = pags.find((p) => p.id === p50.id);
   const pg30 = pags.find((p) => p.id === p30.id);
-  check('somente o pagamento selecionado foi estornado', Boolean(pg30?.estornado_em) && !pg50?.estornado_em && pags.length === 2,
+  check('ambos os pagamentos continuam validos', !pg30?.estornado_em && !pg50?.estornado_em && pags.length === 2,
     `30=${pg30?.estornado_em} 50=${pg50?.estornado_em}`);
   r = await req('POST', `/pagamentos/${p30.id}/estornar`, { token: owner.token, unit, body: { motivo: 'de novo' } });
-  check('estornar de novo -> 409 PAGAMENTO_JA_ESTORNADO', r.status === 409 && r.code === 'PAGAMENTO_JA_ESTORNADO', `${r.status} ${r.code}`);
+  check('estornar de novo -> 409 REVERSAO_APROVACAO_NECESSARIA', r.status === 409 && r.code === 'REVERSAO_APROVACAO_NECESSARIA', `${r.status} ${r.code}`);
   r = await req('POST', '/pagamentos', { token: owner.token, unit, key: chave30, body: corpo30 });
   pags = await pagamentosDoAluno(owner, unit, aluno.id);
-  check('reenvio da chave dos 30 apos estorno: original, sem novo pagamento', r.status === 200 && r.json?.id === p30.id && pags.length === 2,
+  check('reenvio da chave dos 30 apos recusa: original, sem novo pagamento', r.status === 200 && r.json?.id === p30.id && pags.length === 2,
     `${r.status} pagamentos=${pags.length}`);
 
   // ---------- 7. base: lancamentos, reversao e auditoria ----------
@@ -189,20 +187,20 @@ async function pagamentosDoAluno(owner, unit, alunoId) {
        WHERE deleted_at IS NULL AND (
          (origem = 'pagamento_mensalidade' AND origem_id IN (?, ?))
          OR (origem = 'mensalidade' AND origem_id = ?)
-         OR (origem = 'reversao_controlada' AND origem_id = ?)
+         OR (origem = 'reversao_controlada' AND origem_id IN (SELECT id FROM reversao_controlada WHERE modulo = 'pagamentos' AND registro_origem_id = ?))
        )`,
-      [p50.id, p30.id, mensalidade.id, est?.reversao?.id || -1]
+      [p50.id, p30.id, mensalidade.id, p30.id]
     );
     const porPagamento = lanc.filter((l) => l.origem === 'pagamento_mensalidade');
     const inversos = lanc.filter((l) => l.origem === 'reversao_controlada');
     const agregadoPendente = lanc.filter((l) => l.origem === 'mensalidade');
     check('um lancamento por pagamento (50 e 30), sem duplicar no reenvio', porPagamento.length === 2
       && porPagamento.map((l) => Number(l.valor)).sort((a, b) => a - b).join(',') === '30,50', JSON.stringify(porPagamento));
-    check('estorno gerou lancamento inverso (despesa de 30)', inversos.length === 1 && inversos[0].tipo === 'despesa' && Number(inversos[0].valor) === 30,
+    check('recusa nao gerou lancamento inverso', inversos.length === 0,
       JSON.stringify(inversos));
     check('a receber agregado baixado (sem receita em dobro)', agregadoPendente.length === 0, JSON.stringify(agregadoPendente));
     const liquido = lanc.reduce((acc, l) => acc + (l.tipo === 'receita' ? 1 : -1) * Math.round(Number(l.valor) * 100), 0);
-    check('efeito financeiro liquido = R$ 50', liquido === 5000, `${liquido / 100}`);
+    check('efeito financeiro liquido = R$ 80', liquido === 8000, `${liquido / 100}`);
     const aud = await db.all(
       `SELECT action FROM audit_log WHERE (module = 'pagamentos' AND record_id = ?) OR (module = 'mensalidades' AND record_id = ?)`,
       [String(p30.id), String(mensalidade.id)]
@@ -211,21 +209,18 @@ async function pagamentosDoAluno(owner, unit, alunoId) {
       [String(p30.id), String(mensalidade.id)]
     ));
     const acoes = aud.map((a) => a.action);
-    check('auditoria: estorno registrado', acoes.includes('estornar_pagamento_mensalidade'), acoes.join(','));
+    check('auditoria: sem evento de estorno executado', !acoes.includes('estornar_pagamento_mensalidade'), acoes.join(','));
     check('auditoria: 2 pagamentos registrados (reenvio nao audita de novo)',
       acoes.filter((a) => a === 'registrar_pagamento_mensalidade').length === 2, acoes.join(','));
-    const rev = await db.get('SELECT modulo, tipo, registro_origem_id, motivo, lancamento_inverso_id FROM reversao_controlada WHERE id = ?', [est?.reversao?.id || -1]);
-    check('reversao_controlada aponta para o pagamento', rev && rev.tipo === 'pagamento_mensalidade' && String(rev.registro_origem_id) === String(p30.id)
-      && rev.lancamento_inverso_id, JSON.stringify(rev));
+    const rev = await db.get("SELECT id FROM reversao_controlada WHERE modulo = 'pagamentos' AND registro_origem_id = ?", [p30.id]);
+    check('sem registro de reversao para o pagamento', !rev, JSON.stringify(rev));
     db.close();
   } else {
     console.log('[--]     conferencias na base puladas (use --db=backend/academia.sqlite)');
   }
 
-  // ---------- 8. reabre e quita de novo ----------
   r = await req('POST', '/pagamentos', { token: owner.token, unit, key: `smoke-p1-${RUN}-e`, body: { ...base, valor_pago: 30 } });
-  check('apos estorno, novo pagamento de 30 quita de novo', r.status === 201 && r.json?.status_mensalidade === 'pago' && r.json?.saldo_em_aberto === 0,
-    `${r.status} ${r.code || r.json?.status_mensalidade}`);
+  check('apos recusa, mensalidade quitada nao aceita novo pagamento', r.status === 409 && r.code === 'MENSALIDADE_QUITADA', `${r.status} ${r.code}`);
 
   // ---------- 9. concorrencia ----------
   // Duas requisicoes simultaneas de R$ 30 com chaves diferentes sobre saldo 30:
@@ -238,7 +233,7 @@ async function pagamentosDoAluno(owner, unit, alunoId) {
     const al = unwrap(ra);
     const rm = await req('POST', '/mensalidades', {
       token: owner.token, unit,
-      body: { aluno_id: al?.id, plano_id: plano.id, vencimento, valor_cobrado: 80 },
+      body: { aluno_id: al?.id, plano_id: plano.id, vencimento, valor_cobrado: 80, motivo_desconto: 'Valor da fixture P1' },
     });
     const mm = unwrap(rm);
     check(`setup concorrencia ${sufixo}: aluno e mensalidade de R$ 80`, ra.status === 201 && rm.status === 201, `${ra.status} ${rm.status} ${rm.code || ''}`);

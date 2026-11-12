@@ -117,7 +117,7 @@ const nAuditoria = async () => (await q1('SELECT COUNT(*) AS n FROM audit_log'))
   // Filial: mes anterior aberto (o fechamento e so da Matriz).
   await aceita(`Filial com ${mesAnt}/${anoAnt} aberto (fechado so na Matriz): conta da Filial movida para o mes corrente`, filial, cFilial,
     corpo(cFilial, corrente, 130, 'filial movida'));
-  r = await req('POST', `/fechamento-mensal/${anoAnt}/${mesAnt}/reabrir`, { token, unit: matriz });
+  r = await req('POST', `/fechamento-mensal/${anoAnt}/${mesAnt}/reabrir`, { token, unit: matriz, body: { motivo: 'Conferencia no smoke L02' } });
   check('setup: Matriz reaberta', r.s === 200, r.s);
   r = await req('POST', `/fechamento-mensal/${anoAnt}/${mesAnt}/fechar`, { token, unit: filial });
   check(`setup: ${mesAnt}/${anoAnt} fechado so na Filial`, r.s === 200, r.s);
@@ -125,7 +125,7 @@ const nAuditoria = async () => (await q1('SELECT COUNT(*) AS n FROM audit_log'))
     corpo(cOrigemFechada, corrente, 120, 'matriz movida'));
   await recusa(`Filial com ${mesAnt}/${anoAnt} fechado: conta da Filial volta para ${mesAnt}/${anoAnt}`, filial, cFilial,
     corpo(cFilial, anterior, 140, 'filial volta'));
-  r = await req('POST', `/fechamento-mensal/${anoAnt}/${mesAnt}/reabrir`, { token, unit: filial });
+  r = await req('POST', `/fechamento-mensal/${anoAnt}/${mesAnt}/reabrir`, { token, unit: filial, body: { motivo: 'Conferencia no smoke L02' } });
   check('setup: Filial reaberta (base volta ao estado aberto)', r.s === 200, r.s);
 
   console.log(`\n[smoke-a06] ${total - falhas}/${total} verificacoes OK`);

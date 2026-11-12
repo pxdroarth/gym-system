@@ -41,6 +41,7 @@ export default function ModalContratarRenovarPlano({ open, aluno, plano, onClose
   const [form, setForm] = useState({
     data_inicio: hojeISO(),
     desconto_manual: "",
+    motivo_desconto: "",
     forma_pagamento: "dinheiro",
     observacao: "",
   });
@@ -105,6 +106,7 @@ export default function ModalContratarRenovarPlano({ open, aluno, plano, onClose
       const resultado = await contratarRenovarPlano({
         ...buildPayloadBase(),
         valor_pago: preview.valor_cobrado,
+        motivo_desconto: form.motivo_desconto,
         forma_pagamento: form.forma_pagamento,
         observacao: form.observacao,
       });
@@ -120,6 +122,9 @@ export default function ModalContratarRenovarPlano({ open, aluno, plano, onClose
   return (
     <Modal title={`Contratar/Renovar plano de ${aluno.nome}`} onClose={onClose} className="ui-modal--full">
       <form onSubmit={calcularPreview} className="space-y-4">
+        {Number(form.desconto_manual) > 0 && (
+          <Input label="Motivo do desconto excepcional" name="motivo_desconto" value={form.motivo_desconto} onChange={handleChange} />
+        )}
         <div className="ui-info-grid">
           <div className="ui-info-item">
             <div className="ui-info-item__label">Aluno</div>

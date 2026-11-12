@@ -38,3 +38,7 @@ export async function alterarUnidadesUsuarioInterno(id, { unitIds, unitPadraoId,
   });
   return data;
 }
+
+export async function desativarVinculoUnidade(id) {
+  await api.delete(`/usuarios-internos/${id}/vinculo-unidade`);
+}

@@ -14,6 +14,7 @@ import {
   alterarStatusUsuarioInterno,
   alterarUnidadesUsuarioInterno,
   criarUsuarioInterno,
+  desativarVinculoUnidade,
   listarUsuariosInternos,
 } from "../../services/usuariosInternosService";
 import { getApiErrorMessage } from "../../utils/getApiErrorMessage";
@@ -152,6 +153,20 @@ export default function UsuariosInternosPage() {
       const lista = await carregarUsuarios();
       const atualizado = lista?.find((item) => item.id === alvo.id);
       setUsuarioAcesso(atualizado || null);
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  async function handleDesativarVinculo(usuario) {
+    if (!window.confirm(`Desativar o acesso de ${usuario.nome} à unidade selecionada?`)) return;
+    setSalvando(true);
+    try {
+      await desativarVinculoUnidade(usuario.id);
+      toast.success("Vínculo desativado.");
+      await carregarUsuarios();
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
     } finally {
       setSalvando(false);
     }
@@ -308,6 +323,11 @@ export default function UsuariosInternosPage() {
                         </span>
                       </td>
                       <td className="ops-table__actions">
+                        {usuario.vinculo_local_desativavel && podeAlterarUnidades && (
+                          <Button size="sm" variant="danger" disabled={salvando} onClick={() => handleDesativarVinculo(usuario)}>
+                            Desativar nesta unidade
+                          </Button>
+                        )}
                         {gerenciavel ? (
                           <Button
                             size="sm"

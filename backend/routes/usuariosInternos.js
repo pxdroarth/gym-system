@@ -84,4 +84,13 @@ router.patch('/:id/unidades', requirePermission(PERMISSIONS.USUARIOS_ALTERAR_UNI
   }
 });
 
+router.delete('/:id/vinculo-unidade', requirePermission(PERMISSIONS.USUARIOS_ALTERAR_UNIDADES), async (req, res, next) => {
+  try {
+    await UserService.desativarVinculoLocal(req.params.id, req.operator, requireScope(req));
+    res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+});
+
 module.exports = router;

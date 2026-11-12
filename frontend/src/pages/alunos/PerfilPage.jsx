@@ -7,7 +7,7 @@ import ModalContratarRenovarPlano from "./ModalContratarRenovarPlano";
 import ModalNovaMensalidade from "./ModalNovaMensalidade";
 import { fetchAcessos, simularAcesso } from "../../services/acessoService";
 import { fetchAlunoById } from "../../services/alunoService";
-import { fetchMensalidadesPorAluno } from "../../services/mensalidadeService";
+import { fetchMensalidadesPorAluno, emitirMensalidadePadrao, concederDescontoMensalidade } from "../../services/mensalidadeService";
 import { registrarPagamento } from "../../services/pagamentoService";
 import { fetchPlanos } from "../../services/planoService";
 import Badge from "../../components/ui/Badge";
@@ -28,6 +28,8 @@ import {
 
 function formatarData(data) {
   if (!data) return "-";
+  const dataCivil = /^(\d{4})-(\d{2})-(\d{2})$/.exec(data);
+  if (dataCivil) return `${dataCivil[3]}/${dataCivil[2]}/${dataCivil[1]}`;
   return new Date(data).toLocaleDateString("pt-BR");
 }
 
@@ -119,6 +121,7 @@ export default function PerfilPage() {
   const [aluno, setAluno] = useState(null);
   const [erro, setErro] = useState(null);
   const [abaAtiva, setAbaAtiva] = useState("informacoes");
+  const [emitindoMensalidade, setEmitindoMensalidade] = useState(false);
   const [mensalidades, setMensalidades] = useState([]);
   const [totalMensalidades, setTotalMensalidades] = useState(0);
   const [paginaMensalidade, setPaginaMensalidade] = useState(1);
@@ -188,9 +191,44 @@ export default function PerfilPage() {
   const ultimoAcesso = acessos[0]?.data_hora ? new Date(acessos[0].data_hora).toLocaleString("pt-BR") : "Sem registros";
   const mensalidadesPendentes = mensalidades.filter((mensalidade) => mensalidade.status === "em_aberto" || mensalidade.status === "parcial").length;
   const canRegistrarPagamento = userHasUiPermission(user, UI_PERMISSIONS.PAGAMENTOS_REGISTRAR);
-  const canGerenciarPlanos = userHasUiPermission(user, UI_PERMISSIONS.PLANOS_GERENCIAR);
-  const canContratarRenovar = canGerenciarPlanos && canRegistrarPagamento;
-  const canLancamentoManualMensalidade = canRegistrarPagamento;
+  const canContratarRenovar = userHasUiPermission(user, UI_PERMISSIONS.PLANOS_CONTRATAR_RENOVAR) && canRegistrarPagamento;
+  const canLancamentoManualMensalidade = userHasUiPermission(user, UI_PERMISSIONS.MENSALIDADES_GERENCIAR);
+  const canEmitirMensalidadePadrao = userHasUiPermission(user, UI_PERMISSIONS.MENSALIDADES_EMITIR_PADRAO);
+  const canConcederDesconto = userHasUiPermission(user, UI_PERMISSIONS.MENSALIDADES_DESCONTO);
+
+  async function concederDesconto(mensalidade) {
+    const valor = window.prompt("Valor do desconto excepcional");
+    if (!valor) return;
+    const motivo = window.prompt("Motivo do desconto excepcional");
+    if (!motivo?.trim()) return;
+    try {
+      await concederDescontoMensalidade(mensalidade.id, {
+        desconto: valor,
+        motivo,
+        valor_cobrado_esperado: mensalidade.valor_cobrado,
+      });
+      setToastMsg("Desconto registrado.");
+      await carregarMensalidades();
+    } catch (error) {
+      setToastMsg(getApiErrorMessage(error));
+    }
+  }
+
+  const canEditarAluno = userHasUiPermission(user, UI_PERMISSIONS.ALUNOS_EDITAR);
+
+  async function gerarMensalidadePadrao() {
+    setEmitindoMensalidade(true);
+    try {
+      await emitirMensalidadePadrao(aluno.id);
+      setToastMsg("Cobrança padrão disponível.");
+      setPaginaMensalidade(1);
+      await Promise.all([carregarAluno(), carregarMensalidades()]);
+    } catch (error) {
+      setToastMsg(getApiErrorMessage(error));
+    } finally {
+      setEmitindoMensalidade(false);
+    }
+  }
 
   async function pagarMensalidade(mensalidade) {
     if (pagamentosEmAndamento.current.has(mensalidade.id)) return;
@@ -273,9 +311,11 @@ export default function PerfilPage() {
             </div>
 
             <div className="flex gap-2 flex-wrap">
-              <Button variant="secondary" onClick={() => navigate(`/alunos/editar/${aluno.id}`)}>
-                <Edit3 size={15} /> Editar
-              </Button>
+              {canEditarAluno && (
+                <Button variant="secondary" onClick={() => navigate(`/alunos/editar/${aluno.id}`)}>
+                  <Edit3 size={15} /> Editar
+                </Button>
+              )}
               <Button onClick={testarAcesso} disabled={simulandoAcesso}>
                 <Activity size={15} /> {simulandoAcesso ? "Testando..." : "Testar Acesso"}
               </Button>
@@ -389,6 +429,11 @@ export default function PerfilPage() {
                 </Button>
               ) : null}
               {!aluno.plano_id && canContratarRenovar ? <Badge tone="amber">Aluno sem plano</Badge> : null}
+              {canEmitirMensalidadePadrao && (
+                <Button onClick={gerarMensalidadePadrao} disabled={!aluno.plano_id || emitindoMensalidade}>
+                  {emitindoMensalidade ? "Gerando…" : "Gerar Mensalidade"}
+                </Button>
+              )}
               {canLancamentoManualMensalidade ? (
                 <div className="max-w-xs text-right">
                   <Button variant="ghost" onClick={() => setShowModal(true)}>
@@ -425,6 +470,11 @@ export default function PerfilPage() {
                     <td>{badgeMensalidade(mensalidade.status)}</td>
                     <td>{mensalidade.observacoes || "-"}</td>
                     <td>
+                      {canConcederDesconto && ["em_aberto", "vencido"].includes(mensalidade.status) && (
+                        <Button size="sm" variant="ghost" onClick={() => concederDesconto(mensalidade)}>
+                          Conceder desconto
+                        </Button>
+                      )}
                       {["em_aberto", "parcial", "vencido"].includes(mensalidade.status) && canRegistrarPagamento ? (
                         <Button
                           size="sm"

@@ -1,4 +1,5 @@
 const express = require('express');
+const { runTransaction } = require('../dbHelper');
 const router = express.Router();
 const MensalidadeService = require('../services/MensalidadeService');
 const { sincronizarFinanceiro } = require('../services/FinanceService');
@@ -7,7 +8,7 @@ const ReversaoControladaService = require('../services/ReversaoControladaService
 const AppError = require('../errors/AppError');
 const { PERMISSIONS } = require('../constants/userRoles');
 const { MENSALIDADE_STATUS } = require('../constants/domainStates');
-const { requirePermission } = require('../middlewares/requirePermission');
+const { assertPermission, requirePermission } = require('../middlewares/requirePermission');
 const { actorWithScope, requireScope } = require('../helpers/scope');
 
 function isFinancialMensalidadeStatus(status) {
@@ -29,11 +30,36 @@ function assertGenericStatusChangeAllowed(status) {
   }
 }
 
-router.post('/', async (req, res, next) => {
+router.post('/padrao', requirePermission(PERMISSIONS.MENSALIDADES_EMITIR_PADRAO), async (req, res, next) => {
+  try {
+    const scope = requireScope(req);
+    const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
+    const resultado = await MensalidadeService.emitirMensalidadePadrao(req.body?.aluno_id, actor, scope);
+    res.status(resultado.criada ? 201 : 200).json(resultado.mensalidade);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/', requirePermission(PERMISSIONS.MENSALIDADES_GERENCIAR), async (req, res, next) => {
   try {
     const scope = requireScope(req);
     assertGenericStatusChangeAllowed(req.body?.status);
-    const criada = await MensalidadeService.criarMensalidade(req.body || {}, scope);
+    const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
+    const criada = await runTransaction(async (tx) => {
+      const mensalidade = await MensalidadeService.criarMensalidade(req.body || {}, scope, tx);
+      const plano = await tx.get('SELECT valor_base FROM plano WHERE id = ? AND tenant_id = ?', [mensalidade.plano_id, scope.tenant_id]);
+      if (mensalidade.desconto_aplicado > 0 || mensalidade.valor_cobrado < Number(plano?.valor_base)) {
+        assertPermission(req, PERMISSIONS.MENSALIDADES_DESCONTO);
+        const motivo = MensalidadeService.motivoDesconto(req.body?.motivo_desconto);
+        await AuditService.logAction({
+          actor, action: 'conceder_desconto_excepcional', module: 'mensalidades', recordType: 'mensalidade',
+          recordId: mensalidade.id, after: mensalidade, metadata: { motivo },
+          tenant_id: scope.tenant_id, unit_id: scope.unit_id,
+        }, tx);
+      }
+      return mensalidade;
+    });
     await sincronizarFinanceiro(scope);
     res.status(201).json(criada);
   } catch (error) {
@@ -81,11 +107,11 @@ router.get('/aluno/:aluno_id', async (req, res, next) => {
   }
 });
 
-router.put('/:id', async (req, res, next) => {
+router.put('/:id', requirePermission(PERMISSIONS.MENSALIDADES_GERENCIAR), async (req, res, next) => {
   try {
     const scope = requireScope(req);
     assertGenericStatusChangeAllowed(req.body?.status);
-    const atualizada = await MensalidadeService.atualizarMensalidade(req.params.id, req.body || {}, scope);
+    const atualizada = await MensalidadeService.atualizarMensalidade(req.params.id, req.body || {}, scope, actorWithScope(AuditService.getActorFromRequest(req), scope));
     await sincronizarFinanceiro(scope);
     res.json(atualizada);
   } catch (error) {
@@ -93,15 +119,25 @@ router.put('/:id', async (req, res, next) => {
   }
 });
 
-router.patch('/:id/status', async (req, res, next) => {
+router.patch('/:id/status', requirePermission(PERMISSIONS.MENSALIDADES_GERENCIAR), async (req, res, next) => {
   try {
     const scope = requireScope(req);
     assertGenericStatusChangeAllowed(req.body?.status);
     const atualizada = await MensalidadeService.atualizarMensalidade(req.params.id, {
       status: req.body?.status,
-    }, scope);
+    }, scope, actorWithScope(AuditService.getActorFromRequest(req), scope));
     await sincronizarFinanceiro(scope);
     res.json(atualizada);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/:id/desconto', requirePermission(PERMISSIONS.MENSALIDADES_DESCONTO), async (req, res, next) => {
+  try {
+    const scope = requireScope(req);
+    const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
+    res.json(await MensalidadeService.concederDesconto(req.params.id, req.body || {}, actor, scope));
   } catch (error) {
     next(error);
   }
@@ -122,7 +158,7 @@ router.post('/:id/reverter', requirePermission(PERMISSIONS.REVERSAO_EXECUTAR), a
   }
 });
 
-router.delete('/:id', async (req, res, next) => {
+router.delete('/:id', requirePermission(PERMISSIONS.MENSALIDADES_GERENCIAR), async (req, res, next) => {
   try {
     const scope = requireScope(req);
     await MensalidadeService.removerMensalidade(

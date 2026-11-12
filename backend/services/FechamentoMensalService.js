@@ -221,10 +221,13 @@ async function fecharPeriodo(ano, mes, actor, scope = null) {
   });
 }
 
-async function reabrirPeriodo(ano, mes, actor, scope = null) {
+async function reabrirPeriodo(ano, mes, actor, scope, motivo) {
   if (!actor?.role || !roleHasPermission(actor.role, PERMISSIONS.FECHAMENTO_REABRIR)) {
-    throw new AppError('Somente admin pode reabrir fechamento mensal', 403, 'PERMISSAO_NEGADA');
+    throw new AppError('Somente o dono pode reabrir o fechamento mensal', 403, 'PERMISSAO_NEGADA');
   }
+
+  const justificativa = typeof motivo === 'string' ? motivo.trim() : '';
+  if (!justificativa) throw new AppError('Informe o motivo da reabertura', 400, 'MOTIVO_OBRIGATORIO');
 
   return runTransaction(async (tx) => {
     const periodo = validarPeriodo(ano, mes);
@@ -242,6 +245,7 @@ async function reabrirPeriodo(ano, mes, actor, scope = null) {
     await AuditService.logAction({
       actor,
       action: 'reabrir_periodo',
+      metadata: { motivo: justificativa },
       module: 'fechamento_mensal',
       recordType: 'fechamento_mensal',
       recordId: after.id,

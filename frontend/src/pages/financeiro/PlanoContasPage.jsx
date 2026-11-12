@@ -13,6 +13,8 @@ import Input from "../../components/ui/Input";
 import Modal from "../../components/ui/Modal";
 import Select from "../../components/ui/Select";
 import Table from "../../components/ui/Table";
+import useAuth from "../../hooks/useAuth";
+import { UI_PERMISSIONS, userHasUiPermission } from "../../utils/permissions";
 import getApiErrorMessage from "../../utils/getApiErrorMessage";
 
 function tipoBadge(tipo) {
@@ -22,6 +24,8 @@ function tipoBadge(tipo) {
 }
 
 export default function PlanoContasPage() {
+  const { user } = useAuth();
+  const podeGerenciar = userHasUiPermission(user, UI_PERMISSIONS.PLANO_CONTAS_GERENCIAR_REDE);
   const [contas, setContas] = useState([]);
   const [modalAberto, setModalAberto] = useState(false);
   const [form, setForm] = useState({
@@ -114,7 +118,7 @@ export default function PlanoContasPage() {
               <p className="ui-section-subtitle">Categorias financeiras usadas para organizar receitas e despesas da unidade.</p>
             </div>
           </div>
-          <Button onClick={() => abrirModal()}>+ Nova Conta</Button>
+          {podeGerenciar && <Button onClick={() => abrirModal()}>+ Nova Conta</Button>}
         </div>
 
         <div className="p-5 space-y-5">
@@ -149,7 +153,7 @@ export default function PlanoContasPage() {
                   <th>Descrição</th>
                   <th>Qtde Sug.</th>
                   <th>Dia Sug.</th>
-                  <th>Ações</th>
+                  {podeGerenciar && <th>Ações</th>}
                 </tr>
               </thead>
               <tbody>
@@ -160,7 +164,7 @@ export default function PlanoContasPage() {
                     <td>{conta.descricao || "-"}</td>
                     <td>{conta.quantidade_sugerida || "-"}</td>
                     <td>{conta.dia_sugerido || "-"}</td>
-                    <td>
+                    {podeGerenciar && <td>
                       <div className="flex gap-2 flex-wrap">
                         <Button size="sm" variant="secondary" onClick={() => abrirModal(conta)}>
                           Editar
@@ -169,7 +173,7 @@ export default function PlanoContasPage() {
                           Excluir
                         </Button>
                       </div>
-                    </td>
+                    </td>}
                   </tr>
                 ))}
               </tbody>
@@ -178,7 +182,7 @@ export default function PlanoContasPage() {
         </div>
       </Card>
 
-      {modalAberto && (
+      {podeGerenciar && modalAberto && (
         <Modal title={`${editandoId ? "Editar" : "Nova"} Conta`} onClose={fecharModal} className="max-w-4xl">
           {erro && <p className="text-red-700 font-semibold mb-3">{erro}</p>}
 

@@ -36,7 +36,8 @@ router.post('/:ano/:mes/reabrir', requirePermission(PERMISSIONS.FECHAMENTO_REABR
       req.params.ano,
       req.params.mes,
       actorWithScope(AuditService.getActorFromRequest(req), scope),
-      scope
+      scope,
+      req.body?.motivo
     ));
   } catch (error) {
     next(error);
