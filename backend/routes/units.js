@@ -1,8 +1,55 @@
 const express = require('express');
 const router = express.Router();
 const UnitService = require('../services/UnitService');
-const { PERMISSIONS } = require('../constants/userRoles');
-const { requirePermission } = require('../middlewares/requirePermission');
+const { runGet, runTransaction } = require('../dbHelper');
+const AuditService = require('../services/AuditService');
+const AppError = require('../errors/AppError');
+const { actorWithScope, requireScope } = require('../helpers/scope');
+const { PERMISSIONS, USER_ROLES } = require('../constants/userRoles');
+const { assertActiveOperator, requirePermission } = require('../middlewares/requirePermission');
+
+function escopoDono(req) {
+  assertActiveOperator(req);
+  const scope = requireScope(req);
+  if (req.operator.papel !== USER_ROLES.OWNER) {
+    throw new AppError('Somente o dono pode configurar a politica de retorno', 403, 'PERMISSAO_NEGADA');
+  }
+  return scope;
+}
+
+router.get('/politica-retorno', async (req, res, next) => {
+  try {
+    const scope = escopoDono(req);
+    const unit = await runGet('SELECT politica_retorno_mensal FROM unit WHERE id = ? AND tenant_id = ?', [scope.unit_id, scope.tenant_id]);
+    res.json({ politica: unit.politica_retorno_mensal || 'proporcional', configurada: !!unit.politica_retorno_mensal });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.patch('/politica-retorno', async (req, res, next) => {
+  try {
+    const scope = escopoDono(req);
+    const politica = req.body?.politica;
+    if (!['integral', 'proporcional'].includes(politica)) {
+      throw new AppError('Politica de retorno invalida', 400, 'POLITICA_RETORNO_INVALIDA');
+    }
+    const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
+    await runTransaction(async (tx) => {
+      const before = await tx.get('SELECT politica_retorno_mensal FROM unit WHERE id = ? AND tenant_id = ?', [scope.unit_id, scope.tenant_id]);
+      await tx.run('UPDATE unit SET politica_retorno_mensal = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND tenant_id = ?',
+        [politica, scope.unit_id, scope.tenant_id]);
+      await AuditService.logAction({
+        actor, action: 'configurar_politica_retorno', module: 'unidades', recordType: 'unit',
+        recordId: scope.unit_id, before, after: { politica_retorno_mensal: politica },
+        ...scope,
+      }, tx);
+    });
+    res.json({ politica, configurada: true });
+  } catch (error) {
+    next(error);
+  }
+});
 
 router.get('/me', async (req, res, next) => {
   try {

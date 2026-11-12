@@ -11,8 +11,9 @@ const dataLocalISO = datas.dataLocalISO;
 mock.method(datas, 'dataLocalISO', () => dataLocalISO(agora, 'America/Sao_Paulo'));
 
 const db = require('../../backend/database');
-const { runGet, runQuery, runExecute, fecharConexaoTransacional } = require('../../backend/dbHelper');
-const { atualizarMensalidade, emitirMensalidadePadrao, removerMensalidade } = require('../../backend/services/MensalidadeService');
+const { runGet, runQuery, runExecute, runTransaction, fecharConexaoTransacional } = require('../../backend/dbHelper');
+const { atualizarMensalidade, emitirMensalidadePadrao, removerMensalidade, registrarPagamento, prepararMensalidadePadrao, gravarMensalidadePadrao } = require('../../backend/services/MensalidadeService');
+const { avaliarAcessoAluno } = require('../../backend/services/AccessService');
 const { sincronizarFinanceiro } = require('../../backend/services/FinanceiroService');
 
 let total = 0;
@@ -134,7 +135,84 @@ async function main() {
     check(`SQLite: ${label}, uma cobranca por ciclo, inclusive duas no mesmo fevereiro`,
       rows.map(({ vencimento }) => vencimento), vencimentos);
   }
-  console.log(`L02 ciclos: ${total}/${total}`);
+  const configurar = (politica) => runExecute('UPDATE unit SET politica_retorno_mensal = ? WHERE id = ?', [politica, scope.unit_id]);
+  const receber = (mensalidade_id, valor_pago) => registrarPagamento({ mensalidade_id, valor_pago }, actor, scope);
+  const consultarEntrada = (id) => avaliarAcessoAluno(id, { scope, agora });
+  const unidadeAntes = await runGet('SELECT politica_retorno_mensal FROM unit WHERE id = ?', [scope.unit_id]);
+  const retorno = [];
+  try {
+    for (const [politica, valor, inicio] of [
+      [null, 8387, '2026-01-15'],
+      ['integral', 10000, '2026-01-10'],
+    ]) {
+      const id = await aluno(`Smoke L03 retorno ${politica || 'sem configuracao'}`);
+      await runExecute('UPDATE aluno SET dia_vencimento = 10 WHERE id = ?', [id]);
+      agora = new Date('2025-11-10T15:00:00Z');
+      const anterior = await emitirMensalidadePadrao(id, actor, scope);
+      await receber(anterior.mensalidade.id, 100);
+      await configurar(politica);
+      agora = new Date('2026-01-15T15:00:00Z');
+      const { preview } = await runTransaction((tx) => prepararMensalidadePadrao(id, scope, tx, { renovar: true }));
+      check(`retorno ${politica || 'padrao'}: previa, valor e cobertura`,
+        [Math.round(preview.valor_cobrado * 100), preview.data_inicio, preview.data_fim, preview.proximo_vencimento, preview.politica],
+        [valor, inicio, '2026-02-09', '2026-02-10', politica ? 'retorno_integral' : 'retorno_proporcional']);
+      const emitida = await emitirMensalidadePadrao(id, actor, scope, preview);
+      retorno.push([id, emitida.mensalidade]);
+      const rows = await runQuery('SELECT id FROM mensalidade WHERE aluno_id = ?', [id]);
+      check('retorno em janeiro nao gera o ciclo ausente de dezembro', rows.length, 2);
+    }
+
+    const [id, cobranca] = retorno[0];
+    const reuso = await emitirMensalidadePadrao(id, actor, scope);
+    check('trocar para integral preserva ID, valor e datas da cobranca proporcional emitida',
+      [reuso.criada, reuso.mensalidade.id, reuso.mensalidade.valor_cobrado, reuso.mensalidade.data_inicio, reuso.mensalidade.data_fim],
+      [false, cobranca.id, 83.87, '2026-01-15', '2026-02-09']);
+    await configurar('proporcional');
+    const [idIntegral, integral] = retorno[1];
+    const reusoIntegral = await emitirMensalidadePadrao(idIntegral, actor, scope);
+    check('trocar para proporcional preserva a cobranca integral emitida',
+      [reusoIntegral.criada, reusoIntegral.mensalidade.id, reusoIntegral.mensalidade.valor_cobrado],
+      [false, integral.id, 100]);
+
+    agora = new Date('2026-01-16T01:30:00Z');
+    const parcial = await receber(cobranca.id, 50);
+    check('pagamento na virada UTC usa 15/01 em Sao Paulo e deixa saldo de R$ 33,87',
+      [parcial.data_pagamento, parcial.saldo_em_aberto, (await consultarEntrada(id)).resultado],
+      ['2026-01-15', 33.87, 'negado']);
+    await receber(cobranca.id, 33.87);
+    check('quitacao permite entrada no ciclo vigente', (await consultarEntrada(id)).resultado, 'permitido');
+    const futura = await runTransaction(async (tx) => {
+      const proposta = await prepararMensalidadePadrao(id, scope, tx, { renovar: true });
+      check('com cobertura paga so oferece o proximo ciclo',
+        [proposta.preview.data_inicio, proposta.preview.data_fim, proposta.preview.valor_cobrado],
+        ['2026-02-10', '2026-03-09', 100]);
+      return gravarMensalidadePadrao(proposta, actor, scope, tx);
+    });
+    const proxima = await runTransaction((tx) => prepararMensalidadePadrao(id, scope, tx, { renovar: true }));
+    check('previa de renovacao reutiliza a cobranca seguinte ja emitida', proxima.existente.id, futura.mensalidade.id);
+    agora = new Date('2026-02-10T02:59:00Z');
+    check('ultimo minuto do ciclo pago ainda libera', (await consultarEntrada(id)).resultado, 'permitido');
+    agora = new Date('2026-02-10T03:00:00Z');
+    check('virada da vigencia bloqueia se o novo ciclo esta aberto', (await consultarEntrada(id)).resultado, 'negado');
+    await receber(futura.mensalidade.id, 100);
+    check('quitacao do proximo ciclo libera na virada', (await consultarEntrada(id)).resultado, 'permitido');
+
+    for (const [data, resultado] of [['2026-11-15', 'permitido'], ['2026-12-11', 'negado']]) {
+      const alunoAtraso = await aluno(`Smoke L03 atraso ${data}`);
+      await runExecute('UPDATE aluno SET dia_vencimento = 10 WHERE id = ?', [alunoAtraso]);
+      agora = new Date('2026-11-10T15:00:00Z');
+      const { mensalidade } = await emitirMensalidadePadrao(alunoAtraso, actor, scope);
+      agora = new Date(`${data}T15:00:00Z`);
+      const pagamento = await receber(mensalidade.id, 100);
+      const datas = await runGet('SELECT vencimento, data_inicio, data_fim FROM mensalidade WHERE id = ?', [mensalidade.id]);
+      check(`quitacao em ${data} preserva competencia e usa data real de recebimento`,
+        [datas.vencimento, datas.data_inicio, datas.data_fim, pagamento.data_pagamento, (await consultarEntrada(alunoAtraso)).resultado],
+        ['2026-11-10', '2026-11-10', '2026-12-09', data, resultado]);
+    }
+  } finally {
+    await configurar(unidadeAntes.politica_retorno_mensal);
+  }
+  console.log(`L02/L03 ciclos: ${total}/${total}`);
 }
 
 main().catch((error) => {

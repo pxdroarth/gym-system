@@ -119,6 +119,18 @@ async function main(db) {
   const adminLogin = `l02.admin.${run}`;
   check('admin da Filial criado', (await criarUsuario(adminLogin, 'admin', [filial])).status, 201);
   const admin = await login(adminLogin);
+  const rotaPolitica = '/units/politica-retorno';
+  const politicaIntegral = { politica: 'integral' };
+  check('politica de retorno sem sessao', (await req('PATCH', rotaPolitica, { unit: matriz, body: politicaIntegral })).status, 401);
+  check('admin vinculado nao configura retorno', (await req('PATCH', rotaPolitica, { session: admin, unit: filial, body: politicaIntegral })).status, 403);
+  check('owner nao configura unidade de outra Rede', (await req('PATCH', rotaPolitica, { session: owner, unit: outraRede, body: politicaIntegral })).status, 403);
+  check('politica fora do enum recusada', (await req('PATCH', rotaPolitica, { session: owner, unit: matriz, body: { politica: 'invalida' } })).status, 400);
+  check('Matriz sem configuracao usa proporcional',
+    (await req('GET', rotaPolitica, { session: owner, unit: matriz })).json, { politica: 'proporcional', configurada: false });
+  check('owner salva integral na Filial',
+    (await req('PATCH', rotaPolitica, { session: owner, unit: filial, body: politicaIntegral })).json, { politica: 'integral', configurada: true });
+  check('Filial salva preserva a politica da Matriz',
+    (await req('GET', rotaPolitica, { session: owner, unit: matriz })).json, { politica: 'proporcional', configurada: false });
 
   const planos = await req('GET', '/planos', { session: recepcao, unit: matriz });
   const plano = planos.json.find((item) => item.tipo_cobranca === 'AVULSO_MENSAL');

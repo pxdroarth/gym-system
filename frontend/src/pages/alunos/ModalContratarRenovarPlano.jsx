@@ -5,6 +5,7 @@ import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Modal from "../../components/ui/Modal";
 import { contratarRenovarPlano, previewCoberturaPlano } from "../../services/planoService";
+import { nomePoliticaMensal } from "../../utils/politicaMensal";
 import { getApiErrorMessage } from "../../utils/getApiErrorMessage";
 
 function hojeISO() {
@@ -50,7 +51,8 @@ export default function ModalContratarRenovarPlano({ open, aluno, plano, onClose
   const [carregandoPreview, setCarregandoPreview] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
 
-  const podeCalcular = Boolean(aluno?.id && aluno?.plano_id && form.data_inicio);
+  const mensalManual = plano?.tipo_cobranca === "AVULSO_MENSAL";
+  const podeCalcular = Boolean(aluno?.id && aluno?.plano_id && (mensalManual || form.data_inicio));
   const regrasAplicadas = useMemo(() => preview?.regras_aplicadas || [], [preview]);
 
   if (!open || !aluno) return null;
@@ -69,7 +71,7 @@ export default function ModalContratarRenovarPlano({ open, aluno, plano, onClose
     return {
       aluno_id: aluno.id,
       plano_id: aluno.plano_id,
-      data_inicio: form.data_inicio,
+      data_inicio: mensalManual ? undefined : form.data_inicio,
       desconto_manual: form.desconto_manual === "" ? undefined : Number(form.desconto_manual || 0),
     };
   }
@@ -105,7 +107,9 @@ export default function ModalContratarRenovarPlano({ open, aluno, plano, onClose
     try {
       const resultado = await contratarRenovarPlano({
         ...buildPayloadBase(),
-        valor_pago: preview.valor_cobrado,
+        data_inicio: preview.data_inicio,
+        previa: preview,
+        valor_pago: preview.saldo_em_aberto ?? preview.valor_cobrado,
         motivo_desconto: form.motivo_desconto,
         forma_pagamento: form.forma_pagamento,
         observacao: form.observacao,
@@ -137,14 +141,14 @@ export default function ModalContratarRenovarPlano({ open, aluno, plano, onClose
         </div>
 
         <div className="ui-info-grid">
-          <Input
+          {!mensalManual && <Input
             label="Data de inicio"
             type="date"
             name="data_inicio"
             value={form.data_inicio}
             onChange={handleChange}
             required
-          />
+          />}
           <Input
             label="Desconto manual"
             type="number"
@@ -194,7 +198,9 @@ export default function ModalContratarRenovarPlano({ open, aluno, plano, onClose
               <div>
                 <div className="text-sm font-semibold text-slate-700">Preview de cobertura</div>
                 <div className="text-xs text-slate-500">
-                  {formatarData(preview.data_inicio)} ate {formatarData(preview.data_fim)}
+                  {formatarData(preview.data_inicio)} até {formatarData(preview.data_fim)}
+                  {preview.politica && <div>{nomePoliticaMensal(preview.politica)}</div>}
+                  {preview.cobranca_existente && <div>Cobrança existente · Saldo {formatarMoeda(preview.saldo_em_aberto)}</div>}
                 </div>
               </div>
               <Badge tone="blue">{preview.tipo_cobranca}</Badge>
@@ -219,11 +225,7 @@ export default function ModalContratarRenovarPlano({ open, aluno, plano, onClose
               </div>
               <div className="ui-info-item">
                 <div className="ui-info-item__label">Valor a pagar</div>
-                <div className="ui-info-item__value">{formatarMoeda(preview.valor_cobrado)}</div>
-              </div>
-              <div className="ui-info-item">
-                <div className="ui-info-item__label">Valor pago</div>
-                <div className="ui-info-item__value">{formatarMoeda(preview.valor_cobrado)}</div>
+                <div className="ui-info-item__value">{formatarMoeda(preview.saldo_em_aberto ?? preview.valor_cobrado)}</div>
               </div>
             </div>
 
@@ -244,7 +246,7 @@ export default function ModalContratarRenovarPlano({ open, aluno, plano, onClose
           <Button type="submit" variant="secondary" disabled={!podeCalcular || carregandoPreview || confirmando}>
             <Calculator size={15} /> {carregandoPreview ? "Calculando..." : "Calcular preview"}
           </Button>
-          <Button type="button" onClick={confirmar} disabled={!preview || confirmando || carregandoPreview}>
+          <Button type="button" onClick={confirmar} disabled={!preview || preview.saldo_em_aberto === 0 || confirmando || carregandoPreview}>
             <CheckCircle2 size={15} /> {confirmando ? "Confirmando..." : "Confirmar contratacao"}
           </Button>
         </div>

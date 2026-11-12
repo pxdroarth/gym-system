@@ -68,6 +68,8 @@ async function ensureTenantUnitBase() {
     `);
   }
 
+  await addColumnIfMissing('unit', 'politica_retorno_mensal TEXT');
+
   if (!(await tableExists('usuario_tenant'))) {
     await runExecute(`
       CREATE TABLE usuario_tenant (
@@ -964,6 +966,7 @@ async function ensureSchema() {
   await ensureAuditLog();
   const defaultScope = await ensureTenantUnitBase();
   await ensureCoreBusinessTables();
+  await addColumnIfMissing('mensalidade', 'politica_emissao TEXT');
   await ensureFechamentoMensal();
   await ensureFechamentoMensalUnitUnique(defaultScope);
   await ensureReversaoControlada();

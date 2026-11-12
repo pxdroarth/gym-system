@@ -17,8 +17,13 @@ export const mensalidadeService = {
   fetchMensalidades,
 };
 
-export async function emitirMensalidadePadrao(alunoId) {
-  const { data } = await api.post('/mensalidades/padrao', { aluno_id: alunoId });
+export async function preverMensalidadePadrao(alunoId) {
+  const { data } = await api.post('/mensalidades/padrao/previa', { aluno_id: alunoId });
+  return data;
+}
+
+export async function emitirMensalidadePadrao(alunoId, previa) {
+  const { data } = await api.post('/mensalidades/padrao', { aluno_id: alunoId, previa });
   return data;
 }
 

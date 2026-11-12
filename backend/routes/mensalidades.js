@@ -30,11 +30,21 @@ function assertGenericStatusChangeAllowed(status) {
   }
 }
 
+router.post('/padrao/previa', requirePermission(PERMISSIONS.MENSALIDADES_EMITIR_PADRAO), async (req, res, next) => {
+  try {
+    const scope = requireScope(req);
+    const { preview } = await runTransaction((tx) => MensalidadeService.prepararMensalidadePadrao(req.body?.aluno_id, scope, tx));
+    res.json(preview);
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/padrao', requirePermission(PERMISSIONS.MENSALIDADES_EMITIR_PADRAO), async (req, res, next) => {
   try {
     const scope = requireScope(req);
     const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
-    const resultado = await MensalidadeService.emitirMensalidadePadrao(req.body?.aluno_id, actor, scope);
+    const resultado = await MensalidadeService.emitirMensalidadePadrao(req.body?.aluno_id, actor, scope, req.body?.previa);
     res.status(resultado.criada ? 201 : 200).json(resultado.mensalidade);
   } catch (error) {
     next(error);

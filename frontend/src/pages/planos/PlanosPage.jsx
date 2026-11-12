@@ -7,13 +7,57 @@ import EmptyState from "../../components/ui/EmptyState";
 import PageHeader from "../../components/ui/PageHeader";
 import Table from "../../components/ui/Table";
 import useAuth from "../../hooks/useAuth";
+import { api } from "../../services/Api";
 import { fetchPlanos } from "../../services/planoService";
 import getApiErrorMessage from "../../utils/getApiErrorMessage";
-import { UI_PERMISSIONS, userHasUiPermission } from "../../utils/permissions";
+import { ROLES, UI_PERMISSIONS, userHasUiPermission } from "../../utils/permissions";
 import ModalPlanoForm from "./ModalPlanoForm";
 
+function PoliticaRetorno({ unidade }) {
+  const [politica, setPolitica] = useState("");
+  const [salvando, setSalvando] = useState(false);
+
+  useEffect(() => {
+    let ativa = true;
+    api.get("/units/politica-retorno")
+      .then(({ data }) => { if (ativa) setPolitica(data.politica); })
+      .catch((error) => { if (ativa) toast.error(getApiErrorMessage(error)); });
+    return () => { ativa = false; };
+  }, []);
+
+  async function salvar(event) {
+    event.preventDefault();
+    setSalvando(true);
+    try {
+      await api.patch("/units/politica-retorno", { politica });
+      toast.success("Política salva para a unidade.");
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
+    } finally {
+      setSalvando(false);
+    }
+  }
+
+  return (
+    <Card>
+      <form onSubmit={salvar} className="flex flex-wrap items-end gap-3">
+        <label className="ui-field">
+          <span className="ui-field__label">Cobrança no retorno · {unidade.nome}</span>
+          <select className="ui-input" value={politica} disabled={!politica || salvando}
+            onChange={(event) => setPolitica(event.target.value)}>
+            <option value="" disabled>Carregando…</option>
+            <option value="proporcional">Proporcional aos dias restantes</option>
+            <option value="integral">Ciclo integral</option>
+          </select>
+        </label>
+        <Button type="submit" disabled={!politica || salvando}>Salvar política</Button>
+      </form>
+    </Card>
+  );
+}
+
 export default function PlanosPage() {
-  const { user } = useAuth();
+  const { user, currentUnit } = useAuth();
   const [planos, setPlanos] = useState([]);
   const [carregando, setCarregando] = useState(true);
   const [mostrarModal, setMostrarModal] = useState(false);
@@ -59,6 +103,9 @@ export default function PlanosPage() {
         actions={canManagePlanos ? <Button onClick={abrirModalNovo}>+ Novo Plano</Button> : null}
       />
 
+      {user?.papel === ROLES.OWNER && currentUnit && (
+        <PoliticaRetorno key={currentUnit.id} unidade={currentUnit} />
+      )}
       <Card>
         <div className="ui-section-header">
           <div>

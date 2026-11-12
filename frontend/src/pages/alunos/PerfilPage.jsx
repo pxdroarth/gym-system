@@ -4,10 +4,12 @@ import { useNavigate, useParams } from "react-router-dom";
 import ToastNotification from "../../components/ToastNotification";
 import useAuth from "../../hooks/useAuth";
 import ModalContratarRenovarPlano from "./ModalContratarRenovarPlano";
+import Modal from "../../components/ui/Modal";
+import { nomePoliticaMensal } from "../../utils/politicaMensal";
 import ModalNovaMensalidade from "./ModalNovaMensalidade";
 import { fetchAcessos, simularAcesso } from "../../services/acessoService";
 import { fetchAlunoById } from "../../services/alunoService";
-import { fetchMensalidadesPorAluno, emitirMensalidadePadrao, concederDescontoMensalidade } from "../../services/mensalidadeService";
+import { fetchMensalidadesPorAluno, emitirMensalidadePadrao, preverMensalidadePadrao, concederDescontoMensalidade } from "../../services/mensalidadeService";
 import { registrarPagamento } from "../../services/pagamentoService";
 import { fetchPlanos } from "../../services/planoService";
 import Badge from "../../components/ui/Badge";
@@ -121,6 +123,8 @@ export default function PerfilPage() {
   const [aluno, setAluno] = useState(null);
   const [erro, setErro] = useState(null);
   const [abaAtiva, setAbaAtiva] = useState("informacoes");
+  const [previaPadrao, setPreviaPadrao] = useState(null);
+  const [valoresPagamento, setValoresPagamento] = useState({});
   const [emitindoMensalidade, setEmitindoMensalidade] = useState(false);
   const [mensalidades, setMensalidades] = useState([]);
   const [totalMensalidades, setTotalMensalidades] = useState(0);
@@ -219,11 +223,17 @@ export default function PerfilPage() {
   async function gerarMensalidadePadrao() {
     setEmitindoMensalidade(true);
     try {
-      await emitirMensalidadePadrao(aluno.id);
+      if (!previaPadrao) {
+        setPreviaPadrao(await preverMensalidadePadrao(aluno.id));
+        return;
+      }
+      await emitirMensalidadePadrao(aluno.id, previaPadrao);
+      setPreviaPadrao(null);
       setToastMsg("Cobrança padrão disponível.");
       setPaginaMensalidade(1);
       await Promise.all([carregarAluno(), carregarMensalidades()]);
     } catch (error) {
+      setPreviaPadrao(null);
       setToastMsg(getApiErrorMessage(error));
     } finally {
       setEmitindoMensalidade(false);
@@ -235,17 +245,17 @@ export default function PerfilPage() {
     pagamentosEmAndamento.current.add(mensalidade.id);
     setCarregandoPagamentoId(mensalidade.id);
 
-    // Quita o saldo em aberto (pagamentos parciais anteriores ja contam).
     const saldo = Number(mensalidade.saldo_em_aberto ?? mensalidade.valor_cobrado);
-    const tentativa = abrirTentativa(mensalidade.id, {
+    const valor = valoresPagamento[mensalidade.id];
+    const tentativa = tentativaPendente(mensalidade.id) || abrirTentativa(mensalidade.id, {
       mensalidade_id: mensalidade.id,
-      valor_pago: saldo,
-      data_pagamento: new Date().toISOString().slice(0, 10),
+      valor_pago: valor ? Number(valor) : saldo,
     });
 
     try {
       const resultado = await registrarPagamento(tentativa.payload, tentativa.chave);
       encerrarTentativa(mensalidade.id);
+      setValoresPagamento((valores) => ({ ...valores, [mensalidade.id]: "" }));
       setToastMsg(resultado?.idempotente
         ? "Pagamento ja registrado anteriormente; nenhum valor foi lancado de novo."
         : "Pagamento registrado com sucesso.");
@@ -429,6 +439,16 @@ export default function PerfilPage() {
                 </Button>
               ) : null}
               {!aluno.plano_id && canContratarRenovar ? <Badge tone="amber">Aluno sem plano</Badge> : null}
+              {previaPadrao && (
+                <Modal title="Prévia da mensalidade" onClose={() => setPreviaPadrao(null)}>
+                  <p>{nomePoliticaMensal(previaPadrao.politica)}</p>
+                  <p>{formatarMoeda(previaPadrao.valor_cobrado)} · {formatarData(previaPadrao.data_inicio)} a {formatarData(previaPadrao.data_fim)}</p>
+                  <p>Próximo ciclo em {formatarData(previaPadrao.proximo_vencimento)}</p>
+                  <Button onClick={gerarMensalidadePadrao} disabled={emitindoMensalidade}>
+                    {previaPadrao.cobranca_existente ? "Usar cobrança existente" : "Confirmar emissão"}
+                  </Button>
+                </Modal>
+              )}
               {canEmitirMensalidadePadrao && (
                 <Button onClick={gerarMensalidadePadrao} disabled={!aluno.plano_id || emitindoMensalidade}>
                   {emitindoMensalidade ? "Gerando…" : "Gerar Mensalidade"}
@@ -476,7 +496,20 @@ export default function PerfilPage() {
                         </Button>
                       )}
                       {["em_aberto", "parcial", "vencido"].includes(mensalidade.status) && canRegistrarPagamento ? (
-                        <Button
+                        <div className="flex flex-wrap items-center gap-2">
+                          <input
+                            className="ui-input w-28"
+                            type="number" min="0.01" step="0.01"
+                            aria-label="Valor do recebimento"
+                            placeholder={String(mensalidade.saldo_em_aberto ?? mensalidade.valor_cobrado)}
+                            value={tentativaPendente(mensalidade.id)?.payload.valor_pago ?? valoresPagamento[mensalidade.id] ?? ""}
+                            disabled={Boolean(tentativaPendente(mensalidade.id)) || carregandoPagamentoId === mensalidade.id}
+                            onChange={(event) => {
+                              const valor = event.target.value;
+                              setValoresPagamento((valores) => ({ ...valores, [mensalidade.id]: valor }));
+                            }}
+                          />
+                          <Button
                           size="sm"
                           variant="success"
                           onClick={() => pagarMensalidade(mensalidade)}
@@ -492,7 +525,8 @@ export default function PerfilPage() {
                               : mensalidade.status === "parcial"
                                 ? `Pagar saldo ${formatarMoeda(mensalidade.saldo_em_aberto)}`
                                 : "Pagar"}
-                        </Button>
+                          </Button>
+                        </div>
                       ) : mensalidade.status === "em_aberto" ? (
                         <Badge tone="amber">Em aberto</Badge>
                       ) : (

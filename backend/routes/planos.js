@@ -14,6 +14,7 @@ const {
 const MensalidadeService = require('../services/MensalidadeService');
 const {
   TIPO_COBRANCA,
+  isPlanoAvulso,
   POLICY_FIELDS,
   normalizarPoliticaPlano,
   validarPoliticaPlanoInput,
@@ -94,10 +95,6 @@ function toCents(value) {
   return Math.round(number * 100);
 }
 
-function hojeISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
 function buildObservacoesContratacao(body = {}) {
   const partes = ['contratacao/renovacao assistida'];
   if (body.observacao) partes.push(String(body.observacao).trim());
@@ -105,7 +102,10 @@ function buildObservacoesContratacao(body = {}) {
   return partes.filter(Boolean).join(' | ');
 }
 
-router.post('/preview-cobertura', async (req, res, next) => {
+router.post('/preview-cobertura',
+  requirePermission(PERMISSIONS.PLANOS_CONTRATAR_RENOVAR),
+  requirePermission(PERMISSIONS.PAGAMENTOS_REGISTRAR),
+  async (req, res, next) => {
   try {
     const scope = requireScope(req);
     const alunoId = Number(req.body?.aluno_id);
@@ -133,6 +133,16 @@ router.post('/preview-cobertura', async (req, res, next) => {
     );
     if (!plano) {
       throw new AppError('Plano nao encontrado no escopo atual', 404, 'PLANO_NAO_ENCONTRADO_NO_ESCOPO');
+    }
+
+    if (isPlanoAvulso(plano)) {
+      if (Number(aluno.plano_id) !== planoId) {
+        throw new AppError('Use o plano atual do aluno', 409, 'COBERTURA_CONTRATACAO_TROCA_PLANO_NAO_SUPORTADA');
+      }
+      const { preview } = await runTransaction((tx) => MensalidadeService.prepararMensalidadePadrao(alunoId, scope, tx, {
+        renovar: true, descontoManual: req.body?.desconto_manual,
+      }));
+      return res.json(preview);
     }
 
     const preview = calcularPreviewContratacaoRenovacao({
@@ -213,7 +223,11 @@ router.post(
         throw new AppError('Plano nao encontrado no escopo atual', 404, 'PLANO_NAO_ENCONTRADO_NO_ESCOPO');
       }
 
-      const preview = calcularPreviewContratacaoRenovacao({
+      const proposta = isPlanoAvulso(plano)
+        ? await MensalidadeService.prepararMensalidadePadrao(alunoId, scope, tx, {
+          renovar: true, descontoManual: req.body?.desconto_manual,
+        }) : null;
+      const preview = proposta?.preview || calcularPreviewContratacaoRenovacao({
         aluno,
         plano,
         data_inicio: dataInicio,
@@ -230,15 +244,18 @@ router.post(
         );
       }
 
-      const motivoDesconto = preview.desconto_manual > 0 || preview.valor_base < Number(plano.valor_base)
+      const descontoExcepcional = proposta
+        ? !proposta.existente && preview.desconto_manual > 0
+        : preview.desconto_manual > 0 || preview.valor_base < Number(plano.valor_base);
+      const motivoDesconto = descontoExcepcional
         ? MensalidadeService.motivoDesconto(req.body?.motivo_desconto)
         : null;
 
       const coberturaSobreposta = await buscarCoberturaPagaSobreposta({
         aluno_id: aluno.id,
         scope,
-        data_inicio: preview.data_inicio,
-        data_fim: preview.data_fim,
+        data_inicio: dataInicio,
+        data_fim: proposta && dataInicio !== preview.data_inicio ? dataInicio : preview.data_fim,
       }, tx);
       if (coberturaSobreposta) {
         throw new AppError(
@@ -253,8 +270,13 @@ router.post(
         );
       }
 
+      if (proposta && dataInicio !== preview.data_inicio) {
+        throw new AppError('Confirme o inicio calculado para o ciclo elegivel', 409, 'CICLO_MENSAL_INVALIDO');
+      }
+      MensalidadeService.conferirPrevia(preview, req.body?.previa);
+
       const valorPagoCents = toCents(valorPago);
-      const valorCobradoCents = toCents(preview.valor_cobrado);
+      const valorCobradoCents = toCents(preview.saldo_em_aberto ?? preview.valor_cobrado);
       if (valorPagoCents === null || valorPagoCents !== valorCobradoCents) {
         throw new AppError(
           'valor_pago deve ser igual ao valor_cobrado do preview.',
@@ -264,7 +286,10 @@ router.post(
         );
       }
 
-      const mensalidade = await MensalidadeService.criarMensalidade({
+      if (motivoDesconto) assertPermission(req, PERMISSIONS.MENSALIDADES_DESCONTO);
+      const mensalidade = proposta
+        ? (await MensalidadeService.gravarMensalidadePadrao(proposta, actor, scope, tx)).mensalidade
+        : await MensalidadeService.criarMensalidade({
         aluno_id: aluno.id,
         plano_id: plano.id,
         valor_cobrado: preview.valor_cobrado,
@@ -276,7 +301,6 @@ router.post(
       }, scope, tx);
 
       if (motivoDesconto) {
-        assertPermission(req, PERMISSIONS.MENSALIDADES_DESCONTO);
         await AuditService.logAction({
           actor, action: 'conceder_desconto_excepcional', module: 'mensalidades', recordType: 'mensalidade',
           recordId: mensalidade.id, after: mensalidade, metadata: { motivo: motivoDesconto },
@@ -286,7 +310,6 @@ router.post(
 
       const pagamento = await MensalidadeService.registrarPagamento({
         mensalidade_id: mensalidade.id,
-        data_pagamento: hojeISO(),
         valor_pago: valorPago,
       }, actor, scope, tx);
 

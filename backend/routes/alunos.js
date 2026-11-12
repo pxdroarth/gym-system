@@ -6,6 +6,7 @@ const FechamentoMensalService = require('../services/FechamentoMensalService');
 const VinculoService = require('../services/VinculoService');
 const { PERMISSIONS, USER_ROLES } = require('../constants/userRoles');
 const { assertPermission, requirePermission } = require('../middlewares/requirePermission');
+const { dataLocalISO } = require('../utils/dataLocal');
 const { actorWithScope, requireScope } = require('../helpers/scope');
 
 function toISODate(d) {
@@ -38,65 +39,57 @@ const coberturaPagaVigenteWhere = `
   AND m.deleted_at IS NULL
   AND ${coberturaInicioExpr} IS NOT NULL
   AND ${coberturaFimExpr} IS NOT NULL
-  AND DATE(${coberturaInicioExpr}) <= DATE('now')
-  AND DATE(${coberturaFimExpr}) >= DATE('now')
+  AND (
+    NULLIF(NULLIF(m.data_inicio, ''), '0000-00-00') IS NULL
+    OR NULLIF(NULLIF(m.data_fim, ''), '0000-00-00') IS NULL
+    OR DATE(${coberturaInicioExpr}) <= dia_operacional.hoje
+  )
+  AND DATE(${coberturaFimExpr}) >= dia_operacional.hoje
 `;
 
 const coberturaPagaVigenteOrder = `
   ORDER BY DATE(${coberturaFimExpr}) DESC, DATE(${coberturaInicioExpr}) DESC, m.id DESC
 `;
 
+const debitoVencido = `
+  m.deleted_at IS NULL
+  AND (
+    m.status = 'vencido'
+    OR (m.status IN ('em_aberto', 'parcial') AND DATE(NULLIF(m.vencimento, '0000-00-00')) < dia_operacional.hoje)
+  )
+`;
+
+const mensalidadesAluno = `
+  m.aluno_id = ${responsavelIdExpr} AND m.tenant_id = a.tenant_id AND m.unit_id = a.unit_id
+`;
+
 const statusMensalidadeExpr = `
   CASE
-    WHEN EXISTS (
-      SELECT 1
-      FROM mensalidade m
-      WHERE m.aluno_id = ${responsavelIdExpr}
-        AND m.tenant_id = a.tenant_id
-        AND m.unit_id = a.unit_id
-        AND m.status = 'em_aberto'
-        AND m.vencimento IS NOT NULL
-        AND m.vencimento != '0000-00-00'
-        AND DATE(m.vencimento) <= DATE('now')
-    ) THEN 'atrasado'
-    WHEN EXISTS (
-      SELECT 1
-      FROM mensalidade m
-      WHERE m.aluno_id = ${responsavelIdExpr}
-        AND m.tenant_id = a.tenant_id
-        AND m.unit_id = a.unit_id
-    ) THEN 'em_dia'
+    WHEN EXISTS (SELECT 1 FROM mensalidade m WHERE ${mensalidadesAluno} AND ${debitoVencido}) THEN 'atrasado'
+    WHEN EXISTS (SELECT 1 FROM mensalidade m WHERE ${coberturaPagaVigenteWhere}) THEN 'em_dia'
+    WHEN EXISTS (SELECT 1 FROM mensalidade m WHERE ${mensalidadesAluno} AND m.deleted_at IS NULL AND m.status = 'parcial') THEN 'parcial'
+    WHEN EXISTS (SELECT 1 FROM mensalidade m WHERE ${mensalidadesAluno} AND m.deleted_at IS NULL AND m.status = 'em_aberto') THEN 'em_aberto'
+    WHEN EXISTS (SELECT 1 FROM mensalidade m WHERE ${mensalidadesAluno} AND m.deleted_at IS NULL) THEN 'sem_cobertura_vigente'
     ELSE 'sem_mensalidade'
   END
 `;
 
 const statusOperacionalExpr = `
   CASE
-    WHEN COALESCE(a.status, 'ativo') != 'ativo' THEN 'inativo'
+    WHEN COALESCE(a.status, 'ativo') != 'ativo' OR pa.status = 'pendente_regularizacao' THEN 'inativo'
     WHEN EXISTS (
-      SELECT 1
-      FROM aluno ar
-      WHERE ar.id = pa.responsavel_id
-        AND ar.tenant_id = a.tenant_id
-        AND ar.unit_id = a.unit_id
+      SELECT 1 FROM aluno ar
+      WHERE ar.id = pa.responsavel_id AND ar.tenant_id = a.tenant_id AND ar.unit_id = a.unit_id
         AND COALESCE(ar.status, 'ativo') != 'ativo'
     ) THEN 'inativo'
-    WHEN EXISTS (
-      SELECT 1
-      FROM mensalidade m
-      WHERE m.aluno_id = ${responsavelIdExpr}
-        AND m.tenant_id = a.tenant_id
-        AND m.unit_id = a.unit_id
-        AND m.status = 'em_aberto'
-        AND m.vencimento IS NOT NULL
-        AND m.vencimento != '0000-00-00'
-        AND DATE(m.vencimento) <= DATE('now')
-    ) THEN 'inativo'
-    ELSE 'ativo'
+    WHEN EXISTS (SELECT 1 FROM mensalidade m WHERE ${mensalidadesAluno} AND ${debitoVencido}) THEN 'inativo'
+    WHEN EXISTS (SELECT 1 FROM mensalidade m WHERE ${coberturaPagaVigenteWhere}) THEN 'ativo'
+    ELSE 'inativo'
   END
 `;
 
 const baseSelect = `
+  WITH dia_operacional(hoje) AS (VALUES (?))
   SELECT a.*, pa.responsavel_id,
          CASE WHEN pa.responsavel_id IS NOT NULL THEN 1 ELSE 0 END AS eh_vinculado,
          ${statusMensalidadeExpr} AS mensalidade_status,
@@ -148,6 +141,7 @@ const baseSelect = `
          END AS cobertura_motivo,
          COALESCE(p.nome, 'Sem plano') AS plano_nome
   FROM aluno a
+  CROSS JOIN dia_operacional
   LEFT JOIN plano_associado pa ON pa.aluno_id = a.id AND pa.tenant_id = a.tenant_id AND pa.unit_id = a.unit_id AND COALESCE(pa.status, 'ativo') != 'encerrado'
   LEFT JOIN plano p ON a.plano_id = p.id AND p.tenant_id = a.tenant_id
 `;
@@ -171,7 +165,7 @@ router.get('/pesquisa', async (req, res) => {
     const lista = await runQuery(
       `${baseSelect} ${where}
        ORDER BY a.nome ASC LIMIT ? OFFSET ?`,
-      [...params, limite, offset]
+      [dataLocalISO(), ...params, limite, offset]
     );
 
     res.json({ alunos: lista, total: totalRow.total, pagina, limite });
@@ -187,7 +181,7 @@ router.get('/', async (req, res) => {
       ${baseSelect}
       WHERE a.tenant_id = ? AND a.unit_id = ?
       ORDER BY a.id DESC
-    `, [scope.tenant_id, scope.unit_id]);
+    `, [dataLocalISO(), scope.tenant_id, scope.unit_id]);
     res.json(rows);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -253,21 +247,19 @@ router.get('/:id/debito', async (req, res) => {
   try {
     const scope = requireScope(req);
     const row = await runGet(
-      `SELECT COUNT(*) AS total
-       FROM mensalidade
+      `WITH dia_operacional(hoje) AS (VALUES (?))
+       SELECT COUNT(*) AS total
+       FROM mensalidade m CROSS JOIN dia_operacional
        WHERE tenant_id = ?
          AND unit_id = ?
          AND aluno_id = COALESCE((
            SELECT responsavel_id
            FROM plano_associado
-           WHERE aluno_id = ? AND tenant_id = ? AND unit_id = ?
+           WHERE aluno_id = ? AND tenant_id = ? AND unit_id = ? AND COALESCE(status, 'ativo') != 'encerrado'
            LIMIT 1
          ), ?)
-         AND status = 'em_aberto'
-         AND vencimento IS NOT NULL
-         AND vencimento != '0000-00-00'
-         AND DATE(vencimento) <= DATE('now')`,
-      [scope.tenant_id, scope.unit_id, id, scope.tenant_id, scope.unit_id, id]
+         AND ${debitoVencido}`,
+      [dataLocalISO(), scope.tenant_id, scope.unit_id, id, scope.tenant_id, scope.unit_id, id]
     );
     res.json({ em_debito: row.total > 0 });
   } catch (error) {
@@ -383,7 +375,7 @@ router.get('/:id', async (req, res) => {
     const row = await runGet(`
       ${baseSelect}
       WHERE a.id = ? AND a.tenant_id = ? AND a.unit_id = ?
-    `, [id, scope.tenant_id, scope.unit_id]);
+    `, [dataLocalISO(), id, scope.tenant_id, scope.unit_id]);
 
     if (!row) return res.status(404).json({ error: 'Aluno não encontrado' });
     res.json(row);

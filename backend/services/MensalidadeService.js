@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const { paraCentavos, deCentavos } = require('../utils/dinheiro');
 const { dataLocalISO } = require('../utils/dataLocal');
 const { isPlanoAvulso } = require('./PlanoPolicyService');
-const { calcularPreviewContratacaoRenovacao } = require('./CoberturaService');
+const { calcularPreviewContratacaoRenovacao, buscarCoberturaPagaSobreposta } = require('./CoberturaService');
 
 function clientOrDefault(client) {
   return client || { get: runGet, all: runQuery, run: runExecute };
@@ -217,80 +217,134 @@ function vencimentoAncorado(data, dia, deslocamento = 0) {
     .toISOString().slice(0, 10);
 }
 
-async function emitirMensalidadePadrao(alunoId, actor, scope) {
+async function prepararMensalidadePadrao(alunoId, scope, tx, { renovar = false, descontoManual } = {}) {
   if (!Number.isInteger(Number(alunoId)) || Number(alunoId) < 1) {
     throw new AppError('Informe um aluno valido', 400, 'ALUNO_ID_INVALIDO');
   }
 
+  const aluno = await tx.get(
+    'SELECT * FROM aluno WHERE id = ? AND tenant_id = ? AND unit_id = ?',
+    [Number(alunoId), scope.tenant_id, scope.unit_id]
+  );
+  if (!aluno) throw new AppError('Aluno nao encontrado', 404, 'ALUNO_NAO_ENCONTRADO');
+  const plano = await tx.get('SELECT * FROM plano WHERE id = ? AND tenant_id = ?', [aluno.plano_id, scope.tenant_id]);
+  const dia = Number(aluno.dia_vencimento);
+  if (aluno.status !== 'ativo' || !plano || !isPlanoAvulso(plano) || !Number.isInteger(dia) || dia < 1 || dia > 31) {
+    throw new AppError('Aluno sem plano mensal manual ativo e vencimento valido', 409, 'ALUNO_SEM_PLANO_MENSAL_ATIVO');
+  }
+  await validarAlunoCobravel(aluno.id, scope, tx);
+
+  const hoje = dataLocalISO();
+  const mesAtual = vencimentoAncorado(hoje, dia);
+  const vigente = hoje < mesAtual ? -1 : 0;
+  const temCobertura = renovar && await buscarCoberturaPagaSobreposta({
+    aluno_id: aluno.id, scope, data_inicio: hoje, data_fim: hoje,
+  }, tx);
+  const deslocamento = vigente + (temCobertura ? 1 : 0);
+  const inicioCiclo = vencimentoAncorado(hoje, dia, deslocamento);
+  const proximoVencimento = vencimentoAncorado(hoje, dia, deslocamento + 1);
+  const fimCiclo = new Date(Date.parse(proximoVencimento) - 86400000).toISOString().slice(0, 10);
+  const fimPago = temCobertura?.data_fim?.slice(0, 10);
+  // Na transição, só a parte ainda descoberta do próximo ciclo pode ser cobrada.
+  const inicioTransicao = fimPago && fimPago >= inicioCiclo && fimPago < fimCiclo
+    ? new Date(Date.parse(fimPago) + 86400000).toISOString().slice(0, 10)
+    : null;
+
+  const parametros = [aluno.id, scope.tenant_id, scope.unit_id];
+  const anterior = await tx.get(
+    `SELECT * FROM mensalidade
+     WHERE aluno_id = ? AND tenant_id = ? AND unit_id = ? AND deleted_at IS NULL
+       AND status != ?
+       AND DATE(COALESCE(NULLIF(NULLIF(data_inicio, ''), '0000-00-00'), vencimento)) <= DATE(?)
+       AND DATE(COALESCE(NULLIF(NULLIF(data_fim, ''), '0000-00-00'), vencimento)) >= DATE(?)
+     ORDER BY id DESC LIMIT 1`,
+    [...parametros, MENSALIDADE_STATUS.CANCELADO, fimCiclo, inicioTransicao || inicioCiclo]
+  );
+  if (anterior) {
+    const saldo = await resumoSaldoMensalidade(tx, anterior);
+    return {
+      existente: anterior,
+      preview: {
+        aluno_id: aluno.id, plano_id: anterior.plano_id, tipo_cobranca: 'AVULSO_MENSAL',
+        data_inicio: anterior.data_inicio || anterior.vencimento,
+        data_fim: anterior.data_fim || anterior.vencimento, vencimento: anterior.vencimento,
+        valor_base: Number(anterior.valor_cobrado) + Number(anterior.desconto_aplicado || 0),
+        valor_cobrado: anterior.valor_cobrado, desconto_aplicado: anterior.desconto_aplicado,
+        saldo_em_aberto: saldo.saldo_em_aberto, politica: anterior.politica_emissao || 'cobranca_existente',
+        cobranca_existente: true, proximo_vencimento: proximoVencimento,
+      },
+    };
+  }
+
+  // Cobranças canceladas ou excluídas não iniciam o contrato.
+  const historico = await tx.get(
+    `SELECT id FROM mensalidade
+     WHERE aluno_id = ? AND tenant_id = ? AND unit_id = ? AND deleted_at IS NULL
+       AND COALESCE(status, '') != ?
+     LIMIT 1`,
+    [...parametros, MENSALIDADE_STATUS.CANCELADO]
+  );
+
+  const vespera = new Date(Date.parse(inicioCiclo) - 86400000).toISOString().slice(0, 10);
+  const continuidade = historico && await buscarCoberturaPagaSobreposta({
+    aluno_id: aluno.id, scope, data_inicio: vespera, data_fim: vespera,
+  }, tx);
+  const unit = await tx.get('SELECT politica_retorno_mensal FROM unit WHERE id = ? AND tenant_id = ?', [scope.unit_id, scope.tenant_id]);
+  const retorno = historico && !continuidade && !temCobertura;
+  const politica = inicioTransicao ? 'transicao_proporcional'
+    : temCobertura ? 'renovacao_antecipada'
+    : !historico ? 'primeira_proporcional'
+    : !retorno ? 'ciclo_integral'
+    : unit?.politica_retorno_mensal === 'integral' ? 'retorno_integral' : 'retorno_proporcional';
+  const inicio = inicioTransicao
+    || (politica === 'primeira_proporcional' || politica === 'retorno_proporcional' ? hoje : inicioCiclo);
+  const calculo = calcularPreviewContratacaoRenovacao({ aluno, plano, data_inicio: inicio, desconto_manual: descontoManual });
+  const dias = (Date.parse(proximoVencimento) - Date.parse(inicio)) / 86400000;
+  const diasCiclo = (Date.parse(proximoVencimento) - Date.parse(inicioCiclo)) / 86400000;
+  const base = Math.round(paraCentavos(calculo.valor_base) * dias / diasCiclo);
+  const valor = Math.round(paraCentavos(calculo.valor_cobrado) * dias / diasCiclo);
+  if (valor <= 0) throw new AppError('Valor da cobranca invalido', 400, 'VALOR_COBRADO_INVALIDO');
+
+  return {
+    preview: {
+      ...calculo, data_fim: fimCiclo, vencimento: inicio, duracao_dias: dias, politica, proximo_vencimento: proximoVencimento,
+      valor_base: deCentavos(base), valor_cobrado: deCentavos(valor),
+      desconto_aplicado: deCentavos(base - valor), saldo_em_aberto: deCentavos(valor),
+    },
+  };
+}
+
+async function gravarMensalidadePadrao({ existente, preview }, actor, scope, tx) {
+  if (existente) return { mensalidade: existente, criada: false };
+  await FechamentoMensalService.assertPeriodoEditavelPorData(preview.vencimento, 'emissao de mensalidade padrao', tx, scope);
+  const result = await tx.run(
+    `INSERT INTO mensalidade
+      (aluno_id, plano_id, valor_cobrado, desconto_aplicado, status, data_inicio, data_fim, vencimento, tenant_id, unit_id, politica_emissao)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [preview.aluno_id, preview.plano_id, preview.valor_cobrado, preview.desconto_aplicado, MENSALIDADE_STATUS.EM_ABERTO,
+      preview.data_inicio, preview.data_fim, preview.vencimento, scope.tenant_id, scope.unit_id, preview.politica]
+  );
+  const mensalidade = await tx.get('SELECT * FROM mensalidade WHERE id = ?', [result.lastID]);
+  await FinanceiroService.reconciliarLancamentoAgregadoMensalidade(mensalidade, tx);
+  await AuditService.logAction({
+    actor, action: 'emitir_mensalidade_padrao', module: 'mensalidades', recordType: 'mensalidade',
+    recordId: mensalidade.id, after: mensalidade, tenant_id: scope.tenant_id, unit_id: scope.unit_id,
+  }, tx);
+  return { mensalidade, criada: true };
+}
+
+async function emitirMensalidadePadrao(alunoId, actor, scope, previa) {
   return runTransaction(async (tx) => {
-    const aluno = await tx.get(
-      'SELECT * FROM aluno WHERE id = ? AND tenant_id = ? AND unit_id = ?',
-      [Number(alunoId), scope.tenant_id, scope.unit_id]
-    );
-    if (!aluno) throw new AppError('Aluno nao encontrado', 404, 'ALUNO_NAO_ENCONTRADO');
-    const plano = await tx.get('SELECT * FROM plano WHERE id = ? AND tenant_id = ?', [aluno.plano_id, scope.tenant_id]);
-    const dia = Number(aluno.dia_vencimento);
-    if (aluno.status !== 'ativo' || !plano || !isPlanoAvulso(plano) || !Number.isInteger(dia) || dia < 1 || dia > 31) {
-      throw new AppError('Aluno sem plano mensal manual ativo e vencimento valido', 409, 'ALUNO_SEM_PLANO_MENSAL_ATIVO');
-    }
-    await validarAlunoCobravel(aluno.id, scope, tx);
-
-    const hoje = dataLocalISO();
-    const mesAtual = vencimentoAncorado(hoje, dia);
-    const deslocamento = hoje < mesAtual ? -1 : 0;
-    const inicioCiclo = vencimentoAncorado(hoje, dia, deslocamento);
-    const proximoVencimento = vencimentoAncorado(hoje, dia, deslocamento + 1);
-    const fimCiclo = new Date(Date.parse(proximoVencimento) - 86400000).toISOString().slice(0, 10);
-    const parametros = [aluno.id, scope.tenant_id, scope.unit_id];
-    const anterior = await tx.get(
-      `SELECT * FROM mensalidade
-       WHERE aluno_id = ? AND tenant_id = ? AND unit_id = ? AND deleted_at IS NULL
-         AND status != ?
-         AND DATE(COALESCE(NULLIF(NULLIF(data_inicio, ''), '0000-00-00'), vencimento)) <= DATE(?)
-         AND DATE(COALESCE(NULLIF(NULLIF(data_fim, ''), '0000-00-00'), vencimento)) >= DATE(?)
-       ORDER BY id DESC LIMIT 1`,
-      [...parametros, MENSALIDADE_STATUS.CANCELADO, fimCiclo, inicioCiclo]
-    );
-    if (anterior) return { mensalidade: anterior, criada: false };
-
-    // Cobranças canceladas ou excluídas não iniciam o contrato.
-    const historico = await tx.get(
-      `SELECT id FROM mensalidade
-       WHERE aluno_id = ? AND tenant_id = ? AND unit_id = ? AND deleted_at IS NULL
-         AND COALESCE(status, '') != ?
-       LIMIT 1`,
-      [...parametros, MENSALIDADE_STATUS.CANCELADO]
-    );
-    const inicio = historico ? inicioCiclo : hoje;
-    const preview = calcularPreviewContratacaoRenovacao({ aluno, plano, data_inicio: inicio });
-    const dias = (Date.parse(proximoVencimento) - Date.parse(inicio)) / 86400000;
-    const diasCiclo = (Date.parse(proximoVencimento) - Date.parse(inicioCiclo)) / 86400000;
-    const base = Math.round(paraCentavos(preview.valor_base) * dias / diasCiclo);
-    const valor = Math.round(paraCentavos(preview.valor_cobrado) * dias / diasCiclo);
-    if (valor <= 0) throw new AppError('Valor da cobranca invalido', 400, 'VALOR_COBRADO_INVALIDO');
-
-    await FechamentoMensalService.assertPeriodoEditavelPorData(inicio, 'emissao de mensalidade padrao', tx, scope);
-    const result = await tx.run(
-      `INSERT INTO mensalidade
-        (aluno_id, plano_id, valor_cobrado, desconto_aplicado, status, data_inicio, data_fim, vencimento, tenant_id, unit_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [aluno.id, plano.id, deCentavos(valor), deCentavos(base - valor), MENSALIDADE_STATUS.EM_ABERTO,
-        inicio, fimCiclo, inicio, scope.tenant_id, scope.unit_id]
-    );
-    const mensalidade = await tx.get('SELECT * FROM mensalidade WHERE id = ?', [result.lastID]);
-    await FinanceiroService.reconciliarLancamentoAgregadoMensalidade(mensalidade, tx);
-    await AuditService.logAction({
-      actor,
-      action: 'emitir_mensalidade_padrao',
-      module: 'mensalidades',
-      recordType: 'mensalidade',
-      recordId: mensalidade.id,
-      after: mensalidade,
-      tenant_id: scope.tenant_id,
-      unit_id: scope.unit_id,
-    }, tx);
-    return { mensalidade, criada: true };
+    const proposta = await prepararMensalidadePadrao(alunoId, scope, tx);
+    conferirPrevia(proposta.preview, previa);
+    return gravarMensalidadePadrao(proposta, actor, scope, tx);
   });
+}
+
+function conferirPrevia(atual, previa) {
+  if (previa && ['data_inicio', 'data_fim', 'valor_cobrado', 'politica'].some((campo) => atual[campo] !== previa[campo])) {
+    throw new AppError('A cobranca mudou. Calcule a previa novamente.', 409, 'PREVIA_COBRANCA_ALTERADA');
+  }
 }
 
 async function listarMensalidades(filtros = {}, scope = null) {
@@ -545,6 +599,7 @@ async function removerMensalidade(id, actor, motivo = null, scope = null) {
 }
 
 async function listarVigentes(scope = null) {
+  const hoje = dataLocalISO();
   const params = [MENSALIDADE_STATUS.PAGO];
   let scoped = '';
   if (scope?.tenant_id && scope?.unit_id) {
@@ -558,10 +613,10 @@ async function listarVigentes(scope = null) {
       AND vencimento IS NOT NULL
       AND vencimento != '0000-00-00'
       ${scoped}
-      AND DATE(data_inicio) <= DATE('now')
-      AND DATE(data_fim) >= DATE('now')
+      AND DATE(data_inicio) <= DATE(?)
+      AND DATE(data_fim) >= DATE(?)
     ORDER BY DATE(vencimento) DESC
-  `, params);
+  `, [...params, hoje, hoje]);
 }
 
 function normalizarChaveIdempotencia(valor) {
@@ -795,6 +850,9 @@ async function registrarPagamento(payload = {}, actor, scope = null, client = nu
 module.exports = {
   criarMensalidade,
   emitirMensalidadePadrao,
+  prepararMensalidadePadrao,
+  gravarMensalidadePadrao,
+  conferirPrevia,
   concederDesconto,
   motivoDesconto,
   listarMensalidades,

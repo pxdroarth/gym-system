@@ -462,7 +462,10 @@ Diagnóstico e plano completos no documento da GS-07 (commit analisado: `bd74c2d
 - **D5 — Tolerância zero:** se a cobertura anterior acabou e o novo ciclo ainda não foi quitado, o acesso fica bloqueado, inclusive no dia do vencimento. Para planos mensais manuais, esta decisão substitui RN-002.
 - **D6 — Pagamento parcial:** somam-se os pagamentos válidos da mesma mensalidade; o parcial não libera a cobertura daquele ciclo até completar o valor.
 - **D7 — Estorno:** estorna-se o pagamento específico, preserva-se a competência e a situação é recalculada pelo saldo dos pagamentos restantes. Se a quitação deixar de existir, o saldo daquele ciclo é reaberto.
-- Pendentes: D4 (troca do dia de vencimento), D8 (geração das mensalidades), D9 (trimestral/semestral), D10 (limite de competências adiantadas), D11 (fuso por Rede/unidade) e D12 (planos compartilhados).
+- **D8 — Geração no piloto de uma unidade (L03):** no retorno, emitir apenas o ciclo vigente, sob ação do operador. O dono escolhe a política da unidade. Integral cobra o ciclo ancorado inteiro. Proporcional, padrão sem configuração, cobra os dias restantes e inicia a cobertura na data do retorno. Exemplo com âncora 10 e R$ 100 em 15/01: R$ 100 de 10/01 a 09/02 ou R$ 83,87 de 15/01 a 09/02. O ciclo seguinte começa em 10/02. A primeira cobrança fora da âncora continua proporcional. A alteração da política vale para novas emissões. Uma cobrança válida existente é reutilizada com o valor e as datas gravados.
+- **D10 — Renovação antecipada no piloto (L03):** com cobertura paga vigente, antecipar somente o ciclo seguinte. Exibir valor e datas antes de confirmar, reutilizar cobrança desse ciclo e recusar sobreposição com cobertura paga.
+- **Quitação em atraso (L03):** preservar vencimento e cobertura e contabilizar o recebimento no dia operacional de São Paulo. Quitar dentro do intervalo permite entrada até seu fim se os demais requisitos estiverem satisfeitos. Quitar depois do fim liquida a cobrança anterior. A entrada exige cobertura vigente quitada e segue a regra existente de débito vencido.
+- Pendentes fora deste piloto: D4 (troca do dia de vencimento), D9 (trimestral/semestral), D11 (fuso configurável por Rede/unidade) e D12 (planos compartilhados). A aprovação de estornos segue no L04.
 
 ### DN-3 — Permissões operacionais do L02
 

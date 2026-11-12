@@ -1,7 +1,15 @@
+const assert = require('node:assert/strict');
+const { mock } = require('node:test');
+const datas = require('../../backend/utils/dataLocal');
+const dataLocalOriginal = datas.dataLocalISO;
+let relogio;
+mock.method(datas, 'dataLocalISO', (referencia, fuso) => dataLocalOriginal(relogio ?? referencia, fuso));
+
 const express = require('express');
 const db = require('../../backend/database');
-const { runGet, runQuery, runExecute } = require('../../backend/dbHelper');
+const { runGet, runQuery, runExecute, runTransaction } = require('../../backend/dbHelper');
 const AccessService = require('../../backend/services/AccessService');
+const MensalidadeService = require('../../backend/services/MensalidadeService');
 const planosRouter = require('../../backend/routes/planos');
 const errorHandler = require('../../backend/middlewares/errorHandler');
 const { MENSALIDADE_STATUS } = require('../../backend/constants/domainStates');
@@ -56,12 +64,6 @@ function isoDate(offsetDays = 0) {
 function addDays(dateStr, days) {
   const date = new Date(`${dateStr}T12:00:00`);
   date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
-}
-
-function addMonths(dateStr, months) {
-  const date = new Date(`${dateStr}T12:00:00`);
-  date.setUTCMonth(date.getUTCMonth() + months);
   return date.toISOString().slice(0, 10);
 }
 
@@ -434,6 +436,52 @@ async function runCase(label, fn) {
   }
 }
 
+async function testarRenovacaoAncorada(baseUrl, { fimPago, inicioNovo, valor }) {
+  relogio = new Date('2025-11-25T15:00:00Z');
+  try {
+    const key = `RENOVACAO_${fimPago}`;
+    const planoId = await createPlan({ nome: `${PREFIX}${key}_${RUN_ID}`, valor: 100 });
+    await createAluno(key, planoId);
+    const alunoId = created.alunos[key];
+    await runExecute('UPDATE aluno SET dia_vencimento = 10 WHERE id = ?', [alunoId]);
+    const paga = await runExecute(
+      `INSERT INTO mensalidade
+        (aluno_id, plano_id, valor_cobrado, status, data_inicio, data_fim, vencimento, tenant_id, unit_id)
+       VALUES (?, ?, 100, 'pago', '2025-11-10', ?, '2025-11-10', ?, ?)`,
+      [alunoId, planoId, fimPago, created.tenantId, created.unitId]
+    );
+    const antes = await runGet('SELECT * FROM mensalidade WHERE id = ?', [paga.lastID]);
+    const preview = await previewContratacao(baseUrl, key, planoId);
+    assert.deepEqual([preview.data_inicio, preview.data_fim, preview.proximo_vencimento, preview.valor_cobrado],
+      [inicioNovo, '2026-01-09', '2026-01-10', valor], 'prévia da renovação');
+    assert.equal((await countFinancialRecords(key)).mensalidades, 1, 'prévia não grava cobrança');
+
+    const confirmar = () => postJson(`${baseUrl}/planos/contratar-renovar`, {
+      aluno_id: alunoId, plano_id: planoId, data_inicio: inicioNovo, previa: preview, valor_pago: valor,
+    });
+    const resposta = await confirmar();
+    assert.equal(resposta.status, 201, JSON.stringify(resposta.data));
+    const { mensalidade, pagamento } = resposta.data.data;
+    assert.deepEqual([mensalidade.data_inicio, mensalidade.data_fim, mensalidade.valor_cobrado, mensalidade.status],
+      [inicioNovo, '2026-01-09', valor, 'pago']);
+    assert.equal(pagamento.data_pagamento, '2025-11-25');
+    assert.deepEqual(await runGet('SELECT * FROM mensalidade WHERE id = ?', [paga.lastID]), antes);
+    const registros = await countFinancialRecords(key);
+    assert.deepEqual(registros, { mensalidades: 2, pagamentos: 1, contasFinanceiras: 0 });
+    const lancamento = await runGet(
+      "SELECT COUNT(*) AS total FROM conta_financeira WHERE origem = 'pagamento_mensalidade' AND origem_id = ? AND deleted_at IS NULL",
+      [pagamento.id]
+    );
+    assert.equal(lancamento.total, 1);
+
+    const repetida = await confirmar();
+    assert.deepEqual([repetida.status, repetida.data.code], [409, 'COBERTURA_SOBREPOSTA']);
+    assertCountsEqual(registros, await countFinancialRecords(key));
+  } finally {
+    relogio = undefined;
+  }
+}
+
 async function run() {
   console.log('');
   console.log('== Smoke Test Cobertura - Sistema Academia SA ==');
@@ -444,6 +492,11 @@ async function run() {
   await createFixtures();
 
   await withRouteServer(async (baseUrl) => {
+    await runCase('vigencia antiga ate 12/12: transicao de 13/12 a 09/01 por R$ 90,32', () =>
+      testarRenovacaoAncorada(baseUrl, { fimPago: '2025-12-12', inicioNovo: '2025-12-13', valor: 90.32 }));
+    await runCase('vigencia alinhada ate 09/12: renovacao de 10/12 a 09/01 por R$ 100', () =>
+      testarRenovacaoAncorada(baseUrl, { fimPago: '2025-12-09', inicioNovo: '2025-12-10', valor: 100 }));
+
     await runCase('contratar/renovar com admin autorizado', async () => {
       const preview = await previewContratacao(baseUrl, 'SUCESSO', created.planoAvulsoId);
       const response = await contratarRenovar(baseUrl, 'SUCESSO', created.planoAvulsoId, preview.valor_cobrado);
@@ -463,7 +516,7 @@ async function run() {
       assertCountsEqual(before, after);
     });
 
-    await runCase('permitir renovacao apos fim da cobertura atual', async () => {
+    await runCase('antecipar proximo ciclo reaproveitando cobranca ja emitida', async () => {
       const atual = await runGet(
         `SELECT data_fim
          FROM mensalidade
@@ -474,9 +527,23 @@ async function run() {
       if (!atual?.data_fim) throw new Error('data_fim da cobertura atual ausente');
 
       const dataInicio = addDays(atual.data_fim, 1);
+      const scope = { tenant_id: created.tenantId, unit_id: created.unitId };
+      const existente = await runTransaction(async (tx) => {
+        const proposta = await MensalidadeService.prepararMensalidadePadrao(created.alunos.SUCESSO, scope, tx, { renovar: true });
+        return MensalidadeService.gravarMensalidadePadrao(proposta, actor, scope, tx);
+      });
       const preview = await previewContratacao(baseUrl, 'SUCESSO', created.planoAvulsoId, dataInicio);
       const response = await contratarRenovar(baseUrl, 'SUCESSO', created.planoAvulsoId, preview.valor_cobrado, dataInicio);
       await assertSuccessPersistence(response, preview);
+      if (!preview.cobranca_existente || response.data.data.mensalidade.id !== existente.mensalidade.id) {
+        throw new Error('a renovacao nao reutilizou a cobranca existente');
+      }
+      const antes = await countFinancialRecords('SUCESSO');
+      const repetida = await contratarRenovar(baseUrl, 'SUCESSO', created.planoAvulsoId, preview.valor_cobrado, dataInicio);
+      if (repetida.status !== 409 || repetida.data?.code !== 'COBERTURA_SOBREPOSTA') {
+        throw new Error(`repeticao da renovacao: status=${repetida.status}, code=${repetida.data?.code}`);
+      }
+      assertCountsEqual(antes, await countFinancialRecords('SUCESSO'));
     });
 
     await runCase('rejeitar pagamento parcial', async () => {
@@ -511,16 +578,20 @@ async function run() {
       skip('rejeitar tipo de cobranca nao suportado', created.unsupportedScenarioSkipped);
     }
 
-    await runCase('rollback basico em falha controlada', async () => {
+    await runCase('rollback da renovacao antecipada com a data do recebimento fechada', async () => {
+      const atual = await previewContratacao(baseUrl, 'ROLLBACK', created.planoAvulsoId);
+      const compra = await contratarRenovar(baseUrl, 'ROLLBACK', created.planoAvulsoId, atual.valor_cobrado, atual.data_inicio);
+      await assertSuccessPersistence(compra, atual);
+      const antes = await countFinancialRecords('ROLLBACK');
       await insertClosedCurrentPeriod();
-      const dataInicio = addMonths(isoDate(0), 1);
-      const preview = await previewContratacao(baseUrl, 'ROLLBACK', created.planoAvulsoId, dataInicio);
+      const preview = await previewContratacao(baseUrl, 'ROLLBACK', created.planoAvulsoId);
+      const dataInicio = preview.data_inicio;
       const response = await contratarRenovar(baseUrl, 'ROLLBACK', created.planoAvulsoId, preview.valor_cobrado, dataInicio);
 
       if (response.status !== 423 || response.data?.code !== 'PERIODO_FECHADO') {
         throw new Error(`status=${response.status}, code=${response.data?.code || 'ausente'}`);
       }
-      await assertNoFinancialRecords('ROLLBACK');
+      assertCountsEqual(antes, await countFinancialRecords('ROLLBACK'));
     });
   });
 }
