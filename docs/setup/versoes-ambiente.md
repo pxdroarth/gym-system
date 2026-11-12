@@ -6,26 +6,25 @@ Este documento padroniza versoes globais e valida o setup inicial do Sistema Aca
 
 ## 2. Node.js
 
-- Node suportado: `>=20 <23`.
-- Node recomendado e testado atualmente: `22.19.0`.
-- `.nvmrc` indica a versao recomendada, nao a unica versao aceita.
-- O arquivo `.node-version` espelha exatamente o conteudo da `.nvmrc`.
-- `package.json` e `frontend/package.json` indicam a faixa suportada em `engines.node`.
+- Node.js LTS fixado em `24.22.3` para desenvolvimento, CI e implantação.
+- `.nvmrc`, `.node-version` e `engines.node` dos dois pacotes declaram a mesma versão.
+- Nos pull requests, o GitHub Actions lê `.node-version` e executa a verificação de versões, as duas instalações com `npm ci`, os smokes em SQLite descartável e o build de produção.
+- No ambiente de implantação, selecione `24.22.3` na configuração do provedor ou da máquina que executa o backend e compila o frontend.
 - Use `nvm` para trocar a versao antes de instalar dependencias.
 - No Windows, use NVM for Windows ou alternativa equivalente para selecionar a versao indicada.
 
 Exemplo:
 
 ```cmd
-nvm install
-nvm use
+nvm install 24.22.3
+nvm use 24.22.3
 ```
 
 Se sua ferramenta nao ler `.nvmrc` automaticamente, abra o arquivo e use a versao indicada manualmente.
 
 ## 3. npm
 
-- npm suportado: `>=9`.
+- npm suportado: `>=9`. O Node 24.22.3 inclui npm 11.19.1.
 - O npm e validado pelo script de versoes.
 - `package-lock.json` deve ser mantido versionado na raiz.
 - `frontend/package-lock.json` deve ser mantido versionado para as dependencias do frontend.
@@ -57,10 +56,20 @@ Alternativa PowerShell:
 powershell -ExecutionPolicy Bypass -File tests\scripts\check-versions.ps1
 ```
 
+Após `npm ci` na raiz e no frontend, reproduza os smokes e o build do CI no Windows com PowerShell 7:
+
+```powershell
+pwsh -NoProfile -File tests/scripts/smoke-sqlite.ps1
+$env:NODE_ENV = 'production'
+npm.cmd run build:frontend
+```
+
+Os smokes sobem uma API temporária com dados de teste e removem o SQLite ao encerrar.
+
 ## 6. Fluxo recomendado em PC novo
 
 1. Clonar repositorio.
-2. Instalar/usar Node da `.nvmrc`, ou outra versao dentro da faixa suportada `>=20 <23`.
+2. Instalar e usar a versão exata da `.nvmrc`.
 3. Validar versoes:
 
 ```cmd
@@ -106,7 +115,7 @@ Java e Graphviz nao sao obrigatorios para rodar backend, frontend ou SQLite loca
 
 Confira `.nvmrc`, instale a versao indicada com NVM for Windows ou equivalente e rode `tests\scripts\check-versions.cmd` de novo.
 
-Node 18 ou menor nao e suportado. Node 23 ou maior tambem nao e suportado nesta padronizacao.
+A verificação exige a versão exata fixada no repositório.
 
 ### npm incompatibil
 

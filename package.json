@@ -15,7 +15,7 @@
     "e2e:auth:headed": "powershell -ExecutionPolicy Bypass -File tests/scripts/e2e-playwright.ps1 -Headed tests/e2e/playwright/auth.spec.js"
   },
   "engines": {
-    "node": ">=20 <23",
+    "node": "24.22.3",
     "npm": ">=9"
   },
   "dependencies": {

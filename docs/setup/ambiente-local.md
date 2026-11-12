@@ -36,7 +36,7 @@ Por padrao ele roda em dry-run/plano, apenas mostra o que seria executado e so i
 | Sistema operacional | Windows | Plataforma primaria suportada para desenvolvimento local. |
 | Shell | PowerShell 5.1+ | Necessario para os scripts oficiais em `tests\scripts`. |
 | Versionamento | Git | Necessario para clonar, atualizar e versionar o repositorio. |
-| Runtime | Node.js `>=20 <23` | Faixa declarada em `package.json` e `frontend/package.json`. |
+| Runtime | Node.js LTS `24.22.3` | Versão fixada em `package.json` e `frontend/package.json`. |
 | Gerenciador de pacotes | npm compativel com o Node instalado | O projeto declara `npm >=9`. |
 | Dependencias do projeto | `node_modules` da raiz e `frontend/node_modules` | Instalacao manual, sem bootstrap automatico. |
 | Estrutura local | repositorio com `backend`, `frontend` e `tests/scripts` | O doctor valida essa estrutura. |
@@ -47,7 +47,7 @@ Por padrao ele roda em dry-run/plano, apenas mostra o que seria executado e so i
 
 | Categoria | Recomendacao | Observacoes |
 |---|---|---|
-| Distribuicao Node | Node.js LTS compativel dentro da faixa `>=20 <23` | Reduz divergencia entre maquinas locais. |
+| Distribuicao Node | Node.js LTS `24.22.3` | Reduz divergencia entre maquinas locais. |
 | Validacao inicial | `tests\scripts\env-doctor.cmd` | Primeiro passo de diagnostico em maquina nova. |
 | API manual | `curl.exe` | Usado em validacoes manuais e smoke tecnico rapido. |
 | Dependencias nativas | Python 3 disponivel no PATH | Pode ser necessario ao reinstalar modulos nativos. |
@@ -78,9 +78,9 @@ Por padrao ele roda em dry-run/plano, apenas mostra o que seria executado e so i
 
 ### Node.js e npm
 
-- Faixa oficial de Node.js: `>=20 <23`
+- Versão fixa de Node.js: `24.22.3`
 - Compatibilidade oficial de npm: `>=9`
-- O caminho recomendado para maquina nova e instalar um Node.js LTS compativel com essa faixa.
+- O caminho recomendado para maquina nova e instalar o Node.js LTS indicado em `.node-version`.
 - O projeto nao deve assumir que Node/npm ja estejam presentes antes do doctor.
 
 ### Dependencias nativas potenciais
@@ -242,7 +242,7 @@ Playwright / E2E ficam como opcionais e pausados neste momento. Eles nao sao gat
 ## 5. Fluxo recomendado para maquina nova
 
 1. Clonar o repositorio com Git.
-2. Instalar manualmente um Node.js LTS compativel com `>=20 <23`.
+2. Instalar manualmente o Node.js LTS `24.22.3`.
 3. Instalar as dependencias declaradas:
 
 ```cmd
@@ -305,7 +305,7 @@ Revisar:
 
 - Python no PATH;
 - Visual Studio Build Tools com C++;
-- compatibilidade do Node com a faixa `>=20 <23`.
+- compatibilidade do Node com a versão fixa `24.22.3`.
 
 ### Banco local nao encontrado
 

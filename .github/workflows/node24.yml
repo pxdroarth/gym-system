@@ -1,0 +1,37 @@
+name: Node 24
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+      - name: Check versions
+        shell: cmd
+        run: call tests\scripts\check-versions.cmd
+      - name: Install backend dependencies
+        run: npm.cmd ci
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm.cmd ci
+      - name: Run disposable SQLite smokes
+        shell: pwsh
+        run: ./tests/scripts/smoke-sqlite.ps1
+      - name: Build frontend for production
+        env:
+          NODE_ENV: production
+        run: npm.cmd run build:frontend

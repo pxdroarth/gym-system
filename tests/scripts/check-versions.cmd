@@ -1,2 +1,3 @@
 @echo off
-powershell -ExecutionPolicy Bypass -File "%~dp0check-versions.ps1" %*
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0check-versions.ps1" %*
+exit /b %errorlevel%
