@@ -12,7 +12,7 @@ mock.method(datas, 'dataLocalISO', () => dataLocalISO(agora, 'America/Sao_Paulo'
 
 const db = require('../../backend/database');
 const { runGet, runQuery, runExecute, fecharConexaoTransacional } = require('../../backend/dbHelper');
-const { atualizarMensalidade, emitirMensalidadePadrao } = require('../../backend/services/MensalidadeService');
+const { atualizarMensalidade, emitirMensalidadePadrao, removerMensalidade } = require('../../backend/services/MensalidadeService');
 const { sincronizarFinanceiro } = require('../../backend/services/FinanceiroService');
 
 let total = 0;
@@ -73,29 +73,44 @@ async function main() {
   await nova(comum, '2025: 31/03 recupera a ancora 31; abril vence dia 30',
     '2025-03-31T03:00:00Z', '2025-03-31', '2025-04-29', 10000);
 
-  const alunoReemissao = await aluno('Smoke L02 reemissao proporcional');
-  const instante = '2025-02-27T15:00:00Z';
-  const original = await nova(alunoReemissao, 'reemissao: primeira cobranca de R$ 3,57',
-    instante, '2025-02-27', '2025-02-27', 357);
   const dono = { ...actor, id: 'smoke-l02-dono', name: 'Dono fixture', role: 'owner' };
-  await atualizarMensalidade(original, { status: 'cancelado' }, scope, dono);
-  await sincronizarFinanceiro(scope);
-  const substituta = await nova(alunoReemissao, 'reemissao apos cancelamento mantem R$ 3,57 e 27/02',
-    instante, '2025-02-27', '2025-02-27', 357);
-  await reusar(alunoReemissao, 'nova tentativa reutiliza a cobranca substituta', instante, substituta);
-  const cobrancas = await runQuery(
-    'SELECT id, status, vencimento, valor_cobrado, deleted_at FROM mensalidade WHERE aluno_id = ? ORDER BY id', [alunoReemissao]);
-  check('SQLite: historico cancelado preservado e apenas a substituta em aberto',
-    cobrancas.map(({ id, status, vencimento, valor_cobrado, deleted_at }) => [id, status, vencimento, valor_cobrado, deleted_at]),
-    [[original, 'cancelado', '2025-02-27', 3.57, null], [substituta, 'em_aberto', '2025-02-27', 3.57, null]]);
-  const lancamentos = await runQuery(
-    "SELECT origem_id, status, valor, data_lancamento, deleted_at FROM conta_financeira WHERE origem = 'mensalidade' AND origem_id IN (?, ?) ORDER BY id",
-    [original, substituta]);
-  check('SQLite: lancamento original preservado e baixado; so o substituto esta ativo',
-    lancamentos.map(({ origem_id, status, valor, data_lancamento, deleted_at }) => [origem_id, status, valor, data_lancamento, Boolean(deleted_at)]),
-    [[original, 'pendente', 3.57, '2025-02-27', true], [substituta, 'pendente', 3.57, '2025-02-27', false]]);
-  const pagamentos = await runQuery('SELECT id FROM pagamento WHERE mensalidade_id IN (?, ?)', [original, substituta]);
-  check('SQLite: cancelamento e reemissao nao criam pagamento', pagamentos.length, 0);
+  for (const { cenario, invalidar, statusOriginal, excluida } of [
+    {
+      cenario: 'cancelamento',
+      invalidar: (id) => atualizarMensalidade(id, { status: 'cancelado' }, scope, dono),
+      statusOriginal: 'cancelado',
+      excluida: false,
+    },
+    {
+      cenario: 'exclusao logica',
+      invalidar: (id) => removerMensalidade(id, dono, 'Teste de reemissao', scope),
+      statusOriginal: 'em_aberto',
+      excluida: true,
+    },
+  ]) {
+    const alunoReemissao = await aluno(`Smoke L02 reemissao apos ${cenario}`);
+    const instante = '2025-02-27T15:00:00Z';
+    const original = await nova(alunoReemissao, `${cenario}: primeira cobranca de R$ 3,57`,
+      instante, '2025-02-27', '2025-02-27', 357);
+    await invalidar(original);
+    await sincronizarFinanceiro(scope);
+    const substituta = await nova(alunoReemissao, `reemissao apos ${cenario} mantem R$ 3,57 e 27/02`,
+      instante, '2025-02-27', '2025-02-27', 357);
+    await reusar(alunoReemissao, `${cenario}: nova tentativa reutiliza a cobranca substituta`, instante, substituta);
+    const cobrancas = await runQuery(
+      'SELECT id, status, vencimento, valor_cobrado, deleted_at FROM mensalidade WHERE aluno_id = ? ORDER BY id', [alunoReemissao]);
+    check(`SQLite: historico de ${cenario} preservado e apenas a substituta ativa`,
+      cobrancas.map(({ id, status, vencimento, valor_cobrado, deleted_at }) => [id, status, vencimento, valor_cobrado, Boolean(deleted_at)]),
+      [[original, statusOriginal, '2025-02-27', 3.57, excluida], [substituta, 'em_aberto', '2025-02-27', 3.57, false]]);
+    const lancamentos = await runQuery(
+      "SELECT origem_id, status, valor, data_lancamento, deleted_at FROM conta_financeira WHERE origem = 'mensalidade' AND origem_id IN (?, ?) ORDER BY id",
+      [original, substituta]);
+    check(`SQLite: ${cenario} preserva o lancamento baixado e apenas um a receber ativo`,
+      lancamentos.map(({ origem_id, status, valor, data_lancamento, deleted_at }) => [origem_id, status, valor, data_lancamento, Boolean(deleted_at)]),
+      [[original, 'pendente', 3.57, '2025-02-27', true], [substituta, 'pendente', 3.57, '2025-02-27', false]]);
+    const pagamentos = await runQuery('SELECT id FROM pagamento WHERE mensalidade_id IN (?, ?)', [original, substituta]);
+    check(`SQLite: ${cenario} e reemissao nao criam pagamento`, pagamentos.length, 0);
+  }
 
   // Em 2024, 31/jan a 28/fev tem 29 dias. Matrícula em 28/fev
   // cobra 1/29 de R$ 100 = R$ 3,45. 29/fev inicia o próximo ciclo.

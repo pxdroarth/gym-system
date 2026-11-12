@@ -253,10 +253,10 @@ async function emitirMensalidadePadrao(alunoId, actor, scope) {
     );
     if (anterior) return { mensalidade: anterior, criada: false };
 
-    // Uma cobrança cancelada não inicia o contrato nem tira o proporcional da primeira emissão.
+    // Cobranças canceladas ou excluídas não iniciam o contrato.
     const historico = await tx.get(
       `SELECT id FROM mensalidade
-       WHERE aluno_id = ? AND tenant_id = ? AND unit_id = ?
+       WHERE aluno_id = ? AND tenant_id = ? AND unit_id = ? AND deleted_at IS NULL
          AND COALESCE(status, '') != ?
        LIMIT 1`,
       [...parametros, MENSALIDADE_STATUS.CANCELADO]
