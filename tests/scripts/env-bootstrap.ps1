@@ -338,10 +338,10 @@ if ($nodeInfo.Found -and -not $nodeInfo.Error) {
   $nodeReady = $true
 } elseif ($nodeInfo.Found) {
   Write-Fail ("Node.js foi localizado, mas nao respondeu corretamente: {0}" -f $nodeInfo.Error)
-  Write-Info "Instale ou ajuste manualmente um Node.js LTS compativel com >=20 <23."
+  Write-Info "Instale ou ajuste manualmente o Node.js indicado em .node-version."
 } else {
   Write-Fail "Node.js nao encontrado no PATH."
-  Write-Info "Instale manualmente um Node.js LTS compativel com >=20 <23."
+  Write-Info "Instale manualmente o Node.js indicado em .node-version."
 }
 
 if ($nodeReady -and -not [string]::IsNullOrWhiteSpace($rootNodeEngine)) {

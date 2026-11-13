@@ -2,7 +2,7 @@ param()
 
 $ErrorActionPreference = "Stop"
 $script:RequiredFailure = $false
-$RecommendedNpmMajor = 10
+$RecommendedNpmMajor = 11
 
 $RepoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 
@@ -105,7 +105,8 @@ function Read-JsonFile {
 function Test-EnginesNode {
   param(
     [string]$Label,
-    [string]$Path
+    [string]$Path,
+    [string]$ExpectedNode
   )
 
   $json = Read-JsonFile -Path $Path
@@ -113,10 +114,10 @@ function Test-EnginesNode {
     return
   }
 
-  if ($json.engines -and -not [string]::IsNullOrWhiteSpace([string]$json.engines.node)) {
-    Write-Ok "$Label possui engines.node = $($json.engines.node)."
+  if ($json.engines -and [string]$json.engines.node -eq $ExpectedNode -and $ExpectedNode) {
+    Write-Ok "$Label fixa engines.node em $ExpectedNode."
   } else {
-    Write-Fail "$Label nao possui engines.node."
+    Write-Fail "$Label deve fixar engines.node na versao de .node-version ($ExpectedNode)."
   }
 
   if ($json.engines -and -not [string]::IsNullOrWhiteSpace([string]$json.engines.npm)) {
@@ -175,23 +176,12 @@ $node = Invoke-VersionCommand -Label "Node.js" -Candidates @("node") -Arguments 
 $npm = Invoke-VersionCommand -Label "npm" -Candidates @("npm.cmd", "npm") -Arguments @("-v") -Required
 $git = Invoke-VersionCommand -Label "Git" -Candidates @("git") -Arguments @("--version") -Required
 
-if ($node.Found -and -not [string]::IsNullOrWhiteSpace($nvmrc)) {
+if ($node.Found -and $nodeVersion) {
   $currentNode = ([string]$node.Output).TrimStart("v")
-  $currentNodeMajor = Get-MajorVersion -Version $currentNode
-
-  if ($null -eq $currentNodeMajor) {
-    Write-Fail "Nao foi possivel identificar a major version do Node atual ($currentNode)."
-  } elseif ($currentNodeMajor -lt 20) {
-    Write-Fail "Node atual ($currentNode) esta abaixo da faixa suportada >=20 <23."
-  } elseif ($currentNodeMajor -ge 23) {
-    Write-Fail "Node atual ($currentNode) esta acima da faixa suportada >=20 <23."
+  if ($currentNode -eq $nodeVersion) {
+    Write-Ok "Node atual corresponde a versao fixa ($nodeVersion)."
   } else {
-    if ($currentNode -eq $nvmrc) {
-      Write-Ok "Node atual ($currentNode) esta dentro da faixa suportada >=20 <23 e corresponde a versao recomendada."
-    } else {
-      Write-Ok "Node atual ($currentNode) esta dentro da faixa suportada >=20 <23."
-      Write-Warn "Node atual ($currentNode) difere da versao recomendada em .nvmrc ($nvmrc)."
-    }
+    Write-Fail "Node atual ($currentNode) difere da versao fixa ($nodeVersion)."
   }
 }
 
@@ -206,18 +196,13 @@ if ($npm.Found) {
   } else {
     Write-Ok "npm atual ($currentNpm) esta dentro da faixa suportada >=9."
     if ($currentNpmMajor -ne $RecommendedNpmMajor) {
-      Write-Warn "npm atual ($currentNpm) difere da major detectada anteriormente ($RecommendedNpmMajor.x), mas esta dentro da faixa suportada."
+      Write-Warn "npm atual ($currentNpm) difere da major recomendada ($RecommendedNpmMajor.x), mas esta dentro da faixa suportada."
     }
   }
 }
 
-Test-EnginesNode -Label "package.json da raiz" -Path $rootPackagePath
-
-if (Test-Path -LiteralPath $frontendPackagePath) {
-  Test-EnginesNode -Label "frontend/package.json" -Path $frontendPackagePath
-} else {
-  Write-Warn "frontend/package.json nao encontrado; validacao do frontend ignorada."
-}
+Test-EnginesNode -Label "package.json da raiz" -Path $rootPackagePath -ExpectedNode $nodeVersion
+Test-EnginesNode -Label "frontend/package.json" -Path $frontendPackagePath -ExpectedNode $nodeVersion
 
 if (Test-Path -LiteralPath $rootLockPath) {
   Write-Ok "package-lock.json da raiz encontrado."
@@ -225,12 +210,10 @@ if (Test-Path -LiteralPath $rootLockPath) {
   Write-Fail "package-lock.json da raiz ausente."
 }
 
-if (Test-Path -LiteralPath $frontendPackagePath) {
-  if (Test-Path -LiteralPath $frontendLockPath) {
-    Write-Ok "frontend/package-lock.json encontrado."
-  } else {
-    Write-Fail "frontend/package-lock.json ausente."
-  }
+if (Test-Path -LiteralPath $frontendLockPath) {
+  Write-Ok "frontend/package-lock.json encontrado."
+} else {
+  Write-Fail "frontend/package-lock.json ausente."
 }
 
 Invoke-VersionCommand -Label "Java opcional para PlantUML" -Candidates @("java") -Arguments @("-version") | Out-Null

@@ -3,18 +3,17 @@ const router = express.Router();
 const path = require('path');
 const { runQuery, runGet, runExecute } = require('../dbHelper');
 const { requireScope } = require('../helpers/scope');
-const { assertActiveOperator } = require('../middlewares/requirePermission');
+const { requirePermission } = require('../middlewares/requirePermission');
+const { PERMISSIONS } = require('../constants/userRoles');
 const { receberImagem, validarImagem, gravarImagem, removerArquivo } = require('../helpers/uploadImagem');
 
 const uploadDir = path.join(__dirname, '../uploads/produtos');
 
-// S1-P0 (FV-05): sessao ativa e escopo de unidade sao exigidos ANTES de ler o
-// corpo multipart; sem isso o arquivo chegava ao disco sem login.
-// A restricao por papel (quem pode criar/editar produto) e o FV-02b, ainda
-// nao executado: aqui nao muda quem pode operar produtos hoje.
-function exigirSessaoComEscopo(req, _res, next) {
+const gerenciarProdutos = requirePermission(PERMISSIONS.PRODUTOS_GERENCIAR);
+
+// Valida o escopo antes de ler o multipart.
+function exigirEscopo(req, _res, next) {
   try {
-    assertActiveOperator(req);
     requireScope(req);
     next();
   } catch (error) {
@@ -88,7 +87,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
-router.post('/', exigirSessaoComEscopo, receberImagem('imagem'), async (req, res, next) => {
+router.post('/', gerenciarProdutos, exigirEscopo, receberImagem('imagem'), async (req, res, next) => {
   const payload = parseProdutoPayload(req.body);
   const erro = validarProduto(payload);
   if (erro) return res.status(400).json({ error: erro });
@@ -120,7 +119,7 @@ router.post('/', exigirSessaoComEscopo, receberImagem('imagem'), async (req, res
   }
 });
 
-router.put('/:id', exigirSessaoComEscopo, receberImagem('imagem'), async (req, res, next) => {
+router.put('/:id', gerenciarProdutos, exigirEscopo, receberImagem('imagem'), async (req, res, next) => {
   const id = parseInt(req.params.id);
   if (!id) return res.status(400).json({ error: 'ID inválido' });
 
@@ -151,7 +150,7 @@ router.put('/:id', exigirSessaoComEscopo, receberImagem('imagem'), async (req, r
   }
 });
 
-router.patch('/:id/estoque', async (req, res) => {
+router.patch('/:id/estoque', gerenciarProdutos, async (req, res) => {
   const id = parseInt(req.params.id);
   const estoque = Number(req.body?.estoque);
 
@@ -173,7 +172,7 @@ router.patch('/:id/estoque', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', gerenciarProdutos, async (req, res) => {
   const id = parseInt(req.params.id);
   if (!id) return res.status(400).json({ error: 'ID inválido' });
 

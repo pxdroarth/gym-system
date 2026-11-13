@@ -4,10 +4,10 @@ Frontend React + Vite do Sistema Academia SA.
 
 ## Instalar dependências
 
-Dentro de `frontend`:
+Use Node.js LTS `24.22.3`. Dentro de `frontend`:
 
 ```bash
-npm install
+npm ci
 ```
 
 ## Rodar em desenvolvimento

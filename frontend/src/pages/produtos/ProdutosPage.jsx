@@ -13,6 +13,8 @@ import StockBar from "../../components/ui/StockBar";
 import Table from "../../components/ui/Table";
 import getApiErrorMessage from "../../utils/getApiErrorMessage";
 import ProdutoForm from "./ProdutoForm";
+import useAuth from "../../hooks/useAuth";
+import { UI_PERMISSIONS, userHasUiPermission } from "../../utils/permissions";
 
 const API_URL = import.meta.env?.VITE_API_URL || "http://localhost:3001";
 
@@ -25,6 +27,8 @@ function estoqueBaixo(produto) {
 }
 
 export default function ProdutosPage() {
+  const { user } = useAuth();
+  const podeGerenciar = userHasUiPermission(user, UI_PERMISSIONS.PRODUTOS_GERENCIAR);
   const [produtos, setProdutos] = useState([]);
   const [editProduto, setEditProduto] = useState(null);
   const [modalProdutoAberto, setModalProdutoAberto] = useState(false);
@@ -85,7 +89,7 @@ export default function ProdutosPage() {
       <PageHeader
         title="Produtos"
         subtitle="Catálogo operacional da unidade, criticidade de estoque e manutenção rápida de itens."
-        actions={<Button onClick={abrirModalNovo}>+ Novo Produto</Button>}
+        actions={podeGerenciar && <Button onClick={abrirModalNovo}>+ Novo Produto</Button>}
       />
 
       <div className="ui-status-grid">
@@ -176,14 +180,14 @@ export default function ProdutosPage() {
                       )}
                     </td>
                     <td>
-                      <div className="flex gap-2 flex-wrap">
+                      {podeGerenciar && <div className="flex gap-2 flex-wrap">
                         <Button size="sm" variant="secondary" onClick={() => abrirModalEdicao(produto)}>
                           Editar
                         </Button>
                         <Button size="sm" variant="danger" onClick={() => handleDelete(produto.id)}>
                           Excluir
                         </Button>
-                      </div>
+                      </div>}
                     </td>
                   </tr>
                 ))}

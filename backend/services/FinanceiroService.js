@@ -1,4 +1,4 @@
-const { runQuery, runGet, runExecute } = require('../dbHelper');
+const { runQuery, runGet, runExecute, runTransaction } = require('../dbHelper');
 const AppError = require('../errors/AppError');
 const FechamentoMensalService = require('./FechamentoMensalService');
 
@@ -44,11 +44,14 @@ async function isPeriodoEditavel(data, operacao, db, scope) {
 // Categoria (plano de contas) so vale se for da mesma Rede do lancamento.
 // Sem categoria valida da Rede, o lancamento fica sem categoria (null); valor
 // e origem nao mudam. Usada nos lancamentos automaticos e nas contrapartidas.
-async function categoriaDaRede(planoContasId, tenantId, client = null) {
+async function categoriaDaRede(planoContasId, tenantId, client = null, tipo = null) {
   const id = Number(planoContasId);
   if (!id || !tenantId) return null;
   const db = clientOrDefault(client);
-  const row = await db.get('SELECT id FROM plano_contas WHERE id = ? AND tenant_id = ?', [id, tenantId]);
+  const row = await db.get(
+    'SELECT id FROM plano_contas WHERE id = ? AND tenant_id = ? AND (? IS NULL OR tipo = ?)',
+    [id, tenantId, tipo, tipo]
+  );
   return row ? row.id : null;
 }
 
@@ -56,7 +59,12 @@ async function upsertLancamentoFinanceiro(lancamento, client = null) {
   const db = clientOrDefault(client);
   lancamento = {
     ...lancamento,
-    plano_contas_id: await categoriaDaRede(lancamento.plano_contas_id, lancamento.tenant_id, db),
+    plano_contas_id: await categoriaDaRede(
+      lancamento.plano_contas_id,
+      lancamento.tenant_id,
+      db,
+      lancamento.origem === 'venda_produto' ? lancamento.tipo : null
+    ),
   };
   const hasScope = Boolean(lancamento.tenant_id && lancamento.unit_id);
   const existente = hasScope
@@ -228,6 +236,7 @@ async function sincronizarLancamentosMensalidades(scope, client = null, summary 
 }
 
 async function sincronizarLancamentosVendas(scope, client = null, summary = createSyncSummary()) {
+  if (!client) return runTransaction((tx) => sincronizarLancamentosVendas(scope, tx, summary));
   const db = clientOrDefault(client);
   const resolvedScope = normalizeScope(scope);
   const vendas = await db.all(

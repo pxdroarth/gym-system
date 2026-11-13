@@ -51,7 +51,7 @@ sistema-academia-main/
 
 Requisitos esperados:
 
-- Node.js e npm instalados.
+- Node.js LTS `24.22.3` e npm instalado (versão 11 fornecida pelo Node).
 - Java e Graphviz apenas se for exportar diagramas PlantUML localmente.
 - Versao de Node padronizada em `.nvmrc` e espelhada em `.node-version`.
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarDays, PackageCheck, ShoppingCart, Wallet } from "lucide-react";
 import { toast } from "react-toastify";
 import { fetchProdutos } from "../../services/produtoService";
@@ -15,6 +15,9 @@ import PillButton from "../../components/ui/PillButton";
 import Select from "../../components/ui/Select";
 import Table from "../../components/ui/Table";
 import { getApiErrorMessage } from "../../utils/getApiErrorMessage";
+import useAuth from "../../hooks/useAuth";
+import { falhaSemConfirmacao } from "../../utils/tentativaPagamento";
+import { UI_PERMISSIONS, userHasUiPermission } from "../../utils/permissions";
 
 function formatarMoeda(valor) {
   return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -33,6 +36,9 @@ function periodoParaDatas(periodo) {
 }
 
 export default function VendasProdutosPage() {
+  const { user, currentUnit } = useAuth();
+  const podeVender = userHasUiPermission(user, UI_PERMISSIONS.VENDAS_REGISTRAR);
+  const tentativas = useRef(new Map());
   const [produtos, setProdutos] = useState([]);
   const [vendas, setVendas] = useState([]);
   const [total, setTotal] = useState(0);
@@ -50,9 +56,13 @@ export default function VendasProdutosPage() {
   const limite = 10;
 
   useEffect(() => {
+    setProdutoSelecionado(null);
+  }, [currentUnit?.id]);
+
+  useEffect(() => {
     carregarProdutos();
     carregarVendas();
-  }, [pagina, dataInicial, dataFinal]);
+  }, [pagina, dataInicial, dataFinal, currentUnit?.id]);
 
   async function carregarProdutos() {
     try {
@@ -90,26 +100,47 @@ export default function VendasProdutosPage() {
 
   async function handleVenda(event) {
     event.preventDefault();
+    if (!podeVender || !currentUnit?.id || registrandoVenda) return;
     if (!produtoSelecionado) return toast.error("Selecione um produto.");
     if (quantidade <= 0) return toast.error("Quantidade deve ser maior que zero.");
-    if (quantidade > produtoSelecionado.estoque) return toast.error("Quantidade maior que o estoque disponível.");
+    const registro = `gs.venda.${user?.id}.${currentUnit?.id}.${produtoSelecionado.id}.${quantidade}`;
+    let tentativa = tentativas.current.get(registro);
+    if (!tentativa) {
+      try {
+        tentativa = JSON.parse(sessionStorage.getItem(registro));
+      } catch {
+        // A tentativa continua disponível em memória se o storage estiver indisponível.
+      }
+    }
+    if (!tentativa && quantidade > produtoSelecionado.estoque) {
+      return toast.error("Quantidade maior que o estoque disponível.");
+    }
 
     try {
       setRegistrandoVenda(true);
-      await createVendaProduto({
-        produto_id: produtoSelecionado.id,
-        quantidade,
-        preco_unitario: Number(produtoSelecionado.preco),
-      });
+      tentativa ??= {
+        chave: Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join(""),
+        payload: {
+          produto_id: produtoSelecionado.id,
+          quantidade,
+          preco_unitario: Number(produtoSelecionado.preco),
+        },
+      };
+      tentativas.current.set(registro, tentativa);
+      try { sessionStorage.setItem(registro, JSON.stringify(tentativa)); } catch { /* storage opcional */ }
+      await createVendaProduto(tentativa.payload, tentativa.chave, currentUnit.id);
       toast.success("Venda registrada com sucesso!");
       fecharModalVenda();
       carregarProdutos();
       carregarVendas();
     } catch (error) {
       toast.error(getApiErrorMessage(error));
+      if (falhaSemConfirmacao(error) || error.response?.status === 408) return;
     } finally {
       setRegistrandoVenda(false);
     }
+    tentativas.current.delete(registro);
+    try { sessionStorage.removeItem(registro); } catch { /* storage opcional */ }
   }
 
   function aplicarPeriodoRapido(periodo) {
@@ -136,7 +167,7 @@ export default function VendasProdutosPage() {
       <PageHeader
         title="Vendas de Produtos"
         subtitle="Registre vendas da recepção e acompanhe o histórico operacional da unidade."
-        actions={<Button onClick={() => setModalVendaAberto(true)}>+ Registrar Venda</Button>}
+        actions={podeVender && <Button onClick={() => setModalVendaAberto(true)}>+ Registrar Venda</Button>}
       />
 
       <div className="ui-status-grid">
@@ -274,7 +305,6 @@ export default function VendasProdutosPage() {
                     value={quantidade}
                     onChange={(event) => setQuantidade(Number(event.target.value))}
                     min="1"
-                    max={produtoSelecionado?.estoque || 1}
                   />
                 </div>
               </div>

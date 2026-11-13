@@ -128,7 +128,7 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   const currentUnitId = getStoredUser()?.currentUnit?.id;
-  if (currentUnitId) {
+  if (currentUnitId && !config.headers["X-Unit-Id"]) {
     config.headers["X-Unit-Id"] = currentUnitId;
   }
   return config;
@@ -321,7 +321,10 @@ export async function fetchVendasProdutos(params = {}) {
   return response.data;
 }
 
-export async function createVendaProduto(dadosVenda) {
-  const response = await api.post('/vendas-produtos', dadosVenda);
+export async function createVendaProduto(dadosVenda, chaveIdempotencia, unidadeId) {
+  const config = { timeout: 15000, headers: {} };
+  if (chaveIdempotencia) config.headers['Idempotency-Key'] = chaveIdempotencia;
+  if (unidadeId) config.headers['X-Unit-Id'] = unidadeId;
+  const response = await api.post('/vendas-produtos', dadosVenda, config);
   return response.data;
 }

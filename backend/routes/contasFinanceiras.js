@@ -9,6 +9,14 @@ const { PERMISSIONS } = require('../constants/userRoles');
 const { requirePermission } = require('../middlewares/requirePermission');
 const { actorWithScope, requireScope } = require('../helpers/scope');
 
+function validarDataLancamento(data) {
+  if (typeof data === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data) && !data.startsWith('0000-')) {
+    const parsed = new Date(`${data}T00:00:00.000Z`);
+    if (Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === data) return;
+  }
+  throw new AppError('Informe uma data de lancamento valida no formato AAAA-MM-DD', 400, 'DATA_LANCAMENTO_INVALIDA');
+}
+
 function validarCamposObrigatorios(body, campos) {
   for (const campo of campos) {
     if (!body[campo]) return `Campo obrigatorio ausente: ${campo}`;
@@ -98,12 +106,13 @@ router.get('/', async (req, res, next) => {
 });
 
 router.post('/', async (req, res, next) => {
-  const { descricao, tipo, valor, data_lancamento, status, plano_contas_id, observacao } = req.body;
-  const erro = validarCamposObrigatorios(req.body, ['descricao', 'tipo', 'valor', 'data_lancamento', 'status']);
-  if (erro) return res.status(400).json({ error: erro });
-
+  const body = req.body || {};
+  const { descricao, tipo, valor, data_lancamento, status, plano_contas_id, observacao } = body;
   try {
     const scope = requireScope(req);
+    validarDataLancamento(data_lancamento);
+    const erro = validarCamposObrigatorios(body, ['descricao', 'tipo', 'valor', 'status']);
+    if (erro) return res.status(400).json({ error: erro });
     const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
     const criada = await runTransaction(async (tx) => {
       await FechamentoMensalService.assertPeriodoEditavelPorData(data_lancamento, 'criacao de conta financeira', tx, scope);
@@ -139,7 +148,7 @@ router.post('/', async (req, res, next) => {
 
 router.put('/:id', async (req, res, next) => {
   const id = parseInt(req.params.id);
-  const { descricao, tipo, valor, data_lancamento, status, plano_contas_id, observacao } = req.body;
+  const { descricao, tipo, valor, data_lancamento, status, plano_contas_id, observacao } = req.body || {};
 
   try {
     const scope = requireScope(req);
@@ -148,6 +157,9 @@ router.put('/:id', async (req, res, next) => {
       const before = await tx.get('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
       if (!before || before.deleted_at) throw new AppError('Conta nao encontrada', 404, 'CONTA_NAO_ENCONTRADA');
       assertContaFinanceiraManual(before);
+
+      const dataDestino = data_lancamento === undefined ? before.data_lancamento : data_lancamento;
+      if (data_lancamento !== undefined) validarDataLancamento(dataDestino);
 
       // A-06: a edicao mexe no mes de origem (o lancamento sai dele) e no mes
       // de destino (o lancamento entra nele). Os dois precisam estar abertos na
@@ -159,13 +171,16 @@ router.put('/:id', async (req, res, next) => {
         scope
       );
       await FechamentoMensalService.assertPeriodoEditavelPorData(
-        data_lancamento || before.data_lancamento,
+        dataDestino,
         'edicao de conta financeira (mes de destino)',
         tx,
         scope
       );
+      if ([descricao, tipo, valor, status].some((campo) => campo === undefined || campo === null)) {
+        throw new AppError('Informe descricao, tipo, valor e status da conta', 400, 'CONTA_PAYLOAD_INVALIDO');
+      }
       if (before.status === 'pago' && (status !== 'pago' || Number(valor) !== Number(before.valor)
-        || tipo !== before.tipo || data_lancamento !== before.data_lancamento)) {
+        || tipo !== before.tipo || dataDestino !== before.data_lancamento)) {
         throw new AppError('Conta paga exige reversao aprovada', 409, 'REVERSAO_APROVACAO_NECESSARIA');
       }
       const categoria = await assertCategoriaDaRede(tx, plano_contas_id, scope);
@@ -175,7 +190,7 @@ router.put('/:id', async (req, res, next) => {
           descricao = ?, tipo = ?, valor = ?, data_lancamento = ?, status = ?,
           plano_contas_id = ?, observacao = ?, updated_at = datetime('now')
         WHERE id = ?
-      `, [descricao, tipo, valor, data_lancamento, status, categoria, observacao || null, id]);
+      `, [descricao, tipo, valor, dataDestino, status, categoria, observacao || null, id]);
 
       const after = await tx.get('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
       await AuditService.logAction({
