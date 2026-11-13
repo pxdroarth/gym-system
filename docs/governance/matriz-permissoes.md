@@ -76,11 +76,11 @@ Não acessa onboarding global da plataforma. Não administra múltiplas Redes fo
 
 ### financeiro
 
-Confere o fechamento da unidade, acessa o módulo Financeiro e concede desconto excepcional no próprio escopo, com motivo. A execução de estorno pelo financeiro depende da aprovação registrada no fluxo da DN-3.
+Confere o fechamento da unidade, acessa o módulo Financeiro e concede desconto excepcional no próprio escopo, com motivo. Em vendas, solicita estorno, registra autorização externa do gestor (WhatsApp ou e-mail) e executa estorno aprovado (seção 8). Nos demais tipos, a execução depende do fluxo da DN-3.
 
 ### gerente
 
-Perfil de gestão operacional intermediária. Pode acompanhar operação, alunos, mensalidades, produtos e vendas.
+Perfil de gestão operacional intermediária. Pode acompanhar operação, alunos, mensalidades, produtos e vendas. Em vendas, solicita estorno e aprova no sistema pedidos de outras contas; não executa nem registra autorização externa.
 
 Financeiro completo deve ser restrito ou parcial conforme decisão de negócio. Não acessa onboarding global e não altera configurações críticas de plataforma.
 
@@ -88,7 +88,7 @@ Financeiro completo deve ser restrito ou parcial conforme decisão de negócio. 
 
 Perfil de atendimento diário. Pode consultar/cadastrar alunos e apoiar rotinas operacionais.
 
-Não deve acessar financeiro completo. Não deve acessar Histórico de Atividades completo. Pode emitir cobrança padrão calculada pelo servidor e receber pagamentos auditados. Alterações posteriores de plano, vencimento, status e vínculos exigem permissão específica.
+Não deve acessar financeiro completo. Não deve acessar Histórico de Atividades completo. Pode emitir cobrança padrão calculada pelo servidor e receber pagamentos auditados. Em vendas, solicita estorno com motivo, registra a autorização que o gestor deu por WhatsApp ou e-mail e executa estorno aprovado, salvo quando a unidade exige três contas distintas. Alterações posteriores de plano, vencimento, status e vínculos exigem permissão específica.
 
 ### operador_acesso
 
@@ -111,7 +111,7 @@ Não deve acessar financeiro. Não deve registrar pagamento por padrão. Não de
 | Mensalidades | Total | Escopo Rede | Escopo Rede/Unidade | Escopo Unidade | Operação limitada | Leitura limitada | Cancelamento é ação crítica. |
 | Pagamentos | Escopo vinculado | Unidade autorizada | Unidade autorizada | Receber na unidade | Receber na unidade | Não permitido | Estorno segue a DN-3. |
 | Produtos | Leitura no escopo | Gestão na unidade | Gestão na unidade | Gestão na unidade | Leitura no escopo | Leitura no escopo pela API | Escritas com `produtos:gerenciar`. |
-| Vendas | Leitura no escopo | Registrar na unidade | Registrar na unidade | Registrar na unidade | Registrar na unidade | Leitura no escopo pela API | Registro com `vendas:registrar`. Reversão direta bloqueada. |
+| Vendas | Leitura no escopo | Registrar; solicitar, aprovar, registrar autorização externa e executar estorno na unidade; configurar três contas distintas | Registrar; solicitar, aprovar, registrar autorização externa e executar estorno na unidade | Registrar; solicitar e aprovar estorno na unidade | Registrar; solicitar, registrar autorização externa e executar estorno na unidade | Leitura no escopo pela API | Registro com `vendas:registrar`. Estorno conforme seção 8: o financeiro solicita, registra autorização externa e executa. Reversão direta bloqueada. |
 | Financeiro | Acesso no escopo vinculado | Acesso no escopo | Acesso no escopo | Não permitido | Não permitido | Não permitido | `financeiro:acessar` inclui o perfil `financeiro`. |
 | Plano de contas | Leitura | Gestão de Rede | Leitura | Não permitido | Não permitido | Não permitido | Financeiro também consulta. A escrita exige `plano_contas:gerenciar_rede`, hoje exclusiva do dono. |
 | Contas financeiras | Acesso no escopo vinculado | Unidade autorizada | Unidade autorizada | Não permitido | Não permitido | Não permitido | A API também permite ao financeiro criar e marcar como paga na unidade autorizada. Decisões em aberto na seção 6.1. |
@@ -210,7 +210,7 @@ Esta tabela detalha as decisões aprovadas da DN-3 e o estado da implementação
 | Cadastro inicial e edição básica | Recepção, gestor, admin e dono. Status, vencimento e plano pós-cadastro exigem permissão de campos sensíveis. Gestão de associações usa a permissão específica existente. |
 | Emitir padrão e receber | Recepção, gestor, admin e dono na unidade. Lançamento excepcional, edição de valores e cancelamento têm guardas próprias; recebimento usa a API de pagamentos. |
 | Conceder desconto excepcional | Gestor, financeiro, admin e dono. Motivo obrigatório e registro da ação. Caixa poderá solicitar quando o fluxo próprio estiver disponível. |
-| Estornar | Gestor solicita, dono ou admin da unidade aprova e financeiro executa. Execução direta bloqueada até o fluxo de aprovação. |
+| Estornar | Gestor solicita, dono ou admin da unidade aprova e financeiro executa. Para **vendas** (L04, ajuste de 12/11/2026): solicitam recepção, gestor, financeiro, admin e dono; aprovam no sistema gestor, admin e dono; registram autorização externa por WhatsApp ou e-mail recepção, financeiro, admin e dono, informando o autorizador, o canal, a data e a referência; executam com aprovação válida recepção, financeiro, admin e dono. No fluxo padrão a mesma conta pode solicitar, registrar a autorização de outro gestor e executar; ninguém se informa como autorizador e quem solicitou nunca autoriza o próprio pedido. O dono pode exigir na unidade três contas distintas entre solicitante, autorizador e executor. Detalhes em [L04 — Estorno de venda](requisitos-base.md#l04--estorno-de-venda). Pagamentos, mensalidades e contas continuam com a execução direta bloqueada até o sublote próprio. |
 | Analisar, fechar e reabrir | Financeiro, admin e dono analisam. A API também permite análise ao `platform_admin` no escopo vinculado. Admin e dono fecham. Dono reabre com motivo. Telas novas e política master dependem de sublotes. |
 | Catálogo compartilhado, categorias de Rede e Consolidado integral | Permissões distintas de Rede. L02 concede ao dono. Admin recebe relatório das suas unidades. Concessão de alcance integral ou escrita compartilhada a admin depende de autorização explícita de Rede. |
 | Plano exclusivo | Admin com permissão de catálogo da unidade, após cadastro e distribuição de planos locais. A autorização comercial e a autorização de entrada têm regras distintas. |

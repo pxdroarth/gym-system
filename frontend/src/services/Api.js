@@ -321,6 +321,48 @@ export async function fetchVendasProdutos(params = {}) {
   return response.data;
 }
 
+// ---------- Estorno de venda (L04): solicitar, autorizar, executar ----------
+export async function fetchEstornosVenda(params = {}) {
+  const response = await api.get('/vendas-produtos/estornos', { params });
+  return response.data;
+}
+
+export async function solicitarEstornoVenda(vendaId, motivo) {
+  const response = await api.post(`/vendas-produtos/${vendaId}/estornos`, { motivo });
+  return response.data;
+}
+
+export async function aprovarEstornoVenda(estornoId) {
+  const response = await api.post(`/vendas-produtos/estornos/${estornoId}/aprovar`);
+  return response.data;
+}
+
+// Autorizacao do gestor recebida por WhatsApp ou e-mail, registrada pelo operador.
+export async function registrarAutorizacaoExternaEstornoVenda(estornoId, dados) {
+  const response = await api.post(`/vendas-produtos/estornos/${estornoId}/autorizacao-externa`, dados);
+  return response.data;
+}
+
+export async function fetchAutorizadoresEstornoVenda() {
+  const response = await api.get('/vendas-produtos/estornos/autorizadores');
+  return response.data;
+}
+
+export async function fetchPoliticaEstornoVenda() {
+  const response = await api.get('/vendas-produtos/estornos/politica');
+  return response.data;
+}
+
+export async function salvarPoliticaEstornoVenda(contasDistintas) {
+  const response = await api.patch('/vendas-produtos/estornos/politica', { contas_distintas: contasDistintas });
+  return response.data;
+}
+
+export async function executarEstornoVenda(estornoId, itens) {
+  const response = await api.post(`/vendas-produtos/estornos/${estornoId}/executar`, { itens });
+  return response.data;
+}
+
 export async function createVendaProduto(dadosVenda, chaveIdempotencia, unidadeId) {
   const config = { timeout: 15000, headers: {} };
   if (chaveIdempotencia) config.headers['Idempotency-Key'] = chaveIdempotencia;

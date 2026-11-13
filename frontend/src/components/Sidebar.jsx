@@ -38,6 +38,7 @@ const menu = [
       { to: "/financeiro/dashboardFinanceiro", label: "Dashboard Financeiro" },
       { to: "/financeiro/contas-financeiras", label: "Contas Financeiras" },
       { to: "/financeiro/plano-contas", label: "Plano de Contas" },
+      { to: "/financeiro/estornos-venda", label: "Estornos de venda" },
     ],
   },
 ];

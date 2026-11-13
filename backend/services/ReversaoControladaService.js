@@ -49,8 +49,14 @@ function exigirAprovacaoReversao() {
   );
 }
 
-async function criarRegistroReversao(tx, { modulo, tipo, registroId, motivo, actor, metadata }) {
+async function criarRegistroReversao(tx, dados) {
   exigirAprovacaoReversao();
+  return inserirRegistroReversao(tx, dados);
+}
+
+// Grava o registro da reversao. So o fluxo com aprovacao consumida (estorno de
+// venda, L04) chama direto; os demais tipos continuam bloqueados acima.
+async function inserirRegistroReversao(tx, { modulo, tipo, registroId, motivo, actor, metadata }) {
   const result = await tx.run(
     `INSERT INTO reversao_controlada
       (modulo, tipo, registro_origem_id, motivo, actor_id, actor_name, metadata_json, tenant_id, unit_id, created_at)
@@ -71,7 +77,7 @@ async function criarRegistroReversao(tx, { modulo, tipo, registroId, motivo, act
   return tx.get('SELECT * FROM reversao_controlada WHERE id = ?', [result.lastID]);
 }
 
-async function criarLancamentoInverso(tx, { reversao, lancamento, descricao }) {
+async function criarLancamentoInverso(tx, { reversao, lancamento, descricao, dataLancamento = null }) {
   if (!lancamento) return null;
 
   // Reversao controlada nao apaga efeito financeiro anterior: ela cria a
@@ -88,7 +94,7 @@ async function criarLancamentoInverso(tx, { reversao, lancamento, descricao }) {
       descricao,
       tipoInverso(lancamento.tipo),
       Number(lancamento.valor || 0),
-      new Date().toISOString().slice(0, 10),
+      dataLancamento || new Date().toISOString().slice(0, 10),
       'pago',
       categoria,
       `Reversao controlada de ${lancamento.origem || 'conta'} ${lancamento.origem_id || lancamento.id}`,
@@ -466,6 +472,8 @@ async function estornarPagamento(pagamentoId, payload = {}, actor, scope = null)
 }
 
 module.exports = {
+  inserirRegistroReversao,
+  criarLancamentoInverso,
   estornarPagamento,
   reverterMensalidade,
   reverterVenda,

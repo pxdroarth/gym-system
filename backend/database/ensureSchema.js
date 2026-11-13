@@ -962,6 +962,83 @@ async function ensurePagamentoParcialColumns() {
   }
 }
 
+// L04: estorno de venda (DN-3): solicitacao, autorizacao e execucao. Cada linha guarda a venda
+// original, o estado, os autores e os horarios de solicitacao, aprovacao e
+// execucao. A aprovacao e consumida uma vez (status aprovada -> executada) e o
+// indice unico impede duas execucoes para a mesma venda.
+async function ensureVendaEstorno() {
+  await runExecute(`
+    CREATE TABLE IF NOT EXISTS venda_estorno (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id INTEGER NOT NULL,
+      unit_id INTEGER NOT NULL,
+      venda_id INTEGER NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('solicitada', 'aprovada', 'executada', 'encerrada')),
+      motivo TEXT NOT NULL,
+      valor_estornado REAL NOT NULL,
+      quantidade_vendida INTEGER NOT NULL,
+      solicitado_por TEXT NOT NULL,
+      solicitado_por_nome TEXT,
+      solicitado_por_papel TEXT,
+      solicitado_em TEXT NOT NULL,
+      aprovado_por TEXT,
+      aprovado_por_nome TEXT,
+      aprovado_por_papel TEXT,
+      aprovado_em TEXT,
+      executado_por TEXT,
+      executado_por_nome TEXT,
+      executado_por_papel TEXT,
+      executado_em TEXT,
+      data_operacao TEXT,
+      quantidade_reposta INTEGER,
+      reversao_controlada_id INTEGER,
+      lancamento_inverso_id INTEGER,
+      encerrado_em TEXT,
+      encerrado_motivo TEXT,
+      FOREIGN KEY (venda_id) REFERENCES venda_produto(id)
+    )
+  `);
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_venda_estorno_scope_status ON venda_estorno (tenant_id, unit_id, status)');
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_venda_estorno_venda ON venda_estorno (venda_id)');
+  await runExecute(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uidx_venda_estorno_executado
+    ON venda_estorno (venda_id) WHERE status = 'executada'
+  `);
+
+  // Origem da autorizacao: 'sistema' (aprovacao direta) ou autorizacao externa
+  // ('whatsapp' / 'email') declarada por um operador, que fica registrado a parte.
+  await addColumnIfMissing('venda_estorno', 'autorizacao_canal TEXT');
+  await addColumnIfMissing('venda_estorno', 'autorizacao_referencia TEXT');
+  await addColumnIfMissing('venda_estorno', 'autorizacao_registrada_por TEXT');
+  await addColumnIfMissing('venda_estorno', 'autorizacao_registrada_por_nome TEXT');
+  await addColumnIfMissing('venda_estorno', 'autorizacao_registrada_por_papel TEXT');
+  await addColumnIfMissing('venda_estorno', 'autorizacao_registrada_em TEXT');
+  await addColumnIfMissing('venda_estorno', 'contas_distintas_exigidas INTEGER');
+
+  // Um unico pedido ativo por venda. Bases com pedidos abertos repetidos
+  // mantem o mais antigo e encerram os demais antes de criar o indice.
+  await runExecute(`
+    UPDATE venda_estorno
+    SET status = 'encerrada', encerrado_em = CURRENT_TIMESTAMP,
+        encerrado_motivo = 'Pedido duplicado encerrado na migracao (um pedido ativo por venda)'
+    WHERE status IN ('solicitada', 'aprovada')
+      AND EXISTS (
+        SELECT 1 FROM venda_estorno outro
+        WHERE outro.venda_id = venda_estorno.venda_id
+          AND outro.status IN ('solicitada', 'aprovada')
+          AND outro.id < venda_estorno.id
+      )
+  `);
+  await runExecute(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uidx_venda_estorno_ativo
+    ON venda_estorno (venda_id) WHERE status IN ('solicitada', 'aprovada')
+  `);
+
+  // Opcao da unidade: exigir tres contas distintas (solicitante, autorizador e
+  // executor). Padrao 0: o fluxo padrao da DN-3.
+  await addColumnIfMissing('unit', 'estorno_venda_contas_distintas INTEGER NOT NULL DEFAULT 0');
+}
+
 async function ensureSchema() {
   await ensureAuditLog();
   const defaultScope = await ensureTenantUnitBase();
@@ -986,6 +1063,7 @@ async function ensureSchema() {
     ON venda_produto (tenant_id, unit_id, chave_idempotencia)
     WHERE chave_idempotencia IS NOT NULL
   `);
+  await ensureVendaEstorno();
   await ensureUsuarioInterno(defaultScope);
   await ensureLegacyUserScopes(defaultScope);
   await backfillDefaultScope(defaultScope.tenantId, defaultScope.unitId);
