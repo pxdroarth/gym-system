@@ -104,20 +104,20 @@ Para deploy web, revise tambem [Seguranca de Producao](seguranca-producao.md), e
 
 - Java e Graphviz para PlantUML.
 - Insomnia para API.
-- Playwright futuro.
+- Playwright opcional para a [suíte E2E inicial](../../tests/e2e/README.md).
 - k6/JMeter futuro.
 
 Java e Graphviz nao sao obrigatorios para rodar backend, frontend ou SQLite local; eles ajudam apenas em fluxos de diagramas PlantUML.
 
 ## 8. Troubleshooting
 
-### Node incompatibil
+### Node incompatível
 
 Confira `.nvmrc`, instale a versao indicada com NVM for Windows ou equivalente e rode `tests\scripts\check-versions.cmd` de novo.
 
 A verificação exige a versão exata fixada no repositório.
 
-### npm incompatibil
+### npm incompatível
 
 Atualize ou selecione uma instalacao do Node que traga npm dentro da faixa declarada em `engines`.
 

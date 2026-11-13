@@ -84,6 +84,8 @@ Backend:
 - `AUTH_REFRESH_TOKEN_TTL_DAYS`
 - `BOOTSTRAP_ADMIN_PASSWORD`
 
+Mantenha `ALLOW_LEGACY_OPERATOR_HEADERS` desativado no deploy. O middleware aceita os cabeçalhos legados de operador em `NODE_ENV=test` ou com opt-in explícito. [Resolução do operador](../../backend/middlewares/operatorContext.js)
+
 Frontend:
 
 - `VITE_API_URL`

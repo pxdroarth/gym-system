@@ -16,7 +16,7 @@ Em caso de conflito, requisitos, matriz de permissões e validação real no bac
 - `sources/`: fontes PlantUML `.puml` versionáveis e oficiais.
 - `svg/`: artefatos visuais exportados em SVG.
 - `png/`: artefatos visuais exportados em PNG, quando existirem.
-- `sistema-academia-uml.zip`: pacote opcional/gerado para distribuição.
+- `sistema-academia-uml.zip`: pacote de distribuição com `README.md` na raiz e as nove fontes em `sources/`. Os SVGs versionados ficam fora do pacote.
 
 O ZIP não deve ser tratado como fonte oficial única. A fonte versionável deve ser o arquivo `.puml` em `sources/`.
 
@@ -32,7 +32,7 @@ O ZIP não deve ser tratado como fonte oficial única. A fonte versionável deve
 - `08-estados-sessao-refresh.puml`: estados de sessão e refresh token.
 - `09-componentes-arquitetura.puml`: componentes de arquitetura.
 
-Os SVGs presentes em `svg/sources/` são artefatos visuais oficiais exportados a partir das fontes PlantUML, úteis para leitura rápida e portfólio.
+Os SVGs em `svg/sources/` e o ZIP são artefatos versionados. As fontes 03, 04 e 07 foram alinhadas à GS-07 e à DN-3, e as fontes 02 e 09 foram alinhadas à configuração vigente de sessão. Os cinco SVGs correspondentes foram reexportados e o ZIP contém as fontes atuais. Para regras vigentes, consulte as fontes e a governança.
 
 ## Visualizar no VS Code
 
@@ -49,14 +49,14 @@ Abra um arquivo `.puml` em `docs/uml/sources/` e use o preview da extensão Plan
 Com `plantuml.jar` disponível:
 
 ```bash
-java -jar plantuml.jar -tsvg -o ../svg docs/uml/sources/*.puml
+java -jar plantuml.jar -charset UTF-8 -failfast2 -tsvg -o ../svg/sources docs/uml/sources/*.puml
 java -jar plantuml.jar -tpng -o ../png docs/uml/sources/*.puml
 ```
 
 Com `plantuml` instalado globalmente:
 
 ```bash
-plantuml -tsvg -o ../svg docs/uml/sources/*.puml
+plantuml -charset UTF-8 -failfast2 -tsvg -o ../svg/sources docs/uml/sources/*.puml
 plantuml -tpng -o ../png docs/uml/sources/*.puml
 ```
 

@@ -17,7 +17,9 @@ Esta auditoria nao altera codigo funcional. O backend usa token opaco server-sid
 - Nao foram encontrados usos de axios direto fora de `Api.js`.
 - `Api.js` tambem concentra funcoes de dominio, alem da infraestrutura HTTP.
 
-## 3. Arquivos com axios
+## 3. Inventário original de chamadas HTTP
+
+As tabelas desta auditoria são registros das etapas de migração. As atualizações ao final registram mudanças posteriores. Para novas chamadas, use a [fronteira vigente do cliente](api-boundary.md).
 
 | Arquivo | Funcao/componente | Endpoint | Metodo | Usa Api.js central? | Authorization | withCredentials | Tratamento de erro | Risco | Observacao |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |

@@ -25,8 +25,8 @@ API --> Frontend : JSON com bearer\nSet-Cookie academia_sa_refresh
 note right of API
 Cookie:
 HttpOnly
-SameSite=Lax
-Secure apenas em production
+SameSite=Lax por padrão
+Secure por padrão em produção e obrigatório com SameSite=None
 path=/auth
 end note
 

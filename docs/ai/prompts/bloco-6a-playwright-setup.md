@@ -1,5 +1,7 @@
 ﻿# Prompt Codex — BLOCO 6A SETUP PLAYWRIGHT
 
+Registro histórico de preparação do Playwright. A estrutura e os comandos atuais estão em [tests/e2e](../../../tests/e2e/README.md).
+
 ## Objetivo
 
 Adicionar setup mínimo e incremental de Playwright para começar E2E dos fluxos críticos.

@@ -1,5 +1,7 @@
 ﻿# Prompt Codex — CHECKPOINT 5.1 AUTH LOCAL / SMOKE GATE
 
+Registro histórico do checkpoint. O [Fluxo Pai](../../governance/fluxo-pai.md) registra a conclusão. Consulte o [Kanban](../../governance/gym-system-contexto-e-kanban.md) para os lotes vigentes.
+
 ## Objetivo
 
 Garantir que o ambiente local tenha credencial admin válida e que o `smoke-auth` volte a passar sem alterar a arquitetura de autenticação.

@@ -22,8 +22,8 @@ Payload atual:
 ```
 
 Origem principal:
-- [backend/middlewares/errorHandler.js](/C:/sistema-academia-main/backend/middlewares/errorHandler.js)
-- [backend/errors/AppError.js](/C:/sistema-academia-main/backend/errors/AppError.js)
+- [backend/middlewares/errorHandler.js](../../backend/middlewares/errorHandler.js)
+- [backend/errors/AppError.js](../../backend/errors/AppError.js)
 
 Exemplos de uso:
 - `backend/routes/acessos.js`
@@ -31,6 +31,8 @@ Exemplos de uso:
 - `backend/routes/usuariosInternos.js`
 - `backend/routes/units.js`
 - vários services em `backend/services/*`
+
+Exemplos vigentes do L04. Uma data de lançamento inválida em conta manual retorna `400 DATA_LANCAMENTO_INVALIDA`. Um período fechado retorna `423 PERIODO_FECHADO` nas operações que passam pela guarda. A execução direta de estorno que passa pelas validações anteriores retorna `409 REVERSAO_APROVACAO_NECESSARIA`. [Rotas de contas](../../backend/routes/contasFinanceiras.js) · [Serviço de fechamento](../../backend/services/FechamentoMensalService.js) · [Serviço de reversão](../../backend/services/ReversaoControladaService.js)
 
 ### 2. Fallback 404 global
 
@@ -48,7 +50,7 @@ Payload atual:
 ```
 
 Origem principal:
-- [backend/server.js](/C:/sistema-academia-main/backend/server.js)
+- [backend/server.js](../../backend/server.js)
 
 ### 3. Erro interno 500 global
 
@@ -66,7 +68,7 @@ Payload atual:
 ```
 
 Origem principal:
-- [backend/middlewares/errorHandler.js](/C:/sistema-academia-main/backend/middlewares/errorHandler.js)
+- [backend/middlewares/errorHandler.js](../../backend/middlewares/errorHandler.js)
 
 Observação:
 - o log interno já registra `correlation_id` via `console.error` estruturado

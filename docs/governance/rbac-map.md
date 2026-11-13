@@ -29,8 +29,8 @@ Papéis centrais, definidos no backend e espelhados no frontend:
 - `operador_acesso`
 
 Arquivos-base:
-- [backend/constants/userRoles.js](/C:/sistema-academia-main/backend/constants/userRoles.js)
-- [frontend/src/utils/permissions.js](/C:/sistema-academia-main/frontend/src/utils/permissions.js)
+- [backend/constants/userRoles.js](../../backend/constants/userRoles.js)
+- [frontend/src/utils/permissions.js](../../frontend/src/utils/permissions.js)
 
 ## Backend
 
@@ -45,7 +45,7 @@ O backend define:
 - helpers `roleHasPermission`, `isValidRole`, `isValidStatus`
 
 Arquivo principal:
-- [backend/constants/userRoles.js](/C:/sistema-academia-main/backend/constants/userRoles.js)
+- [backend/constants/userRoles.js](../../backend/constants/userRoles.js)
 
 ### Permissões hoje modeladas
 
@@ -54,7 +54,12 @@ Permissões explícitas encontradas:
 - `usuarios:criar`
 - `usuarios:alterar_papel`
 - `usuarios:alterar_status`
+- `financeiro:acessar`
+- `fechamento:fechar`
 - `fechamento:reabrir`
+- `plano_contas:gerenciar_rede`
+- `vendas:registrar`
+- `produtos:gerenciar`
 - `reversao:executar`
 - `acesso:liberacao_manual`
 - `alunos:alterar_plano_com_dependentes`
@@ -68,7 +73,7 @@ Permissões explícitas encontradas:
 
 O middleware principal de autorização é:
 
-- [backend/middlewares/requirePermission.js](/C:/sistema-academia-main/backend/middlewares/requirePermission.js)
+- [backend/middlewares/requirePermission.js](../../backend/middlewares/requirePermission.js)
 
 Ele:
 - falha se houver `req.authError`
@@ -80,20 +85,20 @@ Ele:
 
 O operador autenticado é resolvido em:
 
-- [backend/middlewares/operatorContext.js](/C:/sistema-academia-main/backend/middlewares/operatorContext.js)
+- [backend/middlewares/operatorContext.js](../../backend/middlewares/operatorContext.js)
 
 Pontos relevantes:
 - usa bearer token como fluxo principal
-- ainda aceita fallback legado por header `x-operator-id` / `x-user-id`
+- aceita fallback legado por header `x-operator-id` / `x-user-id` em `NODE_ENV=test` ou com `ALLOW_LEGACY_OPERATOR_HEADERS=true`
 - popula `req.operator`, `req.authSession`, `req.authError`
 
 ### Escopo tenant/unidade
 
 A autorização real hoje não depende só do papel. Ela também depende de escopo operacional:
 
-- [backend/middlewares/scopeContext.js](/C:/sistema-academia-main/backend/middlewares/scopeContext.js)
-- [backend/helpers/scope.js](/C:/sistema-academia-main/backend/helpers/scope.js)
-- [backend/services/UnitService.js](/C:/sistema-academia-main/backend/services/UnitService.js)
+- [backend/middlewares/scopeContext.js](../../backend/middlewares/scopeContext.js)
+- [backend/helpers/scope.js](../../backend/helpers/scope.js)
+- [backend/services/UnitService.js](../../backend/services/UnitService.js)
 
 Comportamento atual:
 - resolve `currentUnit`
@@ -106,22 +111,34 @@ Comportamento atual:
 
 Exemplos claros:
 
-- [backend/routes/usuariosInternos.js](/C:/sistema-academia-main/backend/routes/usuariosInternos.js)
-- [backend/routes/units.js](/C:/sistema-academia-main/backend/routes/units.js)
-- [backend/routes/tenants.js](/C:/sistema-academia-main/backend/routes/tenants.js)
-- [backend/routes/onboarding.js](/C:/sistema-academia-main/backend/routes/onboarding.js)
-- [backend/routes/tenantDashboard.js](/C:/sistema-academia-main/backend/routes/tenantDashboard.js)
-- [backend/routes/reversoes.js](/C:/sistema-academia-main/backend/routes/reversoes.js)
-- [backend/routes/mensalidades.js](/C:/sistema-academia-main/backend/routes/mensalidades.js) em reverter
-- [backend/routes/contasFinanceiras.js](/C:/sistema-academia-main/backend/routes/contasFinanceiras.js) em reverter
-- [backend/routes/vendasProdutos.js](/C:/sistema-academia-main/backend/routes/vendasProdutos.js) em reverter
-- [backend/routes/fechamentoMensal.js](/C:/sistema-academia-main/backend/routes/fechamentoMensal.js)
+- [backend/routes/usuariosInternos.js](../../backend/routes/usuariosInternos.js)
+- [backend/routes/units.js](../../backend/routes/units.js)
+- [backend/routes/tenants.js](../../backend/routes/tenants.js)
+- [backend/routes/onboarding.js](../../backend/routes/onboarding.js)
+- [backend/routes/tenantDashboard.js](../../backend/routes/tenantDashboard.js)
+- [backend/routes/reversoes.js](../../backend/routes/reversoes.js)
+- [backend/routes/mensalidades.js](../../backend/routes/mensalidades.js) em reverter
+- [backend/routes/contasFinanceiras.js](../../backend/routes/contasFinanceiras.js) em reverter
+- [backend/routes/vendasProdutos.js](../../backend/routes/vendasProdutos.js) em registrar e reverter
+- [backend/routes/produtos.js](../../backend/routes/produtos.js) em criar, editar, excluir e ajustar estoque
+- [backend/routes/planoContas.js](../../backend/routes/planoContas.js) em criar, editar e excluir categorias
+- [backend/routes/fechamentoMensal.js](../../backend/routes/fechamentoMensal.js)
+
+| Ação | Guarda e papéis atuais |
+|---|---|
+| Registrar venda nos dois aliases `POST /vendas-produtos` e `POST /vendasProdutos` | `vendas:registrar`: dono, admin, gestor e recepção. |
+| Criar, editar e excluir produtos e ajustar estoque | `produtos:gerenciar`: dono, admin e gestor. |
+| Analisar fechamento | `financeiro:acessar`: dono, admin, financeiro e `platform_admin` no escopo vinculado. |
+| Fechar e reabrir período | `financeiro:acessar` mais `fechamento:fechar` para dono/admin ou `fechamento:reabrir` só para dono. Reabrir exige motivo e auditoria. |
+| Ler e gerir plano de contas | Leitura com `financeiro:acessar`. Escrita também exige `plano_contas:gerenciar_rede`, hoje exclusiva do dono. Vale para `/plano-contas` e `/planoContas`. |
+
+Vendas, produtos e fechamento usam Rede e Unidade autorizada. As categorias do plano de contas são compartilhadas na Rede, resolvida a partir do escopo autorizado. Consulte a [cobertura por rota](rbac-route-coverage.md).
 
 ### Checagens manuais de papel
 
 Além de `requirePermission`, há checagens pontuais por papel:
 
-- [backend/services/UserService.js](/C:/sistema-academia-main/backend/services/UserService.js)
+- [backend/services/UserService.js](../../backend/services/UserService.js)
 
 Exemplo atual:
 - apenas `platform_admin` pode criar ou promover usuário para `platform_admin`
@@ -130,7 +147,7 @@ Exemplo atual:
 
 O histórico de atividades mistura permissão + escopo:
 
-- [backend/routes/auditLogs.js](/C:/sistema-academia-main/backend/routes/auditLogs.js)
+- [backend/routes/auditLogs.js](../../backend/routes/auditLogs.js)
 
 Comportamento atual:
 - `logs:visualizar_total` permite filtro amplo
@@ -143,7 +160,7 @@ Comportamento atual:
 
 O frontend mantém um mapa próprio de papéis e permissões visuais em:
 
-- [frontend/src/utils/permissions.js](/C:/sistema-academia-main/frontend/src/utils/permissions.js)
+- [frontend/src/utils/permissions.js](../../frontend/src/utils/permissions.js)
 
 Ele define:
 - `ROLES`
@@ -156,7 +173,7 @@ Ele define:
 
 Autenticação de rota no frontend hoje é binária:
 
-- [frontend/src/components/auth/ProtectedRoute.jsx](/C:/sistema-academia-main/frontend/src/components/auth/ProtectedRoute.jsx)
+- [frontend/src/components/auth/ProtectedRoute.jsx](../../frontend/src/components/auth/ProtectedRoute.jsx)
 
 Comportamento:
 - se não estiver autenticado, redireciona para `/login`
@@ -166,7 +183,7 @@ Comportamento:
 
 A autorização visual por permissão usa:
 
-- [frontend/src/components/auth/RoleGate.jsx](/C:/sistema-academia-main/frontend/src/components/auth/RoleGate.jsx)
+- [frontend/src/components/auth/RoleGate.jsx](../../frontend/src/components/auth/RoleGate.jsx)
 
 Comportamento:
 - renderiza children se `userHasUiPermission(user, permission)`
@@ -176,7 +193,7 @@ Comportamento:
 
 A sidebar é filtrada por permissão de UI:
 
-- [frontend/src/components/Sidebar.jsx](/C:/sistema-academia-main/frontend/src/components/Sidebar.jsx)
+- [frontend/src/components/Sidebar.jsx](../../frontend/src/components/Sidebar.jsx)
 
 Menus controlados por permissão:
 - dashboard
@@ -195,17 +212,17 @@ Menus controlados por permissão:
 
 Exemplos:
 
-- [frontend/src/pages/financeiro/FinanceiroLayout.jsx](/C:/sistema-academia-main/frontend/src/pages/financeiro/FinanceiroLayout.jsx)
-- [frontend/src/pages/tenant/TenantOverviewPage.jsx](/C:/sistema-academia-main/frontend/src/pages/tenant/TenantOverviewPage.jsx)
-- [frontend/src/pages/platform/OnboardingTenantPage.jsx](/C:/sistema-academia-main/frontend/src/pages/platform/OnboardingTenantPage.jsx)
-- [frontend/src/pages/auditoria/HistoricoAtividadesPage.jsx](/C:/sistema-academia-main/frontend/src/pages/auditoria/HistoricoAtividadesPage.jsx)
-- [frontend/src/pages/usuarios/UsuariosInternosPage.jsx](/C:/sistema-academia-main/frontend/src/pages/usuarios/UsuariosInternosPage.jsx)
+- [frontend/src/pages/financeiro/FinanceiroLayout.jsx](../../frontend/src/pages/financeiro/FinanceiroLayout.jsx)
+- [frontend/src/pages/tenant/TenantOverviewPage.jsx](../../frontend/src/pages/tenant/TenantOverviewPage.jsx)
+- [frontend/src/pages/platform/OnboardingTenantPage.jsx](../../frontend/src/pages/platform/OnboardingTenantPage.jsx)
+- [frontend/src/pages/auditoria/HistoricoAtividadesPage.jsx](../../frontend/src/pages/auditoria/HistoricoAtividadesPage.jsx)
+- [frontend/src/pages/usuarios/UsuariosInternosPage.jsx](../../frontend/src/pages/usuarios/UsuariosInternosPage.jsx)
 
 ### Rotas montadas sem autorização fina
 
 As rotas estão protegidas por autenticação em:
 
-- [frontend/src/App.jsx](/C:/sistema-academia-main/frontend/src/App.jsx)
+- [frontend/src/App.jsx](../../frontend/src/App.jsx)
 
 Mas a maioria continua montada para qualquer usuário autenticado. A restrição fina acontece mais por:
 
@@ -217,7 +234,7 @@ Mas a maioria continua montada para qualquer usuário autenticado. A restrição
 
 O frontend depende de `user.papel`, `tenant`, `currentUnit` e `allowedUnits` recebidos e persistidos no contexto:
 
-- [frontend/src/contexts/AuthContext.jsx](/C:/sistema-academia-main/frontend/src/contexts/AuthContext.jsx)
+- [frontend/src/contexts/AuthContext.jsx](../../frontend/src/contexts/AuthContext.jsx)
 
 Isso influencia:
 - visibilidade de UI
@@ -273,7 +290,7 @@ Risco:
 
 ### 5. Fallback legado por header de operador
 
-`operatorContext` ainda aceita:
+`operatorContext` aceita em teste ou com opt-in explícito:
 
 - `x-operator-id`
 - `x-user-id`

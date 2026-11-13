@@ -4,7 +4,7 @@
 
 Mapear as responsabilidades atuais de `frontend/src/services/Api.js` e definir uma separacao incremental por dominio antes do Bloco 4. Este plano nao altera comportamento, endpoints, payloads, autenticacao, `localStorage` ou bearer token.
 
-## 2. Estado atual
+## 2. Estado no início do plano
 
 `Api.js` mistura duas camadas diferentes:
 

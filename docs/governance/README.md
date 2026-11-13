@@ -17,8 +17,9 @@ Esta pasta concentra os documentos que orientam decisões de produto, permissõe
 |---|---|---|
 | `requisitos-base.md` | Define visão do produto, escopo, requisitos funcionais, segurança, auditoria, dados, testes e pendências antes do PostgreSQL. | Parcial: já cobre a fase atual e pendências principais. |
 | `matriz-permissoes.md` | Define visibilidade, operação, escopo e ações críticas por perfil. | Parcial: há decisões pendentes antes de produção. |
-| `smoke-tests.md` | Roteiro manual e repetível para validar ambiente limpo, sessão, permissões e fluxos críticos. | Parcial: documentado, depende de execução e massa de teste por perfil. |
-| `readme-audit.md` | Registra auditoria dos READMEs e decisões desta revisão documental. | Feito nesta revisão. |
+| `smoke-tests.md` | Roteiro manual, automação e verificações de ambiente, sessão, permissões e fluxos críticos. | Smokes automatizados em SQLite no CI. Aceites manuais do piloto seguem no Kanban. |
+| `readme-audit.md` | Registra a auditoria dos READMEs de 11/05/2026. | Registro histórico. |
+| `gym-system-contexto-e-kanban.md` | Sequência de lotes, decisões, estado e evidências de execução. | Acompanhamento vigente do piloto. |
 
 ## Como usar estes documentos
 
@@ -32,9 +33,9 @@ Esta pasta concentra os documentos que orientam decisões de produto, permissõe
 
 ## Status geral
 
-- Feito: base de requisitos, matriz inicial, autenticação com token opaco server-side, Bloco 3A de refresh token backend com cookie HttpOnly, bootstrap SQLite limpo, documentação UML inicial.
-- Parcial: escopo Rede/Unidade, segurança de sessão ponta a ponta, auditoria B1/B2/B3, permissões finais por perfil, smoke tests repetíveis.
-- Pendente: execução dos smoke tests, schema-freeze, migrations, hardening de produção, remoção de dependência de `localStorage` para access token em produção.
+- Feito: token opaco server-side, refresh por cookie HttpOnly, access token em memória no frontend, bootstrap SQLite limpo e smokes automatizados em SQLite descartável com Node 24.22.3.
+- Parcial: escopo Rede/Unidade, validação de sessão no deploy, auditoria B1/B2/B3, permissões finais por perfil e UML.
+- Pendente: aceites restantes do L04, homologação do piloto, schema-freeze, migrations e hardening de produção. Veja o [Kanban](gym-system-contexto-e-kanban.md).
 - Futuro: PostgreSQL, deploy web, integração real com catraca/Hikvision, Electron opcional.
 
 ## Princípios

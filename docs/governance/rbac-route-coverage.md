@@ -19,9 +19,16 @@ Mapear como as rotas de negócio do backend estão protegidas hoje, sem alterar 
 | `POST/PUT/DELETE /planos`, `/plano-contas` e `/planoContas` | Permissões distintas de catálogo e financeiro da Rede, disponíveis ao dono. O fluxo combinado Contratar/Renovar usa permissão própria de operação. |
 | `DELETE /usuarios-internos/:id/vinculo-unidade` | Admin ou dono, com vínculo na unidade selecionada, escopo e hierarquia GS-03. Revoga sessões após desativar o vínculo local. |
 
-## Categorias encontradas
+## L04 · Escritas de venda, produto e estoque
 
-A tabela do L02 acima prevalece nos domínios alterados pela DN-3. Na primeira entrega do L04, `vendas:registrar` protege o POST de venda e seu alias para dono, admin, gestor e recepção. `produtos:gerenciar` protege criação, edição, ajuste de estoque e exclusão para dono, admin e gestor. Todas as escritas exigem escopo de unidade.
+| Rotas | Permissão | Papéis |
+|---|---|---|
+| `POST /vendas-produtos`, `POST /vendasProdutos` | `vendas:registrar` | Dono, admin, gestor e recepção |
+| `POST /produtos`, `PUT /produtos/:id`, `DELETE /produtos/:id`, `PATCH /produtos/:id/estoque` | `produtos:gerenciar` | Dono, admin e gestor |
+
+Todas essas escritas exigem Rede e Unidade autorizada. Os dois aliases de venda compartilham o mesmo roteador. Validação em [smoke-l04-integridade.js](../../tests/scripts/smoke-l04-integridade.js).
+
+## Categorias encontradas
 
 ### 1. Públicas
 
@@ -58,16 +65,16 @@ Padrão atual:
 
 Domínios prioritários nessa categoria:
 
-- Alunos: [backend/routes/alunos.js](/C:/sistema-academia-main/backend/routes/alunos.js)
-- Mensalidades: [backend/routes/mensalidades.js](/C:/sistema-academia-main/backend/routes/mensalidades.js), exceto `reverter`
-- Pagamentos: [backend/routes/pagamentos.js](/C:/sistema-academia-main/backend/routes/pagamentos.js), exceto registrar (`pagamentos:registrar`) e estornar (`reversao:executar`)
-- Vendas: [backend/routes/vendasProdutos.js](/C:/sistema-academia-main/backend/routes/vendasProdutos.js), exceto `reverter`
-- Acessos: [backend/routes/acessos.js](/C:/sistema-academia-main/backend/routes/acessos.js), exceto liberação manual
-- Plano associado/vínculos: [backend/routes/planoAssociado.js](/C:/sistema-academia-main/backend/routes/planoAssociado.js)
+- Alunos: consultas em [backend/routes/alunos.js](../../backend/routes/alunos.js). Escritas seguem a tabela do L02.
+- Mensalidades: consultas em [backend/routes/mensalidades.js](../../backend/routes/mensalidades.js). Escritas seguem a tabela do L02.
+- Pagamentos: [backend/routes/pagamentos.js](../../backend/routes/pagamentos.js), exceto registrar (`pagamentos:registrar`) e estornar (`reversao:executar`)
+- Vendas: consultas em [backend/routes/vendasProdutos.js](../../backend/routes/vendasProdutos.js). Registro segue o L04 e reversão tem guarda própria.
+- Acessos: [backend/routes/acessos.js](../../backend/routes/acessos.js), exceto liberação manual
+- Plano associado/vínculos: consultas em [backend/routes/planoAssociado.js](../../backend/routes/planoAssociado.js). Criar e excluir exigem `alunos:alterar_plano_com_dependentes`.
 
 Outros domínios no mesmo padrão:
 
-- Produtos
+- Consultas de produtos
 
 O módulo Financeiro saiu desta categoria (ver seção 4, "Módulo Financeiro").
 
@@ -114,7 +121,7 @@ Montado em [backend/server.js](../../backend/server.js) com `requirePermission(P
 |---|---|---|
 | `/dashboard/financeiro` | `GET /`, `GET /kpis` | `POST /sincronizar`: `financeiro:sincronizar` |
 | `/contas-financeiras`, `/contasFinanceiras` | `GET`, `POST`, `PUT /:id`, `PATCH /:id/status`, `DELETE /:id` | `POST /:id/reverter` e `DELETE` de conta paga: `reversao:executar` |
-| `/plano-contas`, `/planoContas` | `GET`, `POST`, `PUT /:id`, `DELETE /:id` | — |
+| `/plano-contas`, `/planoContas` | `GET`, `POST`, `PUT /:id`, `DELETE /:id` | Escritas: `plano_contas:gerenciar_rede`, exclusiva do dono |
 | `/financeiro/ativos` | `GET`, `POST`, `PUT /:id`, `DELETE /:id` | — |
 | `/financeiro/orcamento` | `GET`, `POST`, `PUT /:id`, `DELETE /:id` | — |
 | `/fechamento-mensal` | `GET /:ano/:mes/analisar` | `fechar`: `fechamento:fechar`; `reabrir`: `fechamento:reabrir` |
@@ -131,33 +138,35 @@ Categoria: `plano_contas_id` de conta financeira precisa ser da Rede da operaç�
 
 Validação: `tests/scripts/smoke-financeiro-isolamento.js`.
 
-Papéis com permissão (constants/userRoles.js): `financeiro:acessar` em `platform_admin`, `owner`, `admin` e `financeiro`; `reversao:executar` em `platform_admin`, `owner`, `admin` e `financeiro`; `fechamento:fechar` e `fechamento:reabrir` em `platform_admin`, `owner` e `admin`.
+Papéis com permissão ([userRoles.js](../../backend/constants/userRoles.js)). `financeiro:acessar` e `reversao:executar` estão disponíveis a `platform_admin`, `owner`, `admin` e `financeiro`, com a execução direta de estorno bloqueada. `fechamento:fechar` pertence a `owner` e `admin`. `fechamento:reabrir` pertence apenas a `owner` e exige motivo e auditoria.
+
+Em contas manuais, `POST` e `PATCH /:id/status` usam a permissão geral `financeiro:acessar`. A [matriz](matriz-permissoes.md#61-contas-financeiras--divergência-entre-matriz-e-api) registra os 15 cenários observados e as duas decisões em aberto para o perfil financeiro.
 
 ### 5. Com checagem manual de papel/permissão
 
 Pontos onde a regra não está só no `requirePermission`:
 
 - Auditoria/logs:
-  - [backend/routes/auditLogs.js](/C:/sistema-academia-main/backend/routes/auditLogs.js)
+  - [backend/routes/auditLogs.js](../../backend/routes/auditLogs.js)
   - usa `assertActiveOperator`, `roleHasPermission` e filtros de escopo manualmente
 - Acesso/liberação manual:
-  - [backend/routes/acessos.js](/C:/sistema-academia-main/backend/routes/acessos.js)
+  - [backend/routes/acessos.js](../../backend/routes/acessos.js)
   - usa `assertPermission(req, PERMISSIONS.ACESSO_LIBERACAO_MANUAL)` dentro da rota
 - Alunos:
-  - [backend/routes/alunos.js](/C:/sistema-academia-main/backend/routes/alunos.js)
+  - [backend/routes/alunos.js](../../backend/routes/alunos.js)
   - `PUT /alunos/:id` só exige permissão explícita se houver mudança de plano com dependentes
 - Usuários internos:
-  - [backend/services/UserService.js](/C:/sistema-academia-main/backend/services/UserService.js)
+  - [backend/services/UserService.js](../../backend/services/UserService.js)
   - `platform_admin` tem regra manual adicional para criação/promoção
 - Auth:
-  - [backend/routes/auth.js](/C:/sistema-academia-main/backend/routes/auth.js)
+  - [backend/routes/auth.js](../../backend/routes/auth.js)
   - usa checks manuais de `req.authError`, `req.operator` e `blocked`
 
 ### 6. Legado / fallback por header
 
 O fallback legado continua existindo em:
 
-- [backend/middlewares/operatorContext.js](/C:/sistema-academia-main/backend/middlewares/operatorContext.js)
+- [backend/middlewares/operatorContext.js](../../backend/middlewares/operatorContext.js)
 
 Headers aceitos:
 - `x-operator-id`
@@ -184,12 +193,11 @@ Impacto atual:
 ### Alunos
 
 - domínio protegido por escopo
-- não há permissão fina no CRUD geral
-- única exceção atual é mudança de plano com dependentes
+- cadastro e edição exigem `alunos:editar`; campos sensíveis e mudança de plano com dependentes têm guardas adicionais
 
 ### Mensalidades e pagamentos
 
-- criação, listagem, atualização e exclusão dependem de escopo
+- listagens dependem de escopo; as escritas de mensalidades têm permissões de emissão, gestão ou desconto
 - reversão e estorno de pagamento exigem `reversao:executar`
 - registrar pagamento exige `pagamentos:registrar`
 
@@ -201,8 +209,8 @@ Impacto atual:
 
 ### Vendas
 
-- CRUD principal depende de escopo
-- reversão exige permissão explícita
+- consultas usam escopo; registro nos dois aliases usa `vendas:registrar`
+- reversão exige permissão explícita e segue bloqueada até o fluxo de aprovação
 
 ### Fechamento mensal
 
@@ -232,13 +240,13 @@ Impacto atual:
 
 ### 1. `planos.js` · cobertura do catálogo
 
-- [backend/routes/planos.js](/C:/sistema-academia-main/backend/routes/planos.js)
+- [backend/routes/planos.js](../../backend/routes/planos.js)
 
 As rotas de leitura resolvem o escopo. As mutações do catálogo exigem permissão de Rede. A comercialização de plano exclusivo ainda depende do modelo de distribuição.
 
 ### 2. `POST /dashboard/financeiro/sincronizar` é rota sensível e deve permanecer auditada
 
-- [backend/routes/dashboardFinanceiro.js](/C:/sistema-academia-main/backend/routes/dashboardFinanceiro.js)
+- [backend/routes/dashboardFinanceiro.js](../../backend/routes/dashboardFinanceiro.js)
 
 Hoje:
 - exige `requirePermission(PERMISSIONS.FINANCEIRO_SINCRONIZAR)`
@@ -248,16 +256,9 @@ Hoje:
 Risco residual:
 - continua sendo operação sensível e merece revisão periódica de RBAC, auditoria e escopo
 
-### 3. CRUDs críticos dependem só de escopo
+### 3. Leituras operacionais dependem de escopo
 
-Exemplos:
-- alunos
-- mensalidades
-- vendas
-- revisão histórica de produtos e estoque (FV-02b; escritas cobertas no L04)
-
-Risco:
-- qualquer operador autenticado com unidade válida pode executar ações além do papel desejado, se o domínio não tiver outras travas internas
+Consultas de alunos, mensalidades, vendas e produtos não distinguem papéis por ação na API. As escritas desses domínios têm guardas próprias descritas acima.
 
 ### 4. Mistura de estilos de autorização
 
@@ -272,10 +273,10 @@ Risco:
 - difícil auditar cobertura real
 - fácil introduzir drift entre domínios
 
-### 5. Fallback legado de operador continua transversal
+### 5. Fallback legado de operador em teste ou opt-in
 
 Risco:
-- caminho antigo ainda interfere no contexto de autenticação de rotas protegidas
+- em `NODE_ENV=test` ou com `ALLOW_LEGACY_OPERATOR_HEADERS=true`, o caminho legado também pode resolver o operador
 
 ## Estratégia incremental recomendada
 
@@ -287,6 +288,6 @@ Risco:
    - financeiro (feito: `financeiro:acessar` no módulo inteiro)
    - fechamento mensal (feito)
    - pagamentos (registrar e estornar já têm permissão própria)
-   - produtos e estoque (FV-02b; ver cobertura de escritas no L04)
+   - produtos e estoque (escritas cobertas no L04)
    - alunos com impacto financeiro
 4. Só depois reduzir checks manuais espalhados, aproximando tudo de helpers centrais sem mudar o comportamento em lote.

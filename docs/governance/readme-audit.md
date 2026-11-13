@@ -2,6 +2,8 @@
 
 Auditoria documental executada em 2026-05-11.
 
+As tabelas abaixo preservam o diagnóstico e as decisões daquela auditoria. Para o estado vigente, consulte o [Kanban](gym-system-contexto-e-kanban.md) e o [guia de ambiente](../setup/ambiente-local.md).
+
 ## Comando usado
 
 ```powershell

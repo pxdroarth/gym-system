@@ -252,6 +252,8 @@ Para inventário, chamados e manutenção quando houver operação multi-cliente
 
 ## Decisão
 
+Estado confirmado no backend. O [middleware de correlação](../../backend/middlewares/correlationId.js) e o [tratamento de erros](../../backend/middlewares/errorHandler.js) já usam `correlation_id`, e o [servidor](../../backend/server.js) expõe `/health`. O pipeline de dispositivo, os monitores e a instrumentação de gateway abaixo são evolução planejada.
+
 Agora:
 
 ```txt

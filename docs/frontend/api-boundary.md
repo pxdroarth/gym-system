@@ -59,5 +59,5 @@ Excecoes devem ser raras e justificadas:
 
 - remover exports legados do `Api.js` quando todos os services tiverem implementacao propria
 - mover implementacoes de dominio para dentro dos services gradualmente
-- Bloco 5: hardening de producao com cookie Secure, HTTPS, CSP e CORS por ambiente
-- Playwright/E2E depois do Bloco 4
+- validar o hardening do Bloco 5 no deploy final, conforme o [guia de segurança](../setup/seguranca-producao.md)
+- ampliar a [suíte E2E inicial](../../tests/e2e/README.md) conforme os aceites do piloto

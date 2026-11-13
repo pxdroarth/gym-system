@@ -202,15 +202,17 @@ Evento:
 
 ## Contrato mínimo de credenciais/dispositivos
 
-Checkpoint atual:
+Registro do checkpoint de criação do schema:
 
 - o schema mínimo já foi criado em `backend/database/ensureSchema.js`
 - `access_devices`, `access_credentials` e `access_events` já existem no SQLite local
-- as três tabelas permanecem vazias neste checkpoint
+- as três tabelas estavam vazias naquele checkpoint
 - `AccessService` não foi alterado
 - `acesso` continua sendo o registro canônico da decisão operacional final
 - `audit_log` continua sendo a trilha administrativa e de override manual
 - `access_events` já existe no schema, mas ainda não possui uso funcional no runtime atual
+
+O backend já monta rotas de [dispositivos e credenciais](../../backend/routes/accessDevices.js). O fluxo de entrada em operação segue no [AccessService](../../backend/services/AccessService.js). A ingestão de eventos de hardware e o provedor real permanecem previstos.
 
 ### access_devices
 

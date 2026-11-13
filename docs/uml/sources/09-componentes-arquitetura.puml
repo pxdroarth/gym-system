@@ -4,7 +4,7 @@ skinparam componentStyle rectangle
 skinparam shadowing false
 
 package "Frontend" {
-  [React/Vite] as Frontend
+  component "React/Vite" as ReactApp
   [AuthContext] as AuthContext
   [Api.js / Axios] as Axios
 }
@@ -26,9 +26,9 @@ cloud "Uploads/Storage futuro" as Storage
 cloud "Backup futuro" as Backup
 node "Integração futura\ncatraca/câmera" as Catraca
 
-Frontend --> AuthContext
+ReactApp --> AuthContext
 AuthContext --> Axios
-Axios --> API : HTTP/JSON\nBearer atual\nCookie refresh futuro no frontend
+Axios --> API : HTTP/JSON\nBearer em memória\nRefresh por cookie HttpOnly
 API --> Middlewares
 Middlewares --> Services
 Services --> Auth

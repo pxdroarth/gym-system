@@ -34,7 +34,7 @@ Por padrao ele roda em dry-run/plano, apenas mostra o que seria executado e so i
 | Categoria | Requisito oficial | Observacoes |
 |---|---|---|
 | Sistema operacional | Windows | Plataforma primaria suportada para desenvolvimento local. |
-| Shell | PowerShell 5.1+ | Necessario para os scripts oficiais em `tests\scripts`. |
+| Shell | Windows PowerShell 5.1 para os wrappers CMD, PowerShell 7 para a suíte SQLite do CI | A suíte descartável usa `pwsh`. |
 | Versionamento | Git | Necessario para clonar, atualizar e versionar o repositorio. |
 | Runtime | Node.js LTS `24.22.3` | Versão fixada em `package.json` e `frontend/package.json`. |
 | Gerenciador de pacotes | npm compativel com o Node instalado | O projeto declara `npm >=9`. |
@@ -59,7 +59,7 @@ Por padrao ele roda em dry-run/plano, apenas mostra o que seria executado e so i
 | Categoria | Status | Observacoes |
 |---|---|---|
 | `winget` | Opcional | Pode ajudar em instalacoes manuais, mas nao e requisito do projeto. |
-| Playwright / E2E | Opcional / pausado | Nao bloqueia readiness local neste bloco. |
+| Playwright / E2E | Opcional | Há uma suíte inicial de autenticação em [tests/e2e](../../tests/e2e/README.md). |
 | Insomnia | Opcional | Util para API manual e semiautomatizada. |
 | PlantUML / Java / Graphviz | Opcional | Necessarios apenas para diagramas locais. |
 | k6 / JMeter | Futuro | Fora do gate principal atual. |

@@ -2,7 +2,7 @@
 
 ## Stack
 
-- Backend: Node.js + Express
+- Backend: Node.js 24.22.3 + Express
 - Frontend: React + Vite
 - Banco atual: SQLite
 - Banco futuro: PostgreSQL
@@ -31,7 +31,11 @@ O sistema já possui:
 - multi-unidade inicial
 - documentação/governança
 
-## Posição atual no Fluxo Pai
+## Estado dos lotes
+
+O [Kanban vigente](../governance/gym-system-contexto-e-kanban.md) registra o L03 e a integridade do L04 integrados. Estornos aprovados e telas de fechamento seguem no L04. O [CI](../../.github/workflows/node24.yml) roda smokes em SQLite descartável e build em pull requests.
+
+## Checkpoint histórico no Fluxo Pai
 
 ```txt
 FASE 4 — Estabilização Profissional
@@ -39,11 +43,11 @@ CHECKPOINT 5.1 — Auth local / smoke-auth gate
 Depois: BLOCO 6A — Setup Playwright
 ```
 
-## Pendência operacional conhecida
+## Ocorrência histórica de autenticação local
 
 `tests\scripts\smoke-auth.cmd -Login admin` já falhou com `401` por credencial local inválida no SQLite atual.
 
-Antes de avançar para Playwright/E2E de auth, corrigir credencial/admin local ou criar reset/bootstrap seguro.
+O checkpoint 5.1 foi concluído. Em nova ocorrência, consulte o [ambiente local](../setup/ambiente-local.md). A suíte de auth já está em [tests/e2e](../../tests/e2e/README.md).
 
 ## Validações recentes esperadas
 
@@ -60,7 +64,7 @@ Não trocar estratégia de auth sem decisão arquitetural.
 
 Não iniciar PostgreSQL, Docker, catraca real ou IA antes de blindar fluxos críticos com testes suficientes.
 
-## Próxima sequência recomendada
+## Sequência planejada no checkpoint histórico
 
 1. CHECKPOINT 5.1 — corrigir smoke-auth local
 2. BLOCO 6A — setup Playwright

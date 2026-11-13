@@ -110,12 +110,12 @@ Não deve acessar financeiro. Não deve registrar pagamento por padrão. Não de
 | Associações/vínculos | Total | Escopo Rede | Escopo Rede/Unidade | Escopo Unidade | Operação limitada | Não permitido | Impacta acesso e mensalidade. |
 | Mensalidades | Total | Escopo Rede | Escopo Rede/Unidade | Escopo Unidade | Operação limitada | Leitura limitada | Cancelamento é ação crítica. |
 | Pagamentos | Escopo vinculado | Unidade autorizada | Unidade autorizada | Receber na unidade | Receber na unidade | Não permitido | Estorno segue a DN-3. |
-| Produtos | Total | Escopo Rede | Escopo Rede/Unidade | Escopo Unidade | Operação limitada | Não permitido | Alteração de estoque é sensível. |
-| Vendas | Total | Escopo Rede | Escopo Rede/Unidade | Escopo Unidade | Operação limitada | Não permitido | Cancelamento/reversão exige auditoria. |
-| Financeiro | Total / Observação produção | Escopo Rede | Escopo Rede/Unidade / Pendente | Pendente | Não permitido | Não permitido | Módulo restrito. |
-| Plano de contas | Leitura | Gestão de Rede | Leitura; gestão depende de autorização de Rede | Não permitido | Não permitido | Não permitido | Financeiro consulta categorias. |
-| Contas financeiras | Total / Observação produção | Escopo Rede | Escopo Rede/Unidade / Pendente | Pendente | Não permitido | Não permitido | Pagar conta financeira é ação crítica. |
-| Fechamento mensal | Análise no escopo vinculado; política de suporte pendente | Analisar, fechar e reabrir | Analisar e fechar | Não permitido | Não permitido | Não permitido | Financeiro analisa. Reabertura exige motivo. |
+| Produtos | Leitura no escopo | Gestão na unidade | Gestão na unidade | Gestão na unidade | Leitura no escopo | Leitura no escopo pela API | Escritas com `produtos:gerenciar`. |
+| Vendas | Leitura no escopo | Registrar na unidade | Registrar na unidade | Registrar na unidade | Registrar na unidade | Leitura no escopo pela API | Registro com `vendas:registrar`. Reversão direta bloqueada. |
+| Financeiro | Acesso no escopo vinculado | Acesso no escopo | Acesso no escopo | Não permitido | Não permitido | Não permitido | `financeiro:acessar` inclui o perfil `financeiro`. |
+| Plano de contas | Leitura | Gestão de Rede | Leitura | Não permitido | Não permitido | Não permitido | Financeiro também consulta. A escrita exige `plano_contas:gerenciar_rede`, hoje exclusiva do dono. |
+| Contas financeiras | Acesso no escopo vinculado | Unidade autorizada | Unidade autorizada | Não permitido | Não permitido | Não permitido | A API também permite ao financeiro criar e marcar como paga na unidade autorizada. Decisões em aberto na seção 6.1. |
+| Fechamento mensal | Análise no escopo vinculado | Analisar, fechar e reabrir | Analisar e fechar | Não permitido | Não permitido | Não permitido | Financeiro analisa. Reabertura exige motivo e auditoria. |
 | Acessos | Total | Escopo Rede | Escopo Rede/Unidade | Escopo Unidade | Operação limitada | Operação limitada | Operação deve respeitar regra de mensalidade/status. |
 | Liberação manual de acesso | Total | Escopo Rede | Escopo Rede/Unidade | Pendente | Pendente | Operação limitada | Deve gerar Auditoria. |
 | Histórico de Atividades | Total | Leitura / Escopo Rede | Leitura / Escopo Rede/Unidade | Não permitido | Não permitido | Não permitido | Módulo visual somente leitura. |
@@ -141,18 +141,30 @@ Não deve acessar financeiro. Não deve registrar pagamento por padrão. Não de
 | pagar mensalidade | owner, admin, gestor, recepção | Unidade autorizada | Sim | Recebimento pelo fluxo de pagamentos. |
 | cancelar mensalidade | owner, admin | Rede/Unidade | Sim | Ação sensível; deve respeitar fechamento mensal. |
 | reverter pagamento | gestor solicita, owner/admin aprova, financeiro executa | Unidade autorizada | Sim | Execução direta bloqueada até o fluxo aprovado. |
-| registrar venda | owner, admin, gerente, recepção | Rede/Unidade | Sim | Recepção pode operar venda se o fluxo estiver autorizado. |
-| cancelar/reverter venda | owner, admin | Rede/Unidade | Sim | Reversão/cancelamento é sensível. |
-| alterar estoque | owner, admin, gerente | Rede/Unidade | Sim | Recepção não deve alterar estoque por padrão. |
-| criar produto | owner, admin, gerente | Rede/Unidade | Sim | Pode exigir aprovação administrativa em produção. |
-| editar produto | owner, admin, gerente | Rede/Unidade | Sim | Alterações de preço/estoque são sensíveis. |
-| acessar financeiro | platform_admin, owner, admin | Global/Rede/Unidade | Sim | Platform_admin global em produção é decisão pendente. |
-| criar conta financeira | owner, admin | Rede/Unidade | Sim | Gerente é pendente. |
-| pagar conta financeira | owner, admin | Rede/Unidade | Sim | Ação financeira sensível. |
-| reabrir fechamento mensal | owner | Unidade autorizada | Sim | Motivo obrigatório. Política master pendente. |
+| registrar venda | owner, admin, gestor, recepção | Rede/Unidade | Sim | `vendas:registrar` em `POST /vendas-produtos` e `POST /vendasProdutos`. |
+| reverter venda | Fluxo da DN-3 pendente | Rede/Unidade | Sim | Execução direta bloqueada. |
+| criar, editar e excluir produto e ajustar estoque | owner, admin, gestor | Rede/Unidade | Regra de governança | `produtos:gerenciar`. As rotas atuais de gestão de produto não gravam evento próprio de auditoria. A baixa pela venda é auditada no registro da venda. |
+| acessar financeiro | platform_admin, owner, admin, financeiro | Escopo vinculado | Conforme ação | `financeiro:acessar`. Política de suporte master pendente. |
+| criar conta financeira | owner, admin na matriz | Rede/Unidade | Sim | A API também permite ao financeiro. Decisão pendente na seção 6.1. |
+| marcar conta financeira como paga | owner, admin na matriz | Rede/Unidade | Sim | A API também permite ao financeiro. Decisão pendente na seção 6.1. |
+| analisar fechamento mensal | platform_admin, owner, admin, financeiro | Rede/Unidade | Leitura | `financeiro:acessar`. |
+| fechar período mensal | owner, admin | Rede/Unidade | Sim | `financeiro:acessar` e `fechamento:fechar`. |
+| reabrir fechamento mensal | owner | Rede/Unidade | Sim | `financeiro:acessar`, `fechamento:reabrir` e motivo obrigatório. |
+| gerir plano de contas | owner | Rede | Regra de governança | `financeiro:acessar` e `plano_contas:gerenciar_rede` nos dois aliases. As rotas atuais não gravam evento próprio de auditoria. |
 | liberar acesso manualmente | platform_admin, owner, admin, operador_acesso | Rede/Unidade | Sim | Gerente/recepção pendentes conforme operação. |
 | ver Histórico de Atividades | platform_admin, owner, admin | Global/Rede/Unidade | Não altera dados | Somente leitura; bloqueado para perfis operacionais. |
 | ver Consolidado da Rede | owner integral; admin e platform_admin em unidades autorizadas | Rede/Unidade | Somente leitura | Integral exige alcance explícito de Rede. |
+
+### 6.1. Contas financeiras · divergência entre matriz e API
+
+A matriz lista dono e admin para criar uma conta e marcá-la como paga. As duas rotas usam `financeiro:acessar` e validam Rede e Unidade. A validação em SQLite descartável com Node 24.22.3 confirmou 15 cenários para dono, admin e financeiro.
+
+- Na Matriz autorizada, os três receberam `201` ao criar conta pendente e `200` ao marcar outra conta como paga. A auditoria identificou ator e unidade.
+- Ao selecionar uma unidade sem vínculo, as duas ações devolveram `403 UNIT_FORBIDDEN`. Ao tentar marcar uma conta externa como paga com a Matriz selecionada, os três receberam `404 CONTA_NAO_ENCONTRADA`. As recusas preservaram as contas e a auditoria de conclusão.
+- Decisão aberta 1. O financeiro deve poder criar contas financeiras?
+- Decisão aberta 2. O financeiro deve poder marcar contas financeiras como pagas?
+
+Veja o [registro do L04](gym-system-contexto-e-kanban.md#l04--integridade-de-contas-vendas-e-estoque).
 
 ## 7. Regras de segurança por perfil
 
@@ -199,7 +211,7 @@ Esta tabela detalha as decisões aprovadas da DN-3 e o estado da implementação
 | Emitir padrão e receber | Recepção, gestor, admin e dono na unidade. Lançamento excepcional, edição de valores e cancelamento têm guardas próprias; recebimento usa a API de pagamentos. |
 | Conceder desconto excepcional | Gestor, financeiro, admin e dono. Motivo obrigatório e registro da ação. Caixa poderá solicitar quando o fluxo próprio estiver disponível. |
 | Estornar | Gestor solicita, dono ou admin da unidade aprova e financeiro executa. Execução direta bloqueada até o fluxo de aprovação. |
-| Analisar, fechar e reabrir | Financeiro, admin e dono analisam. Admin e dono fecham. Dono reabre com motivo. Telas novas e política master dependem de sublotes. |
+| Analisar, fechar e reabrir | Financeiro, admin e dono analisam. A API também permite análise ao `platform_admin` no escopo vinculado. Admin e dono fecham. Dono reabre com motivo. Telas novas e política master dependem de sublotes. |
 | Catálogo compartilhado, categorias de Rede e Consolidado integral | Permissões distintas de Rede. L02 concede ao dono. Admin recebe relatório das suas unidades. Concessão de alcance integral ou escrita compartilhada a admin depende de autorização explícita de Rede. |
 | Plano exclusivo | Admin com permissão de catálogo da unidade, após cadastro e distribuição de planos locais. A autorização comercial e a autorização de entrada têm regras distintas. |
 | Desativar vínculo local | Admin e dono podem desativar o vínculo da unidade selecionada conforme escopo e hierarquia. As sessões do usuário são revogadas e os demais vínculos são preservados. |

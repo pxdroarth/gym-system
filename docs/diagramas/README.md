@@ -28,3 +28,4 @@ O ponto recomendado para entender o uso dessas referências é:
 - SQLite é o banco atual; PostgreSQL é evolução futura.
 - Hikvision/catraca é integração futura; a fase atual considera webcam local/simulação.
 - Decisões visuais antigas devem ser revisadas antes de virar requisito oficial.
+- As imagens históricas de acesso e mensalidade antecedem a GS-07 e a DN-3. Consulte as [fontes UML](../uml/README.md) e os [requisitos atuais](../governance/requisitos-base.md#gs-07--planos-e-mensalidades-mensal-manual) para cobertura quitada e estornos.

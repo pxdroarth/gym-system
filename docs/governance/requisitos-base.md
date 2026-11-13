@@ -247,7 +247,7 @@ Visão consolidada da Rede, somente leitura, voltada a acompanhamento e governan
 
 **RS-011 [parcial]** CSP deve ser configurada para reduzir risco de XSS.
 
-**RS-012 [pendente]** Produção não deve persistir access token em `localStorage`.
+**RS-012 [feito no frontend]** O access token fica em memória. A validação no deploy permanece pendente.
 
 **RS-013 [parcial]** Frontend deve usar refresh cookie com `withCredentials` e access token em memória.
 
@@ -339,7 +339,7 @@ Visão consolidada da Rede, somente leitura, voltada a acompanhamento e governan
 
 **RNF-009 [feito]** Documentação deve ser versionada no repositório.
 
-**RNF-010 [pendente]** Smoke tests devem ser documentados e repetíveis.
+**RNF-010 [feito]** O [roteiro de smokes](smoke-tests.md) documenta os fluxos manuais e a execução automatizada em SQLite descartável.
 
 ## 12. Requisitos de integração
 
@@ -357,7 +357,7 @@ Visão consolidada da Rede, somente leitura, voltada a acompanhamento e governan
 
 ## 13. Requisitos de teste
 
-**RT-001 [pendente]** Deve existir roteiro de smoke tests manuais.
+**RT-001 [feito]** O [roteiro de smoke tests manuais](smoke-tests.md) está versionado.
 
 **RT-002 [pendente]** Testes devem cobrir os principais perfis: platform_admin, owner, admin, gerente, recepção e operador_acesso.
 
@@ -437,9 +437,10 @@ Diagnóstico e plano completos no documento da GS-07 (commit analisado: `bd74c2d
 - Cada pagamento é um registro próprio. A mensalidade fica `parcial` enquanto a soma dos pagamentos válidos (não estornados) for menor que o valor cobrado, e `pago` quando alcança o valor (D6).
 - Pagamento acima do saldo em aberto é recusado (`422 PAGAMENTO_ACIMA_DO_SALDO`); mensalidade quitada recusa novo pagamento (`409 MENSALIDADE_QUITADA`). O saldo é comparado em centavos, na mesma transação que grava o pagamento; valores com mais de duas casas decimais são recusados.
 - Idempotência: header `Idempotency-Key` (ou campo `chave_idempotencia`), única por Rede/Unidade. Mesma chave com os mesmos dados devolve o resultado original (`200`, header `Idempotent-Replayed: true`) sem gravar pagamento, lançamento ou auditoria, inclusive com saldo zerado ou pagamento já estornado. Mesma chave com dados diferentes: `409 IDEMPOTENCIA_CONFLITO`. Sem chave, cada envio é um pagamento novo.
-- Estorno: `POST /pagamentos/:id/estornar` com `motivo`, exige `reversao:executar`, valida Rede/Unidade (pagamento de outra unidade: `404`) e o fechamento do período do pagamento e da data do estorno. Estorna só o pagamento escolhido, mantém vencimento e período de cobertura e recalcula o status pelo saldo restante (D7). Registra `reversao_controlada`, lançamento inverso e auditoria `estornar_pagamento_mensalidade`.
+- Estorno implementado no P1: `POST /pagamentos/:id/estornar` com `motivo` exige `reversao:executar`, valida Rede e Unidade (pagamento de outra unidade: `404`) e confere os períodos do pagamento e do estorno. A implementação do P1 estorna apenas o pagamento selecionado, preserva vencimento e cobertura, recalcula o status pelo saldo restante (D7) e registra `reversao_controlada`, lançamento inverso e auditoria `estornar_pagamento_mensalidade`.
+- Estado atual após o L02: a execução direta que passa pelas guardas recebe `409 REVERSAO_APROVACAO_NECESSARIA`. A recusa preserva os pagamentos, o saldo e as datas de cobertura. A liberação depende da [DN-3](#dn-3--permissões-operacionais-do-l02) no L04. O gestor solicita com motivo, o dono ou admin autorizado da unidade aprova e o financeiro executa.
 - Financeiro: cada pagamento novo gera o próprio lançamento (`origem = 'pagamento_mensalidade'`) na data do pagamento, para que um pagamento posterior não altere lançamento de mês já fechado. Lançamentos legados (`origem = 'mensalidade'`) são preservados; a sincronização não soma de novo o que já tem lançamento próprio, e o "a receber" agregado é baixado quando a mensalidade passa a ter pagamentos no modelo novo.
-- A reversão em bloco (`/reversoes/mensalidades/:id`) continua para mensalidades legadas; com pagamentos no modelo novo, responde `409 USAR_ESTORNO_POR_PAGAMENTO`.
+- A rota de reversão em bloco (`/reversoes/mensalidades/:id`) é o caminho legado e também depende da aprovação. Com pagamentos no modelo novo, responde `409 USAR_ESTORNO_POR_PAGAMENTO`.
 - As transações do processo passaram a ser serializadas (fila em `dbHelper.runTransaction`): com uma única conexão SQLite, requisições simultâneas falhavam com "cannot start a transaction within a transaction".
 - Validação: `tests/scripts/smoke-p1-pagamentos.js`.
 

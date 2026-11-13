@@ -35,7 +35,7 @@ end
 note right of Access
 Regras documentadas:
 - mensalidade vencida bloqueia acesso
-- dia do vencimento ainda permite acesso
+- mensal manual exige cobertura vigente quitada, inclusive no vencimento (GS-07 D5)
 - status/vínculos afetam decisão
 end note
 @enduml

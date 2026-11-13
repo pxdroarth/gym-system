@@ -1,4 +1,4 @@
-﻿# Fluxo Pai — Sistema Academia SA
+# Fluxo Pai — Sistema Academia SA
 
 ## Visão macro
 
@@ -191,7 +191,7 @@ Hoje o sistema já possui:
 CHECKPOINT 5.1 — AUTH LOCAL / SMOKE GATE (CONCLUÍDO)
 ```
 
-Gate principal atual:
+Gate local registrado no checkpoint 5.1:
 
 ```txt
 tests\scripts\smoke-auth.cmd
@@ -199,7 +199,7 @@ tests\scripts\smoke-acesso.cmd
 npm.cmd --prefix frontend run build
 ```
 
-Playwright/E2E permanece criado apenas como infraestrutura experimental e será retomado em fase futura de maturidade/CI.
+O [CI atual de pull requests](../../.github/workflows/node24.yml) valida versões, roda os smokes em SQLite descartável e gera o build em Node 24.22.3. O Playwright tem uma [suíte local inicial](../../tests/e2e/README.md). A sequência de entregas do piloto está no [Kanban](gym-system-contexto-e-kanban.md).
 
 ---
 
@@ -341,7 +341,7 @@ Permitir automação assistida por agente:
 
 ### Observação de governança
 
-- O gate principal atual voltou a ser:
+- O gate local registrado nesta fase voltou a ser:
   - `tests\scripts\smoke-auth.cmd`
   - `tests\scripts\smoke-acesso.cmd`
   - `npm.cmd --prefix frontend run build`
@@ -452,7 +452,7 @@ Base já concluída nesta mini-fase:
 - `GET /health`
 - fallback 404 JSON com `correlation_id`
 - erro interno 500 seguro com `correlation_id`
-- inventário documental inicial em [docs/governance/error-contracts.md](/C:/sistema-academia-main/docs/governance/error-contracts.md)
+- inventário documental inicial em [docs/governance/error-contracts.md](error-contracts.md)
 
 A observabilidade deve responder:
 
@@ -950,11 +950,11 @@ O hardware apenas identifica e/ou executa.
 - índices e unique constraints mínimos
 - escopo obrigatório por `tenant_id` e `unit_id`
 
-### Estado atual
+### Estado
 
-- schema mínimo já criado
-- tabelas novas ainda vazias
-- sem service, endpoint ou UI funcional usando essas tabelas
+- schema mínimo criado
+- consultas de dispositivos e credenciais disponíveis via [API](../../backend/routes/accessDevices.js), com permissão e escopo
+- ingestão em `access_events` e interface operacional ainda pendentes
 
 ## BLOCO 9C — PROVIDER SIMULATOR
 
@@ -969,7 +969,6 @@ O hardware apenas identifica e/ou executa.
 
 ## PRÓXIMOS PASSOS SEGUROS
 
-- service/admin read-only para dispositivos e credenciais
 - cadastro mock de dispositivo
 - cadastro mock de credencial
 - tentativa de acesso por credencial mock usando `AccessService`
@@ -1062,7 +1061,9 @@ Operação quase solo baseada em IA.
 
 ---
 
-# PRIORIDADE IMEDIATA
+# SEQUÊNCIA HISTÓRICA APÓS O CHECKPOINT 5.1
+
+O [Kanban](gym-system-contexto-e-kanban.md) acompanha as prioridades vigentes do piloto.
 
 ## Sequência recomendada
 

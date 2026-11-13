@@ -4,6 +4,8 @@ Esta pasta documenta o papel das referências visuais antigas do Sistema Academi
 
 ## Status dos diagramas antigos
 
+As imagens em `telas-geradas/telas/` e `telas-geradas/extras/` são referências visuais geradas, registradas no histórico do Git. A correspondência de cada tela com a interface vigente não foi validada nesta revisão.
+
 Os diagramas antigos são referência visual e histórica. Eles ajudam a entender decisões, hipóteses e leituras anteriores, mas não são fonte oficial única.
 
 Eles não substituem:

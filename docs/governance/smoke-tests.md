@@ -6,8 +6,8 @@ Estes smoke tests validam rapidamente se o sistema sobe em ambiente limpo e se o
 
 ## 2. Pré-requisitos
 
-- Node.js instalado.
-- Dependências instaladas com `npm install` na raiz e em `frontend`.
+- Node.js 24.22.3 instalado.
+- Dependências instaladas com `npm ci` na raiz e em `frontend`.
 - Backend rodando.
 - Frontend rodando.
 - Banco SQLite local disponível.
@@ -18,7 +18,7 @@ Estes smoke tests validam rapidamente se o sistema sobe em ambiente limpo e se o
 ## 3. Ambiente esperado
 
 - Backend: `http://localhost:3001`
-- Frontend: `http://localhost:5173`
+- Frontend: `http://localhost:3000` no Vite local. O Playwright configura `http://localhost:5173` para a sua suíte.
 - Banco: SQLite local em `backend/academia.sqlite`
 - Produção comercial real: fora de escopo.
 
@@ -37,7 +37,7 @@ Estes smoke tests validam rapidamente se o sistema sobe em ambiente limpo e se o
 - [ ] testar refresh backend via cookie, se possível via Insomnia/curl.
 - [ ] validar que frontend usa refresh cookie com `withCredentials` no Bloco 3B.
 - [ ] validar que frontend nao persiste access token em `localStorage`/`sessionStorage` no Bloco 4.
-- [ ] validar CORS local em `http://localhost:5173` no Bloco 5.
+- [ ] validar CORS na origem local do frontend.
 - [ ] validar que origem nao autorizada e bloqueada em configuracao de producao.
 - [ ] validar que cookie de refresh continua `HttpOnly`.
 - [ ] validar que cookie `Secure` fica ativo em producao e desativado apenas em dev/local sem HTTPS.
@@ -69,7 +69,7 @@ Use `curl.exe` no PowerShell se `curl` estiver apontando para alias local.
 
 | Teste | Comando ou ação | Resultado esperado | Observação | Status |
 |---|---|---|---|---|
-| Subir frontend | `cd frontend` e `npm run dev` | Vite disponível em `http://localhost:5173`. | Porta pode mudar se 5173 estiver ocupada. | feito |
+| Subir frontend | `cd frontend` e `npm run dev` | Vite disponível em `http://localhost:3000`. | Confira a URL informada pelo Vite se a porta estiver ocupada. | feito |
 | Login | abrir frontend e autenticar com usuário de teste. | Usuário entra no sistema e vê dashboard conforme perfil. | O backend continua sendo autoridade final. | feito |
 | Dashboard | acessar tela inicial após login. | Dashboard carrega sem erro crítico. | Não deve expor financeiro restrito para perfil sem permissão. | parcial |
 | Menus por perfil | testar navegação com perfis diferentes. | Itens aparecem/ocultam conforme UI. | Frontend apenas organiza visibilidade; validar backend separadamente. | parcial |
@@ -118,7 +118,7 @@ Nota 3C-B: o cliente central usa flags internas `_skipAuthHeader`, `_skipAuthRef
 
 | Teste | Comando ou ação | Resultado esperado | Observação | Status |
 |---|---|---|---|---|
-| CORS localhost dev | acessar frontend em `http://localhost:5173` chamando API local. | Login, refresh e logout funcionam com credenciais. | Defaults dev aceitam `localhost:3000` e `localhost:5173`. | feito |
+| CORS localhost dev | acessar frontend em `http://localhost:3000` chamando API local. | Login, refresh e logout funcionam com credenciais. | Defaults dev aceitam `localhost:3000` e `localhost:5173`. | feito |
 | CORS producao explicito | iniciar backend com `NODE_ENV=production` e `CORS_ORIGINS` definido. | Apenas origens configuradas recebem CORS. | Nao usar `*` com credentials. | parcial |
 | Origem nao autorizada | chamar API com `Origin` fora da allowlist em producao. | Requisicao bloqueada com erro controlado. | Validar no ambiente alvo. | parcial |
 | Cookie HttpOnly | login deve retornar `academia_sa_refresh` com `HttpOnly`. | Cookie nao fica acessivel via JavaScript. | Preservado do fluxo de auth. | feito |
@@ -138,7 +138,7 @@ Nota 3C-B: o cliente central usa flags internas `_skipAuthHeader`, `_skipAuthRef
 | Vínculo | criar/consultar vínculo responsável/dependente. | Dependente fica relacionado ao responsável. | Validar impacto em acesso. | parcial |
 | Auditoria/Histórico | executar ação crítica e consultar Histórico de Atividades. | Evento aparece para perfil autorizado e permanece somente leitura. | Escopo ainda precisa validação ampla. | parcial |
 | Financeiro restrito | acessar financeiro com perfis autorizados e não autorizados. | Autorizados acessam; operacionais não. | Backend deve ser a autoridade final. | parcial |
-| Fechamento mensal | criar/consultar fechamento, se houver massa/fluxo disponível. | Período fechado deve restringir alterações sensíveis conforme regra. | Cobertura ainda parcial nos requisitos. | parcial |
+| Fechamento mensal | Analisar, fechar e reabrir por API em unidade de teste. | Financeiro analisa, dono e admin fecham, dono reabre com motivo. Escritas que atingem período fechado são recusadas conforme a ação. | A-06 e isolamento financeiro cobrem a API. Telas seguem no L04. | API coberta |
 
 ### Casos obrigatorios de acesso sem tolerancia
 
@@ -186,6 +186,10 @@ O smoke automatizado usa fixtures locais com prefixo `SMOKE_ACESSO_`, valida ace
 
 ## 12. Automação disponível
 
+O [CI de pull requests](../../.github/workflows/node24.yml) usa Node 24.22.3, roda os smokes em uma API com SQLite descartável e gera o build de produção. Para reproduzir a suíte após instalar as dependências, use `pwsh -NoProfile -File tests/scripts/smoke-sqlite.ps1`.
+
+- O [smoke de integridade do L04](../../tests/scripts/smoke-l04-integridade.js) cobre datas, escopo, permissões, idempotência e rollback de venda. O [Kanban](gym-system-contexto-e-kanban.md#l04--integridade-de-contas-vendas-e-estoque) reúne as evidências de navegador e dos 15 cenários de contas financeiras.
+
 O smoke de autenticação backend já possui automação inicial em PowerShell:
 
 ```powershell
@@ -196,11 +200,10 @@ powershell -ExecutionPolicy Bypass -File tests\scripts\smoke-auth.ps1 -Login adm
 - Playwright possui setup mínimo em `tests/e2e/` com sanity test inicial da rota `/login`.
 - Playwright agora possui suite inicial de auth em `tests/e2e/playwright/auth.spec.js`, usando `E2E_LOGIN` e `E2E_PASSWORD`.
 - A expansão de E2E/Playwright está pausada nesta fase e não é gate principal.
-- O gate principal atual permanece:
+- Os comandos de validação local da rodada inicial foram:
   - `tests\scripts\smoke-auth.cmd`
   - `tests\scripts\smoke-acesso.cmd`
   - `npm.cmd --prefix frontend run build`
 - API geral, frontend, carga e permissões completas ainda serão expandidos.
 - Insomnia será usado para API manual/semiautomatizada. Consulte `tests/insomnia/README.md` e `tests/insomnia/requests-map.md`.
-- Playwright será usado futuramente para E2E.
 - k6 e JMeter serão usados futuramente para carga/performance.
