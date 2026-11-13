@@ -57,14 +57,14 @@ Registre cada decisão com data, cenário, regra aprovada e lotes afetados. Quan
 
 ## Kanban inicial
 
-O dono aprovou o L01, integrado em `ba5e23c`. O L02 foi concluído e integrado à `main` em `fb5656b`. L03 e L04 dependem dos aceites e regras de seus fluxos. As dependências abaixo organizam o trabalho. Ajuste a ordem quando houver evidência ou decisão que justifique a mudança.
+O dono aprovou o L01, integrado em `ba5e23c`. O L02 foi concluído e integrado à `main` em `fb5656b`. O L03 e o sublote de integridade do L04 também estão integrados. O L04 segue aberto para o fluxo de estornos e as telas de fechamento. As dependências abaixo organizam o trabalho. Ajuste a ordem quando houver evidência ou decisão que justifique a mudança.
 
 | ID | Lote | Depende de | Estado | Aceite resumido |
 | --- | --- | --- | --- | --- |
 | L01 | Isolamento e acesso ao Financeiro | Base do diagnóstico | Concluído (`ba5e23c`) | Duas redes isoladas na API. Papel e categoria de conta validados no servidor. |
 | L02 | Permissões operacionais por função | L01, DN-3 | Concluído (`fb5656b`) | A matriz aprovada de ações por perfil bate com a API e com as telas. |
-| L03 | Contrato, renovação manual e entrada | L02, decisões da GS-07 | Em revisão | Aluno contrata, paga, renova e tem acesso decidido conforme a cobertura. |
-| L04 | Contas, venda, estoque e fechamento | L02–L03, regras financeiras | Fila | Validação A-13, vendas e movimentações deixam saldo, estoque e fechamento conciliáveis. |
+| L03 | Contrato, renovação manual e entrada | L02, decisões da GS-07 | Integrado (`6cd16bd`) | Aluno contrata, paga, renova e tem acesso decidido conforme a cobertura. |
+| L04 | Contas, venda, estoque e fechamento | L02–L03, regras financeiras | Aberto. Integridade integrada (`e6220b1`) | A-13, A-10 e permissões de venda e estoque integrados. Solicitação, aprovação e execução de estornos e telas de fechamento pendentes. |
 | L05 | Homologação do piloto de uma unidade | L01–L04 | Fila | Fluxo de cadastro ao fechamento demonstrado com dados fictícios e perfis da operação. |
 | L06 | Modelo da matrícula única e unidade do contrato | L05, GS-02 | Fila | Identidade única dentro de cada rede e vínculo explícito do contrato à unidade. |
 | L07 | Migração dos cadastros existentes | L06 | Fila | Conflitos revisáveis e totais, vínculos e histórico reconciliados em ensaio. |
@@ -105,6 +105,10 @@ O dono aprovou o L01, integrado em `ba5e23c`. O L02 foi concluído e integrado �
 > Confirme o aceite do L02 e consulte as decisões da GS-07. Mapeie, em uma única unidade, contratação, geração de mensalidade manual, pagamento, início e fim da cobertura, renovação e decisão de entrada. Corrija as lacunas confirmadas para o piloto segundo as regras aprovadas. Teste cobrança em aberto, pagamento parcial, quitação, ciclo vencido, renovação e efeito de estorno no acesso conforme a política registrada. Valide pelo fluxo normal da aplicação. Registre qualquer regra sem decisão como bloqueio do trecho afetado.
 
 ### L04 · Contas, vendas, estoque e fechamento
+
+A primeira entrega valida a data de lançamento e preserva a data atual se omitida no PUT. Venda e gestão de produtos seguem a matriz de papéis. O registro de venda aceita `Idempotency-Key` por rede e unidade. A mesma chave com os mesmos dados devolve a venda original, e dados diferentes com a mesma chave recebem `409 IDEMPOTENCIA_CONFLITO`. O lançamento usa categoria de receita da própria rede ou fica sem categoria.
+
+**Decisão pendente:** confirmar quando o preço manual pode substituir o preço de catálogo e quem pode fazê-lo. A primeira entrega preserva o comportamento atual do preço. Aprovação de estornos e interface de fechamento seguem nas próximas entregas.
 
 > Confirme o aceite do L03. Reproduza e trate as validações A-13 confirmadas, incluindo a edição de conta com `data_lancamento` ausente ou inválida. Use o contrato de erros da API. Verifique a venda com baixa de estoque e lançamento de receita, as reversões previstas e a proteção de período fechado. Corrija os defeitos reproduzidos dentro das regras financeiras aprovadas. Teste que tentativas recusadas preservam estoque, lançamentos e fechamento. Rode os smokes de pagamentos e A-06 e registre o que precisa de decisão em lote próprio.
 
@@ -156,10 +160,17 @@ Para cada entrega, registre ID do lote, data, branch, commit-base, arquivos alte
 
 ### L03 · Contratação, renovação manual e entrada
 
-- **Estado:** Em revisão em 12/11/2026. Branch `codex/l03-contratacao-renovacao-entrada`, base `fb5656b`.
+- **Estado:** Revisado em 12/11/2026 e integrado à `main` em `6cd16bd`. Branch de trabalho `codex/l03-contratacao-renovacao-entrada`, base `fb5656b`.
 - **Regra aplicada:** política de retorno por unidade configurada pelo dono, com proporcional como padrão. Emissão padrão, prévia e contratação/renovação do mensal manual compartilham o cálculo de ciclo. Cobrança existente mantém valor e datas. Recebimentos pela tela podem ser parciais e usam o dia operacional. Renovação antecipada limita-se ao próximo ciclo.
 - **Evidências em base descartável, Node 22.19.0:** ciclos 39/39, HTTP L02/L03 118/118, cobertura 6/6, pagamentos P1 41/41, acesso F0 20/20, identidade 71/71, S1-P0 37/37 + 30/30 + 12/12, isolamento de transação 11/11, A-06 18/18, isolamento financeiro 102/102 e build de produção aprovado. No Edge, confira configuração e retorno nas duas políticas, reutilização após troca de política, emissão, pagamento parcial com resposta perdida, recusa acima do saldo, quitação, entrada e renovação antecipada.
 - **Dependência:** aprovação de estornos permanece no L04. A execução direta continua bloqueada.
+
+### L04 · Integridade de contas, vendas e estoque
+
+- **Estado:** Sublote integrado à `main` pelo PR #2 em `e6220b1`, com a implementação em `faf8fe3` e base `2ce352b` (Node 24.22.3).
+- **Entrega:** A-13 valida as datas de lançamento e preserva a data omitida no `PUT`, com trava na origem e no destino. A matriz rege as escritas de venda e estoque. A venda grava estoque e receita em uma transação e aceita reenvio por chave de idempotência. O A-10 restringe a categoria da receita de venda a uma categoria compatível da própria rede.
+- **Evidências em base descartável, Node 24.22.3:** 13 smokes aprovados, incluindo 66/66 verificações de integridade do L04, e build de produção aprovado. No Chrome, a recepção reenviou a mesma chave após perda simulada da resposta e recebeu o ID original. O SQLite confirmou uma venda, uma baixa e uma receita de R$ 50.
+- **Pendências do L04:** solicitação, aprovação e execução de estornos e telas de fechamento. O preço manual versus o preço de catálogo permanece como decisão aberta.
 
 ## Fontes para a revisão técnica
 
