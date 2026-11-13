@@ -64,7 +64,7 @@ try {
       'smoke-identidade', 'smoke-s1-p0', 'smoke-p1-pagamentos',
       'smoke-isolamento-transacao', 'smoke-a06-conta-fechamento',
       'smoke-financeiro-isolamento', 'smoke-l02', 'smoke-l02-ciclos',
-      'smoke-cobertura', 'smoke-f0-acesso-datas', 'smoke-acesso',
+      'smoke-cobertura', 'smoke-f0-acesso-datas', 'smoke-acesso', 'smoke-l04-integridade',
       'smoke-diagnostico-consistencia'
     )) {
       Invoke-Node "tests/scripts/$smoke.js" "--base-url=$baseUrl" '--db=backend/academia.sqlite'

@@ -21,7 +21,7 @@ Mapear como as rotas de negócio do backend estão protegidas hoje, sem alterar 
 
 ## Categorias encontradas
 
-A tabela do L02 acima prevalece nos domínios alterados pela DN-3. A separação por ação de produtos e estoque (FV-02b) continua em aberto neste registro.
+A tabela do L02 acima prevalece nos domínios alterados pela DN-3. Na primeira entrega do L04, `vendas:registrar` protege o POST de venda e seu alias para dono, admin, gestor e recepção. `produtos:gerenciar` protege criação, edição, ajuste de estoque e exclusão para dono, admin e gestor. Todas as escritas exigem escopo de unidade.
 
 ### 1. Públicas
 
@@ -254,7 +254,7 @@ Exemplos:
 - alunos
 - mensalidades
 - vendas
-- produtos e estoque (FV-02b, depende da DN-3)
+- revisão histórica de produtos e estoque (FV-02b; escritas cobertas no L04)
 
 Risco:
 - qualquer operador autenticado com unidade válida pode executar ações além do papel desejado, se o domínio não tiver outras travas internas
@@ -287,6 +287,6 @@ Risco:
    - financeiro (feito: `financeiro:acessar` no módulo inteiro)
    - fechamento mensal (feito)
    - pagamentos (registrar e estornar já têm permissão própria)
-   - produtos e estoque (FV-02b, depende da DN-3)
+   - produtos e estoque (FV-02b; ver cobertura de escritas no L04)
    - alunos com impacto financeiro
 4. Só depois reduzir checks manuais espalhados, aproximando tudo de helpers centrais sem mudar o comportamento em lote.

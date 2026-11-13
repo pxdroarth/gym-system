@@ -264,8 +264,9 @@ async function negar(label, fotoArgs, chamada, statusEsperado, codigoEsperado) {
   r = await req('PUT', `/produtos/${prodFoto.id}`, { token: owner.token, unit: matriz, form: formProduto(`S1P0 com foto ${RUN}`, HTML, 'x.jpg', 'image/jpeg') });
   check('PUT com HTML disfarcado -> 400 e nenhum arquivo novo; imagem anterior mantida',
     r.s === 400 && JSON.stringify(antesPut) === JSON.stringify(arquivosNaPasta()) && (await q1('SELECT imagem FROM produto WHERE id = ?', [prodFoto.id])).imagem.endsWith('.jpg'), `${r.s} ${r.code}`);
-  r = await req('POST', '/produtos', { token: recepcao.token, form: formProduto(`S1P0 recepcao ${RUN}`, PNG_1x1, 'r.png', 'image/png') });
-  check('recepcao (Matriz) com PNG valido -> 201: permissao por papel inalterada (FV-02b fora deste lote)', r.s === 201, `${r.s} ${r.code || ''}`);
+  await semArquivoNovo('recepcao com PNG valido, sem permissao para cadastrar produto',
+    () => req('POST', '/produtos', { token: recepcao.token, form: formProduto(`S1P0 recepcao ${RUN}`, PNG_1x1, 'r.png', 'image/png') }),
+    403, 'PERMISSAO_NEGADA');
 
   for (const nome of plantados.slice(0, 4)) {
     g = await req('GET', `/uploads/produtos/${nome}`);

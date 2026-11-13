@@ -47,7 +47,9 @@ router.get('/:id', async (req, res, next) => {
   try {
     const scope = requireScope(req);
     const venda = await runGet(
-      'SELECT * FROM venda_produto WHERE id = ? AND tenant_id = ? AND unit_id = ? AND deleted_at IS NULL',
+      `SELECT id, produto_id, produto_nome, quantidade, preco_unitario, valor_total,
+              data_venda, tenant_id, unit_id, deleted_at, reversao_controlada_id
+       FROM venda_produto WHERE id = ? AND tenant_id = ? AND unit_id = ? AND deleted_at IS NULL`,
       [id, scope.tenant_id, scope.unit_id]
     );
     if (!venda) return res.status(404).json({ error: 'Venda nao encontrada' });
@@ -57,14 +59,19 @@ router.get('/:id', async (req, res, next) => {
   }
 });
 
-router.post('/', async (req, res, next) => {
+router.post('/', requirePermission(PERMISSIONS.VENDAS_REGISTRAR), async (req, res, next) => {
   try {
     const scope = requireScope(req);
-    const venda = await VendaService.registrarVenda(
+    const { venda, reenvio } = await VendaService.registrarVenda(
       req.body || {},
       actorWithScope(AuditService.getActorFromRequest(req), scope),
-      scope
+      scope,
+      req.get('Idempotency-Key')
     );
+    if (reenvio) {
+      res.set('Idempotent-Replayed', 'true');
+      return res.status(200).json(venda);
+    }
     res.status(201).json(venda);
   } catch (error) {
     next(error);

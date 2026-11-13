@@ -979,6 +979,13 @@ async function ensureSchema() {
   await ensureReversaoSoftDeleteColumns();
   await ensureScopeColumns();
   await ensurePagamentoParcialColumns();
+  await addColumnIfMissing('venda_produto', 'chave_idempotencia TEXT');
+  await addColumnIfMissing('venda_produto', 'idempotencia_payload TEXT');
+  await runExecute(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uidx_venda_scope_idempotencia
+    ON venda_produto (tenant_id, unit_id, chave_idempotencia)
+    WHERE chave_idempotencia IS NOT NULL
+  `);
   await ensureUsuarioInterno(defaultScope);
   await ensureLegacyUserScopes(defaultScope);
   await backfillDefaultScope(defaultScope.tenantId, defaultScope.unitId);
