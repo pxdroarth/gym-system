@@ -18,6 +18,7 @@ import { getApiErrorMessage } from "../../utils/getApiErrorMessage";
 import useAuth from "../../hooks/useAuth";
 import { falhaSemConfirmacao } from "../../utils/tentativaPagamento";
 import { UI_PERMISSIONS, userHasUiPermission } from "../../utils/permissions";
+import { EstornoBadge, EstornoVendaModal, usePermissoesEstorno } from "../../components/vendas/EstornoVenda";
 
 function formatarMoeda(valor) {
   return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -38,6 +39,8 @@ function periodoParaDatas(periodo) {
 export default function VendasProdutosPage() {
   const { user, currentUnit } = useAuth();
   const podeVender = userHasUiPermission(user, UI_PERMISSIONS.VENDAS_REGISTRAR);
+  const permEstorno = usePermissoesEstorno();
+  const [vendaEstorno, setVendaEstorno] = useState(null);
   const tentativas = useRef(new Map());
   const [produtos, setProdutos] = useState([]);
   const [vendas, setVendas] = useState([]);
@@ -257,16 +260,26 @@ export default function VendasProdutosPage() {
                   <th>Preço Unitário</th>
                   <th>Total</th>
                   <th>Data Venda</th>
+                  <th>Estorno</th>
+                  {permEstorno.algum && <th />}
                 </tr>
               </thead>
               <tbody>
                 {vendas.map((venda) => (
-                  <tr key={venda.id}>
+                  <tr key={venda.id} data-venda-id={venda.id}>
                     <td className="font-semibold">{venda.produto_nome}</td>
                     <td>{venda.quantidade}</td>
                     <td>{formatarMoeda(venda.preco_unitario)}</td>
                     <td className="font-semibold">{formatarMoeda(Number(venda.preco_unitario || 0) * Number(venda.quantidade || 0))}</td>
                     <td>{new Date(venda.data_venda).toLocaleString("pt-BR")}</td>
+                    <td><EstornoBadge status={venda.estorno_status} /></td>
+                    {permEstorno.algum && (
+                      <td>
+                        <Button size="sm" variant="secondary" onClick={() => setVendaEstorno(venda)}>
+                          Estorno
+                        </Button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -276,6 +289,14 @@ export default function VendasProdutosPage() {
           <Pagination page={pagina} totalPages={totalPaginas} onPageChange={setPagina} />
         </div>
       </Card>
+
+      {vendaEstorno && (
+        <EstornoVendaModal
+          venda={vendaEstorno}
+          onClose={() => setVendaEstorno(null)}
+          onChanged={() => { carregarVendas(); carregarProdutos(); }}
+        />
+      )}
 
       {modalVendaAberto && (
         <Modal title="Registrar Venda" onClose={fecharModalVenda} className="max-w-4xl">

@@ -36,7 +36,7 @@ Troque `L01` pelo ID autorizado na execução seguinte.
 | --- | --- |
 | L02 | DN-3 aprovada em 10/11/2026. Veja [requisitos e estados da entrega](requisitos-base.md#dn-3--permissões-operacionais-do-l02). |
 | L03 | Retorno por unidade, quitação em atraso e antecipação de um ciclo aprovados. Veja [GS-07](requisitos-base.md#gs-07--planos-e-mensalidades-mensal-manual). |
-| L04 | Cancelamento, correções após fechamento, vendas e aprovação de estornos. |
+| L04 | Estorno de venda aprovado e ajustado à operação em 12/11/2026: fluxo padrão com aprovação direta ou autorização externa registrada, e opção da unidade por três contas distintas (veja [requisitos](requisitos-base.md#l04--estorno-de-venda)). Seguem abertos: demais tipos de estorno, estorno financeiro parcial de venda, registro formal de perdas, preço manual, telas de fechamento e as permissões do Financeiro em contas. |
 | L07–L09 | Tratamento de cadastros duplicados, seleção das unidades do plano, momento em que mudanças afetam um ciclo pago, dependentes e transferência de unidade do contrato. |
 | L11–L12 | Oferta SaaS, ativação, atraso, suspensão e primeiro gateway. |
 | L16, L18–L21 | Segundo fornecedor, política de recorrência do aluno, modelo de catraca e conduta durante indisponibilidade. |
@@ -57,14 +57,14 @@ Registre cada decisão com data, cenário, regra aprovada e lotes afetados. Quan
 
 ## Kanban inicial
 
-O dono aprovou o L01, integrado em `ba5e23c`. O L02 foi concluído e integrado à `main` em `fb5656b`. O L03 e o sublote de integridade do L04 também estão integrados. O L04 segue aberto para o fluxo de estornos e as telas de fechamento. As dependências abaixo organizam o trabalho. Ajuste a ordem quando houver evidência ou decisão que justifique a mudança.
+O dono aprovou o L01, integrado em `ba5e23c`. O L02 foi concluído e integrado à `main` em `fb5656b`. O L03 e o sublote de integridade do L04 também estão integrados. O sublote de estorno de venda do L04 está em revisão. O L04 segue aberto para os demais estornos e as telas de fechamento. As dependências abaixo organizam o trabalho. Ajuste a ordem quando houver evidência ou decisão que justifique a mudança.
 
 | ID | Lote | Depende de | Estado | Aceite resumido |
 | --- | --- | --- | --- | --- |
 | L01 | Isolamento e acesso ao Financeiro | Base do diagnóstico | Concluído (`ba5e23c`) | Duas redes isoladas na API. Papel e categoria de conta validados no servidor. |
 | L02 | Permissões operacionais por função | L01, DN-3 | Concluído (`fb5656b`) | A matriz aprovada de ações por perfil bate com a API e com as telas. |
 | L03 | Contrato, renovação manual e entrada | L02, decisões da GS-07 | Integrado (`6cd16bd`) | Aluno contrata, paga, renova e tem acesso decidido conforme a cobertura. |
-| L04 | Contas, venda, estoque e fechamento | L02–L03, regras financeiras | Aberto. Integridade integrada (`e6220b1`) | A-13, A-10 e permissões de venda e estoque integrados. Solicitação, aprovação e execução de estornos e telas de fechamento pendentes. |
+| L04 | Contas, venda, estoque e fechamento | L02–L03, regras financeiras | Aberto. Integridade integrada (`e6220b1`). Estorno de venda em revisão | A-13, A-10 e permissões de venda e estoque integrados. Estorno de venda (fluxo padrão e opção de três contas) em revisão. Demais estornos e telas de fechamento pendentes. |
 | L05 | Homologação do piloto de uma unidade | L01–L04 | Fila | Fluxo de cadastro ao fechamento demonstrado com dados fictícios e perfis da operação. |
 | L06 | Modelo da matrícula única e unidade do contrato | L05, GS-02 | Fila | Identidade única dentro de cada rede e vínculo explícito do contrato à unidade. |
 | L07 | Migração dos cadastros existentes | L06 | Fila | Conflitos revisáveis e totais, vínculos e histórico reconciliados em ensaio. |
@@ -176,6 +176,20 @@ Para cada entrega, registre ID do lote, data, branch, commit-base, arquivos alte
 - **Pendências do L04:** solicitação, aprovação e execução de estornos e telas de fechamento. O preço manual versus o preço de catálogo permanece como decisão aberta.
 - **Estorno por pagamento na versão atual:** o P1 registrou a implementação do estorno individual. Após passar pelas validações de permissão, escopo e período, a tentativa de execução direta recebe `409 REVERSAO_APROVACAO_NECESSARIA`. A recusa preserva os pagamentos, o saldo e as datas de cobertura da mensalidade.
 - **Aceite para liberar o estorno (DN-3):** o gestor solicita com motivo, o dono ou admin autorizado da unidade aprova e o financeiro executa. O teste deve demonstrar que apenas o pagamento selecionado é estornado, com recálculo do saldo pelos pagamentos restantes, preservação da competência e das datas de cobertura e registro da contrapartida financeira e da auditoria.
+
+### L04 · Estorno de venda
+
+- **Estado:** Em revisão desde 12/11/2026, ajustado no mesmo dia à operação aprovada. Aguarda aceite, commit e push do dono.
+- **Base:** branch `l04-estorno-vendas`, criada a partir da `main` em `0a88b0d`, com alterações locais sem commit.
+- **Regra padrão:** [L04 — Estorno de venda](requisitos-base.md#l04--estorno-de-venda). Atendente, gestor, financeiro, admin ou dono solicitam com motivo. O gestor (ou dono/admin) aprova no sistema; quando autoriza por WhatsApp ou e-mail, um operador registra a autorização com autorizador, canal, data e referência, marcada como declarada. Atendente, financeiro, admin ou dono executam com aprovação válida. A mesma conta pode solicitar, registrar a autorização de outro gestor e executar; ninguém se informa como autorizador e quem solicitou nunca autoriza o próprio pedido.
+- **Opção por unidade:** o dono pode exigir três contas distintas entre solicitante, autorizador e executor, conferidas pelo ID no servidor, inclusive com autorização externa; quem registrou a autorização fica gravado à parte.
+- **Fechado na revisão:** venda sem receita original ativa no escopo não é executada (`409 VENDA_SEM_RECEITA_ORIGINAL`, conciliação) e preserva aprovação, venda, estoque e lançamentos. A autorização externa informa data e hora em minutos no fuso da unidade, com data de calendário válida e janela do minuto da venda ao minuto do registro; pode ser anterior à abertura do pedido. Em venda legada só com data, o limite inferior é a data civil da venda.
+- **Regras mantidas:** um pedido ativo por venda (reenvio devolve o existente), solicitar e autorizar com período fechado, execução conferindo o mês da venda, o da contrapartida e o do lançamento original quando diferente, `423` que preserva a aprovação, valor integral, reposição de 0 até o vendido e uma transação para consumo da aprovação, contrapartida, estoque, estado da venda e auditoria.
+- **Entrega:** tabela `venda_estorno` com origem da autorização e responsável pelo registro externo, índice de pedido ativo único (com encerramento de duplicados na migração), coluna `unit.estorno_venda_contas_distintas`, permissões `vendas:estorno_solicitar`, `vendas:estorno_aprovar`, `vendas:estorno_registrar_autorizacao` e `vendas:estorno_executar`, serviço `EstornoVendaService`, rotas nos dois aliases de vendas (incluindo autorização externa, autorizadores e política), modal na tela de Vendas com etapas e origem da autorização, aba "Estornos de venda" no Financeiro com a opção do dono.
+- **Evidências em base descartável, Node 24.22.3:** `smoke-l04-estorno-venda` 175/175, `smoke-l04-estorno-venda-datas` 61/61, migração de pedidos duplicados conferida, build de produção do frontend aprovado. Regressão: identidade 71/71, L02 118/118, L04 integridade 66/66, S1-P0 37/37 + 32/32 + 12/12, P1 41/41, A-06 18/18, isolamento financeiro 102/102, ciclos L02/L03 39/39, F0 20/20, isolamento de transação 11/11, acesso, cobertura e diagnóstico de consistência aprovados. Teste de tela `ui-l04-estorno-venda.py` 17/17 (Chromium, desktop e celular), executado em ambiente com Node 22.
+- **Pendências:** demais tipos de estorno, estorno financeiro parcial de venda, registro formal de perdas, confirmação automática da autorização externa, telas de fechamento, preço manual e as decisões sobre o Financeiro criar contas e marcá-las como pagas.
+- **Decisão do dono:** pendente.
+- **Commit resultante:** a preencher após a integração.
 
 ## Fontes para a revisão técnica
 

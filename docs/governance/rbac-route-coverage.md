@@ -13,7 +13,7 @@ Mapear como as rotas de negócio do backend estão protegidas hoje, sem alterar 
 | `POST /mensalidades`, `PUT`, `PATCH /:id/status`, `DELETE` | `mensalidades:gerenciar`. Desconto excepcional em criação exige permissão e motivo. Edição comum não concede desconto. |
 | `PATCH /mensalidades/:id/desconto` | `mensalidades:desconto`. Motivo, cobrança em aberto sem pagamento, período editável e auditoria. |
 | `POST /pagamentos` | `pagamentos:registrar` inclui recepção e gestor. Mantém escopo, saldo, pagamento parcial e chave de idempotência. |
-| Estorno e reversões de pagamentos, mensalidades, vendas e contas | Guardas anteriores continuam validando papel e escopo. A gravação exige aprovação e está bloqueada com `409 REVERSAO_APROVACAO_NECESSARIA`. Abrange aliases e exclusão de conta paga. Edição comum de conta paga não pode neutralizar valor, tipo, data ou status. |
+| Estorno e reversões de pagamentos, mensalidades, vendas e contas | Guardas anteriores continuam validando papel e escopo. A execução direta exige aprovação e está bloqueada com `409 REVERSAO_APROVACAO_NECESSARIA`. Abrange aliases e exclusão de conta paga. Edição comum de conta paga não pode neutralizar valor, tipo, data ou status. O estorno de venda passou a ter fluxo próprio de solicitação, autorização (direta ou externa registrada) e execução (seção "L04 · Estorno de venda"). Pagamentos, mensalidades e contas seguem bloqueados. |
 | `/fechamento-mensal/:ano/:mes` | Conferência com Financeiro. Fechar exige admin ou dono na unidade. Reabrir exige dono, motivo e auditoria. Política master pendente. |
 | `/tenant-dashboard/resumo` | Relatório filtrado pelos vínculos do admin. Integral requer `relatorios:rede_integral`. |
 | `POST/PUT/DELETE /planos`, `/plano-contas` e `/planoContas` | Permissões distintas de catálogo e financeiro da Rede, disponíveis ao dono. O fluxo combinado Contratar/Renovar usa permissão própria de operação. |
@@ -27,6 +27,23 @@ Mapear como as rotas de negócio do backend estão protegidas hoje, sem alterar 
 | `POST /produtos`, `PUT /produtos/:id`, `DELETE /produtos/:id`, `PATCH /produtos/:id/estoque` | `produtos:gerenciar` | Dono, admin e gestor |
 
 Todas essas escritas exigem Rede e Unidade autorizada. Os dois aliases de venda compartilham o mesmo roteador. Validação em [smoke-l04-integridade.js](../../tests/scripts/smoke-l04-integridade.js).
+
+## L04 · Estorno de venda
+
+As rotas valem nos dois aliases, `/vendas-produtos` e `/vendasProdutos`, que montam o mesmo roteador. Cada etapa exige a própria permissão e a unidade selecionada; o serviço repete identidade, papel, Rede e Unidade dentro da transação. Registro de outra Rede ou unidade pelo ID: `404`. Unidade sem vínculo no `X-Unit-Id`: `403 UNIT_FORBIDDEN`. Regras em [L04 — Estorno de venda](requisitos-base.md#l04--estorno-de-venda).
+
+| Rota | Permissão | Papéis e recusas |
+|---|---|---|
+| `POST /:id/estornos` (solicitar, com `motivo`) | `vendas:estorno_solicitar` | Recepção, gestor, financeiro, admin e dono. Pedido ativo existente: `200` com `Idempotent-Replayed: true` e o pedido existente, sem alterar o estado. |
+| `POST /estornos/:estornoId/aprovar` (aprovação direta) | `vendas:estorno_aprovar` | Gestor, admin e dono. Quem solicitou recebe `403 AUTOAPROVACAO_PROIBIDA`, mesmo após mudar de papel. |
+| `POST /estornos/:estornoId/autorizacao-externa` (`autorizador_id`, `canal` `whatsapp`/`email`, `autorizado_em` como `AAAA-MM-DDTHH:MM` no fuso da unidade ou ISO com fuso, `referencia`) | `vendas:estorno_registrar_autorizacao` | Recepção, financeiro, admin e dono. Informar a própria conta: `403 AUTOAUTORIZACAO_PROIBIDA`. Autorizador igual ao solicitante: `403 AUTOAPROVACAO_PROIBIDA`. Autorizador inativo, sem vínculo na unidade/Rede ou sem `vendas:estorno_aprovar`: `422 AUTORIZADOR_SEM_PERMISSAO`. Dados inválidos: `400`. Data inexistente no calendário, anterior ao minuto da venda ou posterior ao minuto do registro: `400 DATA_AUTORIZACAO_INVALIDA`. |
+| `POST /estornos/:estornoId/executar` (com `itens`) | `vendas:estorno_executar` | Recepção, financeiro, admin e dono. Sem aprovação: `409 REVERSAO_APROVACAO_NECESSARIA`. Unidade com três contas distintas e executor igual ao solicitante ou ao autorizador: `403 CONTAS_DISTINTAS_EXIGIDAS`. Venda sem receita original ativa no escopo: `409 VENDA_SEM_RECEITA_ORIGINAL` (conciliação), sem gravar nada. |
+| `GET /estornos` (filtros `status` e `venda_id`) | Qualquer uma das quatro acima | Recepção, gestor, financeiro, admin e dono |
+| `GET /estornos/autorizadores` | `vendas:estorno_registrar_autorizacao` | Contas ativas da unidade com `vendas:estorno_aprovar`, sem a do operador. |
+| `GET /estornos/politica` | Qualquer uma das quatro acima | Lê se a unidade exige três contas distintas. |
+| `PATCH /estornos/politica` (`contas_distintas` booleano) | Papel `owner` | Somente o dono; demais: `403 PERMISSAO_NEGADA`. Auditado. |
+
+`platform_admin` e `operador_acesso` não recebem essas permissões; a atuação do suporte depende do sublote de controles master. As reversões diretas de venda (`POST /:id/reverter` nos dois aliases e `POST /reversoes/vendas/:id`) continuam bloqueadas com `409 REVERSAO_APROVACAO_NECESSARIA`. Validação em [smoke-l04-estorno-venda.js](../../tests/scripts/smoke-l04-estorno-venda.js), [smoke-l04-estorno-venda-datas.js](../../tests/scripts/smoke-l04-estorno-venda-datas.js) e [ui-l04-estorno-venda.py](../../tests/scripts/ui-l04-estorno-venda.py).
 
 ## Categorias encontradas
 
@@ -210,7 +227,7 @@ Impacto atual:
 ### Vendas
 
 - consultas usam escopo; registro nos dois aliases usa `vendas:registrar`
-- reversão exige permissão explícita e segue bloqueada até o fluxo de aprovação
+- estorno segue solicitação (`vendas:estorno_solicitar`), aprovação direta (`vendas:estorno_aprovar`) ou registro de autorização externa (`vendas:estorno_registrar_autorizacao`) e execução (`vendas:estorno_executar`); a unidade pode exigir três contas distintas; a reversão direta continua bloqueada
 
 ### Fechamento mensal
 

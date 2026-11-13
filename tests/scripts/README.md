@@ -301,4 +301,32 @@ node tests/scripts/smoke-l02-ciclos.js
 | `smoke-a06-conta-fechamento.js` | O dono reabre as unidades da fixture com motivo, conforme a DN-3. As verificações A-06 de meses de origem e destino e de isolamento permanecem. | A interface nova de fechamento é de outro sublote. A regra A-06 mantém sua cobertura neste smoke. |
 | `smoke-financeiro-isolamento.js` | Financeiro pode conferir, mas o estorno direto fica bloqueado e não gera contrapartida. Reabertura exige dono com motivo. A Rede Beta agora fecha e reabre de fato seu período, com status e unidade verificados, antes de confirmar que o período da Alfa permaneceu intacto. Os testes de categorias de Rede para leitura e lançamentos automáticos continuam. | Contrapartida de execução aprovada preserva valor e origem e usa somente categoria válida da própria Rede, inclusive nos registros legados. |
 
-Os estornos permanecem bloqueados até o fluxo de solicitação, aprovação e execução. A execução positiva e a contrapartida financeira são critérios do sublote, ainda sem validação nesta rodada.
+Os estornos de pagamento, mensalidade e conta permanecem bloqueados até o fluxo próprio. O estorno de venda já tem solicitação, autorização (direta ou externa registrada) e execução, validados nos smokes `smoke-l04-estorno-venda*` abaixo.
+
+## `smoke-l04-estorno-venda.js` (L04 · Estorno de venda pela API)
+
+Rode em base descartável semeada, com a API sobre ela. O smoke cria produtos, vendas, um gestor da Matriz, um gestor e um admin da Filial e uma Rede B pelo onboarding, fecha e reabre o mês corrente na Matriz, liga e desliga a opção de três contas na Matriz e lê o SQLite só para conferir os efeitos.
+
+```cmd
+node tests\scripts\smoke-l04-estorno-venda.js --base-url=http://localhost:3001 --db=backend\academia.sqlite
+```
+
+Cobre permissões por etapa e papel, pedido único por venda (reenvio e solicitações concorrentes devolvem o existente), execução sem aprovação (inclusive pelas rotas diretas legadas), escopo de Rede e Unidade (também do autorizador externo), autoaprovação antes e depois da mudança de papel, autoautorização, validação da autorização externa, aprovação direta do gestor, autorização externa por WhatsApp e e-mail registrada pelo atendente e pelo financeiro, o atendente solicitando e executando, quantidades inválidas, reposição parcial e zero, corrida entre aprovação direta e registro externo, a mesma aprovação executada em paralelo, repetição, mês fechado com nova tentativa após reabertura e a opção de três contas distintas. Cada recusa confere venda, estoque, lançamentos, estados e auditoria antes e depois.
+
+## `smoke-l04-estorno-venda-datas.js` (L04 · Períodos, data operacional e rollback)
+
+Roda em processo, sobre o SQLite da cópia descartável semeada, e controla só o relógio de negócio (como o `smoke-l02-ciclos.js`). Usa os anos de 2030 e 2031 e grava fechamentos e datas de venda direto na base.
+
+```cmd
+node tests\scripts\smoke-l04-estorno-venda-datas.js
+```
+
+Cobre mês da venda fechado, mês do estorno fechado, mês do lançamento original gravado em UTC, nova tentativa com a mesma aprovação após reabertura, virada do dia e do mês em Brasília (22h–24h, quando a data em UTC já é o dia seguinte), rollback completo quando a última gravação da transação falha, venda sem receita original ativa no escopo (excluída ou em outra unidade: `409 VENDA_SEM_RECEITA_ORIGINAL`, sem contrapartida nem evento de execução, e execução após a conciliação) e a data da autorização externa: limites da janela por minuto, data e hora inexistentes, um minuto antes da venda, horário futuro, autorização válida anterior à abertura do pedido e venda legada só com data (dia anterior recusado; mesmo dia e dia seguinte aceitos até o minuto do registro, sem horário gravado na venda).
+
+## `ui-l04-estorno-venda.py` (L04 · Estorno de venda pela tela)
+
+Playwright para Python. Com a API em `localhost:3001` e o frontend em `localhost:5173` sobre base descartável, o atendente solicita pela tela de Vendas, registra a autorização que o gestor deu por WhatsApp e executa; o gestor aprova no sistema outro pedido e vê bloqueada a aprovação do próprio; o dono liga a opção de três contas na aba Financeiro → Estornos de venda e o atendente deixa de poder executar o próprio pedido. Cobre a recusa sem motivo, a lista de autorizadores sem a própria conta, a origem da autorização e quem atuou em cada etapa, a quantidade acima da vendida, a mensagem de período fechado com a aprovação preservada, a execução após reabertura e a visão no celular. Os prints vão para `test-results/ui-l04-estorno` (variável `GS_SHOTS`).
+
+```cmd
+python tests\scripts\ui-l04-estorno-venda.py
+```

@@ -38,6 +38,15 @@ const PERMISSIONS = Object.freeze({
   VENDAS_REGISTRAR: 'vendas:registrar',
   PRODUTOS_GERENCIAR: 'produtos:gerenciar',
   REVERSAO_EXECUTAR: 'reversao:executar',
+  // Estorno de venda (L04, DN-3). Cada etapa tem permissao propria, ligada ao
+  // papel e validada na unidade do escopo: solicitar (recepcao, gestor,
+  // financeiro, admin, dono), aprovar no sistema (gestor, admin, dono),
+  // registrar autorizacao externa por WhatsApp ou e-mail (recepcao,
+  // financeiro, admin, dono) e executar (recepcao, financeiro, admin, dono).
+  VENDAS_ESTORNO_SOLICITAR: 'vendas:estorno_solicitar',
+  VENDAS_ESTORNO_APROVAR: 'vendas:estorno_aprovar',
+  VENDAS_ESTORNO_REGISTRAR_AUTORIZACAO: 'vendas:estorno_registrar_autorizacao',
+  VENDAS_ESTORNO_EXECUTAR: 'vendas:estorno_executar',
   ACESSO_LIBERACAO_MANUAL: 'acesso:liberacao_manual',
   ACESSO_CREDENCIAIS_VISUALIZAR: 'acesso:credenciais_visualizar',
   PLANOS_CONTRATAR_RENOVAR: 'planos:contratar_renovar',
@@ -67,6 +76,15 @@ const ACADEMIA_ADMIN_PERMISSIONS = Object.values(PERMISSIONS).filter(
   (permission) => !PLATFORM_ONLY_PERMISSIONS.includes(permission)
 );
 
+// O fluxo de estorno de venda nao vale para o suporte da plataforma, que
+// depende do sublote de controles master.
+const ESTORNO_VENDA_PERMISSIONS = [
+  PERMISSIONS.VENDAS_ESTORNO_SOLICITAR,
+  PERMISSIONS.VENDAS_ESTORNO_APROVAR,
+  PERMISSIONS.VENDAS_ESTORNO_REGISTRAR_AUTORIZACAO,
+  PERMISSIONS.VENDAS_ESTORNO_EXECUTAR,
+];
+
 const ROLE_PERMISSIONS = Object.freeze({
   [USER_ROLES.PLATFORM_ADMIN]: Object.values(PERMISSIONS).filter(
     (permission) => !OWNER_ONLY_PERMISSIONS.includes(permission)
@@ -74,6 +92,7 @@ const ROLE_PERMISSIONS = Object.freeze({
       && permission !== PERMISSIONS.MENSALIDADES_DESCONTO
       && permission !== PERMISSIONS.VENDAS_REGISTRAR
       && permission !== PERMISSIONS.PRODUTOS_GERENCIAR
+      && !ESTORNO_VENDA_PERMISSIONS.includes(permission)
   ),
   [USER_ROLES.OWNER]: ACADEMIA_ADMIN_PERMISSIONS,
   [USER_ROLES.ADMIN]: ACADEMIA_ADMIN_PERMISSIONS.filter(
@@ -81,6 +100,8 @@ const ROLE_PERMISSIONS = Object.freeze({
   ),
   [USER_ROLES.GESTOR]: [
     PERMISSIONS.VENDAS_REGISTRAR,
+    PERMISSIONS.VENDAS_ESTORNO_SOLICITAR,
+    PERMISSIONS.VENDAS_ESTORNO_APROVAR,
     PERMISSIONS.PRODUTOS_GERENCIAR,
     PERMISSIONS.ALUNOS_ALTERAR_STATUS_VENCIMENTO,
     PERMISSIONS.ALUNOS_EDITAR,
@@ -93,9 +114,15 @@ const ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.MENSALIDADES_DESCONTO,
     PERMISSIONS.FINANCEIRO_ACESSAR,
     PERMISSIONS.REVERSAO_EXECUTAR,
+    PERMISSIONS.VENDAS_ESTORNO_SOLICITAR,
+    PERMISSIONS.VENDAS_ESTORNO_REGISTRAR_AUTORIZACAO,
+    PERMISSIONS.VENDAS_ESTORNO_EXECUTAR,
   ],
   [USER_ROLES.RECEPCAO]: [
     PERMISSIONS.VENDAS_REGISTRAR,
+    PERMISSIONS.VENDAS_ESTORNO_SOLICITAR,
+    PERMISSIONS.VENDAS_ESTORNO_REGISTRAR_AUTORIZACAO,
+    PERMISSIONS.VENDAS_ESTORNO_EXECUTAR,
     PERMISSIONS.ALUNOS_EDITAR,
     PERMISSIONS.MENSALIDADES_EMITIR_PADRAO,
     PERMISSIONS.PAGAMENTOS_REGISTRAR,
