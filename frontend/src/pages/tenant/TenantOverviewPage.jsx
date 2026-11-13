@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Building2, DollarSign, Landmark, ShoppingCart, TrendingDown, Users } from "lucide-react";
+import { Building2, DollarSign, Landmark, Users } from "lucide-react";
 import RoleGate from "../../components/auth/RoleGate";
 import Badge from "../../components/ui/Badge";
 import Card from "../../components/ui/Card";
 import EmptyState from "../../components/ui/EmptyState";
 import KpiCard from "../../components/ui/KpiCard";
+import MovementChart from "../../components/ui/MovementChart";
 import PageHeader from "../../components/ui/PageHeader";
 import Table from "../../components/ui/Table";
 import { fetchTenantOverview } from "../../services/tenantService";
@@ -46,10 +47,10 @@ export default function TenantOverviewPage() {
     const unidades = data?.unidades || [];
     return {
       unidadesAtivas: unidades.filter((unit) => unit.status === "ativa").length,
-      vendas: unidades.reduce((total, unit) => total + Number(unit.vendas || 0), 0),
-      despesas: unidades.reduce((total, unit) => total + Number(unit.despesas || 0), 0),
     };
   }, [data]);
+  const restrito = data?.escopo === "unidades_autorizadas_readonly";
+  const escopo = restrito ? "Unidades autorizadas" : "Toda a rede";
 
   return (
     <RoleGate
@@ -61,10 +62,10 @@ export default function TenantOverviewPage() {
         />
       }
     >
-      <div className="governance-shell">
+      <div className="gym-module">
         <PageHeader
-          title={data?.escopo === "unidades_autorizadas_readonly" ? "Relatório das unidades autorizadas" : "Consolidado da Rede"}
-          subtitle="Indicadores executivos por unidade."
+          title={restrito ? "Relatório das unidades autorizadas" : "Consolidado da Rede"}
+          subtitle={data && `${data.tenant?.nome || "Rede"} · ${escopo}`}
           actions={<Badge tone="blue">Somente leitura</Badge>}
         />
 
@@ -75,13 +76,12 @@ export default function TenantOverviewPage() {
         ) : (
           <>
             <div className="ui-status-grid">
-              <KpiCard label="Unidades ativas" value={resumo.unidadesAtivas} icon={<Building2 size={20} />} tone="blue" />
-              <KpiCard label="Alunos ativos" value={data?.totais?.alunos_ativos || 0} icon={<Users size={20} />} tone="green" />
-              <KpiCard label="Vendas" value={resumo.vendas} icon={<ShoppingCart size={20} />} tone="amber" />
-              <KpiCard label="Receita consolidada" value={moeda(data?.totais?.receitas)} icon={<DollarSign size={20} />} tone="blue" />
-              <KpiCard label="Despesas consolidadas" value={moeda(resumo.despesas)} icon={<TrendingDown size={20} />} tone="red" />
+              <KpiCard label="Unidades ativas" value={resumo.unidadesAtivas} subtitle="Cadastro atual" icon={<Building2 size={20} />} tone="blue" />
+              <KpiCard label="Alunos ativos" value={data?.totais?.alunos_ativos || 0} subtitle="Cadastro atual" icon={<Users size={20} />} tone="green" />
+              <KpiCard label="Receita consolidada" value={moeda(data?.totais?.receitas)} subtitle="Histórico acumulado" icon={<DollarSign size={20} />} tone="blue" />
               <KpiCard
                 label="Saldo consolidado"
+                subtitle="Histórico acumulado"
                 value={moeda(data?.totais?.saldo)}
                 icon={<Landmark size={20} />}
                 tone={Number(data?.totais?.saldo || 0) >= 0 ? "green" : "red"}
@@ -92,8 +92,8 @@ export default function TenantOverviewPage() {
               <div className="governance-panel__body">
                 <div className="ui-section-header">
                   <div>
-                    <h2 className="ui-section-title">{data?.tenant?.nome || "Rede"}</h2>
-                    <p className="ui-section-subtitle">Desempenho por unidade.</p>
+                    <h2 className="ui-section-title">Comparativo por unidade</h2>
+                    <p className="ui-section-subtitle">Cadastros atuais · Vendas e valores no histórico acumulado</p>
                   </div>
                   <Badge tone="gray">Somente leitura</Badge>
                 </div>
@@ -129,6 +129,12 @@ export default function TenantOverviewPage() {
                   </tbody>
                 </Table>
               </div>
+            </Card>
+            <Card className="gym-panel">
+              <div className="gym-panel__head"><div><h2 className="ui-section-title">Receitas e despesas por unidade</h2><p>Histórico acumulado · {escopo}</p></div></div>
+              <MovementChart title="Receitas e despesas por unidade" format={moeda}
+                data={(data?.unidades || []).map((unit) => ({ label: unit.nome, entries: unit.receitas, expenses: -unit.despesas }))}
+                bars={[{ key: "entries", label: "Receitas" }, { key: "expenses", label: "Despesas" }]} />
             </Card>
           </>
         )}

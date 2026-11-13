@@ -9,6 +9,7 @@ import EmptyState from "../../components/ui/EmptyState";
 import Input from "../../components/ui/Input";
 import KpiCard from "../../components/ui/KpiCard";
 import Modal from "../../components/ui/Modal";
+import MovementChart from "../../components/ui/MovementChart";
 import PageHeader from "../../components/ui/PageHeader";
 import Pagination from "../../components/ui/Pagination";
 import PillButton from "../../components/ui/PillButton";
@@ -22,6 +23,10 @@ import { EstornoBadge, EstornoVendaModal, usePermissoesEstorno } from "../../com
 
 function formatarMoeda(valor) {
   return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function valorBruto(venda) {
+  return Number(venda.valor_total ?? venda.preco_unitario * venda.quantidade);
 }
 
 function periodoParaDatas(periodo) {
@@ -45,6 +50,8 @@ export default function VendasProdutosPage() {
   const [produtos, setProdutos] = useState([]);
   const [vendas, setVendas] = useState([]);
   const [total, setTotal] = useState(0);
+  const [carregandoVendas, setCarregandoVendas] = useState(true);
+  const buscaVendas = useRef(0);
 
   const [produtoSelecionado, setProdutoSelecionado] = useState(null);
   const [quantidade, setQuantidade] = useState(1);
@@ -53,19 +60,20 @@ export default function VendasProdutosPage() {
 
   const [dataInicial, setDataInicial] = useState("");
   const [dataFinal, setDataFinal] = useState("");
+  const [recorte, setRecorte] = useState({ inicio: "", fim: "" });
   const [periodoRapido, setPeriodoRapido] = useState("personalizado");
 
   const [pagina, setPagina] = useState(1);
   const limite = 10;
 
   useEffect(() => {
-    setProdutoSelecionado(null);
+    carregarProdutos();
   }, [currentUnit?.id]);
 
   useEffect(() => {
-    carregarProdutos();
     carregarVendas();
-  }, [pagina, dataInicial, dataFinal, currentUnit?.id]);
+    return () => { buscaVendas.current += 1; };
+  }, [pagina, recorte, currentUnit?.id]);
 
   async function carregarProdutos() {
     try {
@@ -77,17 +85,27 @@ export default function VendasProdutosPage() {
   }
 
   async function carregarVendas() {
+    const busca = ++buscaVendas.current;
+    setCarregandoVendas(true);
     try {
       const { vendas: vendasLista, total: totalVendas } = await fetchVendasProdutos({
-        data_inicial: dataInicial,
-        data_final: dataFinal,
+        data_inicial: recorte.inicio,
+        data_final: recorte.fim,
         pagina,
         limite,
       });
-      setVendas(vendasLista);
-      setTotal(totalVendas);
+      if (busca === buscaVendas.current) {
+        setVendas(vendasLista);
+        setTotal(totalVendas);
+      }
     } catch (error) {
-      toast.error(getApiErrorMessage(error));
+      if (busca === buscaVendas.current) {
+        setVendas([]);
+        setTotal(0);
+        toast.error(getApiErrorMessage(error));
+      }
+    } finally {
+      if (busca === buscaVendas.current) setCarregandoVendas(false);
     }
   }
 
@@ -155,38 +173,47 @@ export default function VendasProdutosPage() {
     const datas = periodoParaDatas(periodo);
     setDataInicial(datas.inicio);
     setDataFinal(datas.fim);
+    setRecorte(datas);
   }
 
   const totalPaginas = Math.max(1, Math.ceil(total / limite));
-  const totalPagina = vendas.reduce((soma, venda) => soma + Number(venda.preco_unitario || 0) * Number(venda.quantidade || 0), 0);
+  const totalPagina = vendas.reduce((soma, venda) => soma + valorBruto(venda), 0);
   const ticketMedio = vendas.length > 0 ? totalPagina / vendas.length : 0;
+  const formatDate = (date) => date.split("-").reverse().join("/");
+  const periodLabel = recorte.inicio && recorte.fim ? `${formatDate(recorte.inicio)} a ${formatDate(recorte.fim)}`
+    : recorte.inicio ? `Desde ${formatDate(recorte.inicio)}`
+      : recorte.fim ? `Até ${formatDate(recorte.fim)}` : "Todo o histórico";
+  const pageSeries = new Map();
+  for (const venda of vendas) {
+    const day = venda.data_venda.slice(0, 10);
+    pageSeries.set(day, (pageSeries.get(day) ?? 0) + valorBruto(venda));
+  }
   const produtosDisponiveis = useMemo(
     () => produtos.filter((produto) => Number(produto.estoque || 0) > 0).length,
     [produtos]
   );
 
   return (
-    <div className="space-y-6">
+    <div className="gym-module">
       <PageHeader
         title="Vendas de Produtos"
-        subtitle="Registre vendas da recepção e acompanhe o histórico operacional da unidade."
+        subtitle={currentUnit?.nome}
         actions={podeVender && <Button onClick={() => setModalVendaAberto(true)}>+ Registrar Venda</Button>}
       />
 
       <div className="ui-status-grid">
-        <KpiCard label="Vendas Encontradas" value={total} icon={<ShoppingCart size={20} />} tone="blue" />
-        <KpiCard label="Total da Página" value={formatarMoeda(totalPagina)} icon={<Wallet size={20} />} tone="green" />
-        <KpiCard label="Ticket Médio" value={formatarMoeda(ticketMedio)} icon={<CalendarDays size={20} />} tone="amber" />
-        <KpiCard label="Produtos Disponíveis" value={produtosDisponiveis} icon={<PackageCheck size={20} />} tone="gray" />
+        <KpiCard label="Vendas no recorte" subtitle={periodLabel} value={carregandoVendas ? "—" : total} icon={<ShoppingCart size={20} />} tone="blue" />
+        <KpiCard label="Total bruto da página" subtitle={`Página ${pagina}`} value={carregandoVendas ? "—" : formatarMoeda(totalPagina)} icon={<Wallet size={20} />} tone="green" />
+        <KpiCard label="Ticket médio bruto" subtitle={`Página ${pagina}`} value={carregandoVendas ? "—" : formatarMoeda(ticketMedio)} icon={<CalendarDays size={20} />} tone="amber" />
+        <KpiCard label="Produtos disponíveis" subtitle="Estoque atual" value={produtosDisponiveis} icon={<PackageCheck size={20} />} tone="gray" />
       </div>
 
       <Card>
         <div className="entity-toolbar">
           <div className="entity-toolbar__intro">
-            <span className="entity-toolbar__eyebrow">Fluxo comercial</span>
             <div>
               <h2 className="ui-section-title">Histórico de vendas</h2>
-              <p className="ui-section-subtitle">Filtros mais claros e leitura operacional refinada sem mudar payload ou paginação.</p>
+              <p className="ui-section-subtitle">Vendas registradas e situação dos estornos.</p>
             </div>
           </div>
         </div>
@@ -226,60 +253,40 @@ export default function VendasProdutosPage() {
               }}
               className="max-w-44"
             />
-            <Button onClick={() => { setPagina(1); carregarVendas(); }}>Filtrar</Button>
+            <Button disabled={Boolean(dataInicial && dataFinal && dataInicial > dataFinal)}
+              onClick={() => { setPagina(1); setRecorte({ inicio: dataInicial, fim: dataFinal }); }}>Filtrar</Button>
           </div>
         </div>
 
         <div className="p-5 space-y-5">
-          <div className="sales-kpi-grid">
-            <div className="sales-quick-card">
-              <div className="sales-quick-card__label">Período ativo</div>
-              <div className="sales-quick-card__value">{periodoRapido === "personalizado" ? "Customizado" : periodoRapido}</div>
-              <div className="sales-quick-card__copy">Recorte aplicado na busca atual de vendas.</div>
-            </div>
-            <div className="sales-quick-card">
-              <div className="sales-quick-card__label">Volume paginado</div>
-              <div className="sales-quick-card__value">{vendas.length}</div>
-              <div className="sales-quick-card__copy">Itens exibidos na página atual.</div>
-            </div>
-            <div className="sales-quick-card">
-              <div className="sales-quick-card__label">Produtos ativos</div>
-              <div className="sales-quick-card__value">{produtosDisponiveis}</div>
-              <div className="sales-quick-card__copy">Produtos com estoque acima de zero.</div>
-            </div>
-          </div>
-
-          {vendas.length === 0 ? (
+          {carregandoVendas ? <p role="status">Carregando vendas…</p> : vendas.length === 0 ? (
             <EmptyState title="Nenhuma venda encontrada." />
           ) : (
             <Table>
               <thead>
                 <tr>
                   <th>Produto</th>
+                  <th>Estorno</th>
                   <th>Quantidade</th>
                   <th>Preço Unitário</th>
                   <th>Total</th>
                   <th>Data Venda</th>
-                  <th>Estorno</th>
-                  {permEstorno.algum && <th />}
                 </tr>
               </thead>
               <tbody>
                 {vendas.map((venda) => (
                   <tr key={venda.id} data-venda-id={venda.id}>
                     <td className="font-semibold">{venda.produto_nome}</td>
+                    <td>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <EstornoBadge status={venda.estorno_status} />
+                        {permEstorno.algum && <Button size="sm" variant="secondary" onClick={() => setVendaEstorno(venda)}>Estorno</Button>}
+                      </div>
+                    </td>
                     <td>{venda.quantidade}</td>
                     <td>{formatarMoeda(venda.preco_unitario)}</td>
-                    <td className="font-semibold">{formatarMoeda(Number(venda.preco_unitario || 0) * Number(venda.quantidade || 0))}</td>
+                    <td className="font-semibold">{formatarMoeda(valorBruto(venda))}</td>
                     <td>{new Date(venda.data_venda).toLocaleString("pt-BR")}</td>
-                    <td><EstornoBadge status={venda.estorno_status} /></td>
-                    {permEstorno.algum && (
-                      <td>
-                        <Button size="sm" variant="secondary" onClick={() => setVendaEstorno(venda)}>
-                          Estorno
-                        </Button>
-                      </td>
-                    )}
                   </tr>
                 ))}
               </tbody>
@@ -290,6 +297,14 @@ export default function VendasProdutosPage() {
         </div>
       </Card>
 
+      {!carregandoVendas && vendas.length > 0 && <Card className="gym-panel">
+        <div className="gym-panel__head"><div><h2 className="ui-section-title">Valor bruto das vendas da página {pagina}</h2>
+          <p>{periodLabel} · {vendas.length} de {total} vendas no recorte</p></div></div>
+        <MovementChart title={`Valor bruto das vendas da página ${pagina} por data`} format={formatarMoeda}
+          data={[...pageSeries.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([day, sales]) => ({ label: day.split("-").reverse().join("/"), sales }))}
+          bars={[{ key: "sales", label: "Vendas brutas" }]} />
+      </Card>}
+
       {vendaEstorno && (
         <EstornoVendaModal
           venda={vendaEstorno}
@@ -299,59 +314,24 @@ export default function VendasProdutosPage() {
       )}
 
       {modalVendaAberto && (
-        <Modal title="Registrar Venda" onClose={fecharModalVenda} className="max-w-4xl">
+        <Modal title="Registrar Venda" onClose={fecharModalVenda} className="gym-sale-modal">
           <form onSubmit={handleVenda} className="space-y-4">
-            <div className="sales-modal-grid">
-              <div className="sales-modal-panel">
-                <h3 className="sales-modal-panel__title">Seleção do produto</h3>
-                <p className="sales-modal-panel__copy">O fluxo permanece igual: produto, quantidade, validação de estoque e envio com createVendaProduto.</p>
-
-                <div className="space-y-4 mt-4">
-                  <Select
-                    label="Produto"
-                    value={produtoSelecionado?.id || ""}
-                    onChange={(event) => setProdutoSelecionado(produtos.find((produto) => produto.id === Number(event.target.value)))}
-                  >
-                    <option value="">Selecione um produto</option>
-                    {produtos.map((produto) => (
-                      <option key={produto.id} value={produto.id}>
-                        {produto.nome} - Estoque: {produto.estoque}
-                      </option>
-                    ))}
-                  </Select>
-
-                  <Input
-                    label="Quantidade"
-                    type="number"
-                    value={quantidade}
-                    onChange={(event) => setQuantidade(Number(event.target.value))}
-                    min="1"
-                  />
-                </div>
-              </div>
-
-              <div className="sales-modal-panel">
-                <h3 className="sales-modal-panel__title">Resumo rápido</h3>
-                <p className="sales-modal-panel__copy">Apoio visual para registrar a venda com mais confiança na operação.</p>
-
-                <div className="sales-modal-summary mt-4">
-                  <div className="sales-modal-summary__item">
-                    <div className="sales-modal-summary__label">Produto</div>
-                    <div className="sales-modal-summary__value">{produtoSelecionado?.nome || "Aguardando seleção"}</div>
-                  </div>
-                  <div className="sales-modal-summary__item">
-                    <div className="sales-modal-summary__label">Estoque disponível</div>
-                    <div className="sales-modal-summary__value">{produtoSelecionado?.estoque ?? "-"}</div>
-                  </div>
-                  <div className="sales-modal-summary__item">
-                    <div className="sales-modal-summary__label">Total estimado</div>
-                    <div className="sales-modal-summary__value">
-                      {formatarMoeda(Number(produtoSelecionado?.preco || 0) * Number(quantidade || 0))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <Select
+              label="Produto"
+              value={produtoSelecionado?.id || ""}
+              onChange={(event) => setProdutoSelecionado(produtos.find((produto) => produto.id === Number(event.target.value)))}
+            >
+              <option value="">Selecione um produto</option>
+              {produtos.map((produto) => (
+                <option key={produto.id} value={produto.id}>{produto.nome} · estoque {produto.estoque}</option>
+              ))}
+            </Select>
+            <Input label="Quantidade" type="number" value={quantidade}
+              onChange={(event) => setQuantidade(Number(event.target.value))} min="1" />
+            {produtoSelecionado && <dl className="gym-sale-summary">
+              <div><dt>Preço unitário</dt><dd>{formatarMoeda(produtoSelecionado.preco)}</dd></div>
+              <div><dt>Total estimado</dt><dd>{formatarMoeda(Number(produtoSelecionado.preco) * Number(quantidade || 0))}</dd></div>
+            </dl>}
 
             <div className="flex justify-end gap-3 pt-2">
               <Button type="button" variant="ghost" onClick={fecharModalVenda}>

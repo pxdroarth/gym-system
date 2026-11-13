@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import gymLogo from "../assets/previa/gym.png";
 import { NavLink, useLocation } from "react-router-dom";
 import {
-  BarChart3,
+  House,
+  Radio,
+  FileText,
+  ChevronsLeft,
+  ChevronsRight,
   Building2,
   CalendarDays,
   ChevronDown,
@@ -17,19 +22,15 @@ import {
   X,
 } from "lucide-react";
 import useAuth from "../hooks/useAuth";
-import { getRoleLabel, UI_PERMISSIONS, userHasUiPermission } from "../utils/permissions";
+import { UI_PERMISSIONS, userHasUiPermission } from "../utils/permissions";
 
-const menu = [
-  { to: "/dashboard", label: "Dashboard", icon: BarChart3, permission: UI_PERMISSIONS.NAV_DASHBOARD },
-  { to: "/tenant/overview", label: "Consolidado", icon: Building2, permission: UI_PERMISSIONS.NAV_TENANT_OVERVIEW },
-  { to: "/platform/onboarding", label: "Onboarding", icon: Settings2, permission: UI_PERMISSIONS.NAV_PLATFORM_ONBOARDING },
+export const menu = [
+  { to: "/dashboard", label: "Dashboard", icon: House, permission: UI_PERMISSIONS.NAV_DASHBOARD },
   { to: "/alunos", label: "Alunos", icon: Users, permission: UI_PERMISSIONS.NAV_ALUNOS },
   { to: "/produtos", label: "Produtos", icon: Package, permission: UI_PERMISSIONS.NAV_PRODUTOS },
   { to: "/vendas-produtos", label: "Vendas", icon: ShoppingCart, permission: UI_PERMISSIONS.NAV_VENDAS },
   { to: "/planos", label: "Planos", icon: CalendarDays, permission: UI_PERMISSIONS.NAV_PLANOS },
   { to: "/planos/associacoes", label: "Associações", icon: Link2, permission: UI_PERMISSIONS.NAV_ASSOCIACOES },
-  { to: "/usuarios-internos", label: "Usuários", icon: UserCog, permission: UI_PERMISSIONS.USUARIOS_VISUALIZAR },
-  { to: "/historico-atividades", label: "Histórico", icon: FileClock, permission: UI_PERMISSIONS.NAV_HISTORICO_ATIVIDADES },
   {
     label: "Financeiro",
     icon: CircleDollarSign,
@@ -41,20 +42,16 @@ const menu = [
       { to: "/financeiro/estornos-venda", label: "Estornos de venda" },
     ],
   },
+  { to: "/acessos", label: "Acessos", icon: Radio, permission: UI_PERMISSIONS.NAV_DASHBOARD },
+  { to: "/relatorios", label: "Relatórios", icon: FileText, permission: UI_PERMISSIONS.NAV_DASHBOARD },
+  { to: "/tenant/overview", label: "Consolidado", icon: Building2, permission: UI_PERMISSIONS.NAV_TENANT_OVERVIEW },
+  { to: "/usuarios-internos", label: "Usuários", icon: UserCog, permission: UI_PERMISSIONS.USUARIOS_VISUALIZAR },
+  { to: "/historico-atividades", label: "Histórico", icon: FileClock, permission: UI_PERMISSIONS.NAV_HISTORICO_ATIVIDADES },
+  { to: "/platform/onboarding", label: "Onboarding", icon: Settings2, permission: UI_PERMISSIONS.NAV_PLATFORM_ONBOARDING },
 ];
 
-function initials(name) {
-  return String(name || "SA")
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0])
-    .join("")
-    .toUpperCase();
-}
-
 // compacto: abaixo de 1024 px o menu vira gaveta (mesmos links, submenu abre dentro).
-export default function Sidebar({ aberta = true, compacto = false, gavetaAberta = false, onFechar }) {
+export default function Sidebar({ aberta = true, compacto = false, gavetaAberta = false, onFechar, onAlternar }) {
   const [hovering, setHovering] = useState(false);
   const location = useLocation();
   const [open, setOpen] = useState(() => (
@@ -91,11 +88,11 @@ export default function Sidebar({ aberta = true, compacto = false, gavetaAberta 
       onMouseLeave={() => !compacto && setHovering(false)}
     >
       <div className="app-sidebar__brand">
-        <div className="app-sidebar__mark">SA</div>
+        <NavLink to="/dashboard" aria-label="Gym System"><img className="app-sidebar__mark" src={gymLogo} alt="" /></NavLink>
         {expanded && (
           <div className="app-sidebar__brand-text">
-            <div className="app-sidebar__title">Academia SA</div>
-            <div className="app-sidebar__subtitle">Operação por unidade</div>
+            <div className="app-sidebar__title">Gym System</div>
+            <div className="app-sidebar__subtitle">Gestão de Academias</div>
           </div>
         )}
         {compacto && (
@@ -114,7 +111,7 @@ export default function Sidebar({ aberta = true, compacto = false, gavetaAberta 
               <div key={item.label}>
                 <button
                   type="button"
-                  className="app-sidebar__submenu-trigger"
+                  className={`app-sidebar__submenu-trigger ${location.pathname.startsWith("/financeiro") ? "active" : ""}`}
                   onClick={() => expanded && handleToggle(item.label)}
                   aria-expanded={Boolean(open[item.label])}
                   aria-controls={`submenu-${item.label}`}
@@ -164,15 +161,13 @@ export default function Sidebar({ aberta = true, compacto = false, gavetaAberta 
         })}
       </nav>
 
-      <div className="app-sidebar__user">
-        <div className="app-sidebar__avatar">{initials(user?.nome || user?.login)}</div>
-        {expanded && (
-          <div>
-            <div className="app-sidebar__user-name">{user?.nome || user?.login || "Operador"}</div>
-            <div className="app-sidebar__user-role">{getRoleLabel(user?.papel)}</div>
-          </div>
-        )}
-      </div>
+      {!compacto && (
+        <button type="button" className="app-sidebar__collapse" onClick={onAlternar}
+          aria-label={aberta ? "Recolher menu lateral" : "Expandir menu lateral"}>
+          {aberta ? <ChevronsLeft size={18} /> : <ChevronsRight size={18} />}
+          {aberta && <span>Recolher menu</span>}
+        </button>
+      )}
     </aside>
   );
 }

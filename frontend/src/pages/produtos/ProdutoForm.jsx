@@ -105,11 +105,9 @@ export default function ProdutoForm({ produto, onSuccess, onCancel }) {
       </div>
 
       <div className="product-form-note">
-        <h3 className="product-form-note__title">Resumo operacional</h3>
         <p className="product-form-note__copy">
-          Estoque atual estimado: <strong>{estoqueAtual}</strong> unidade(s). Valor projetado do saldo:{" "}
+          Estoque previsto: <strong>{estoqueAtual}</strong> unidade(s) · Valor estimado:{" "}
           <strong>{Number(valorProjetado || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong>.
-          O fluxo de upload e envio continua exatamente o mesmo via FormData.
         </p>
       </div>
 

@@ -26,7 +26,7 @@ export default function UnitScopeSelector() {
 
   if (hasMultipleUnits) {
     return (
-      <label className="app-shell-chip hidden md:inline-flex">
+      <label className="app-shell-chip">
         <Building2 size={15} className="app-shell-chip__icon" />
         <div className="leading-tight">
           <div className="app-shell-chip__label">Unidade atual</div>
@@ -34,7 +34,7 @@ export default function UnitScopeSelector() {
             value={currentUnit.id}
             onChange={handleChange}
             className="bg-transparent text-[0.78rem] font-extrabold outline-none cursor-pointer text-slate-900"
-            title="Selecionar unidade"
+            aria-label="Selecionar unidade"
           >
             {units.map((unit) => (
               <option key={unit.id} value={unit.id} className="text-slate-900">
@@ -48,7 +48,7 @@ export default function UnitScopeSelector() {
   }
 
   return (
-    <div className="app-shell-chip hidden md:inline-flex">
+    <div className="app-shell-chip">
       <Building2 size={15} className="app-shell-chip__icon" />
       <div className="leading-tight">
         <div className="app-shell-chip__label">Unidade atual</div>

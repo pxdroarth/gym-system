@@ -1,5 +1,8 @@
 import React from "react";
 import { Menu } from "lucide-react";
+import { Link } from "react-router-dom";
+import gymLogo from "../assets/previa/gym.png";
+import GlobalSearch from "./GlobalSearch";
 import UnitScopeSelector from "./layout/UnitScopeSelector";
 import UserMenu from "./layout/UserMenu";
 
@@ -24,7 +27,8 @@ export default function Header({ compacto, sidebarAberta, menuExpandido, toggleS
           <Menu size={20} aria-hidden="true" />
         </button>
 
-        {compacto && <span className="app-topbar__title">Academia SA</span>}
+        {compacto && <Link className="gym-mobile-brand" to="/dashboard" aria-label="Gym System"><img src={gymLogo} alt="" /></Link>}
+        <GlobalSearch />
       </div>
 
       <div className="app-topbar__right">

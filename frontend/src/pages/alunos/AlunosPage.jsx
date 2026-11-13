@@ -1,221 +1,126 @@
+import { useEffect, useState } from "react";
+import { CheckCircle2, CircleSlash, Plus, Users, WalletCards } from "lucide-react";
+import { Link, useSearchParams } from "react-router-dom";
+import { accessDateTime, StudentIdentity } from "../../components/AccessHistory";
 import RoleGate from "../../components/auth/RoleGate";
-import { UI_PERMISSIONS } from "../../utils/permissions";
-import React, { useEffect, useMemo, useState } from "react";
-import { CheckCircle2, CircleSlash, Search, Users, WalletCards } from "lucide-react";
-import { Link, useNavigate } from "react-router-dom";
-import { toast } from "react-toastify";
-import { fetchAlunos } from "../../services/alunoService";
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
-import EmptyState from "../../components/ui/EmptyState";
 import Input from "../../components/ui/Input";
 import KpiCard from "../../components/ui/KpiCard";
 import PageHeader from "../../components/ui/PageHeader";
 import Pagination from "../../components/ui/Pagination";
+import Select from "../../components/ui/Select";
 import Table from "../../components/ui/Table";
+import useAuth from "../../hooks/useAuth";
+import { fetchAlunos } from "../../services/alunoService";
+import { fetchTodosAcessos } from "../../services/acessoService";
 import getApiErrorMessage from "../../utils/getApiErrorMessage";
+import { UI_PERMISSIONS } from "../../utils/permissions";
 
-const ORDER = (import.meta.env?.VITE_ALUNOS_ORDER || "asc").toLowerCase();
-
-function temCampoCobertura(aluno) {
-  return Object.prototype.hasOwnProperty.call(aluno || {}, "cobertura_paga_vigente")
-    || Object.prototype.hasOwnProperty.call(aluno || {}, "cobertura_status");
-}
-
-function possuiCoberturaPaga(aluno) {
-  return aluno?.cobertura_paga_vigente === true
-    || aluno?.cobertura_paga_vigente === 1
-    || aluno?.cobertura_status === "cobertura_paga_vigente";
-}
-
-function obterBadgeCobertura(aluno) {
-  if (possuiCoberturaPaga(aluno)) {
-    return <Badge tone="green">Cobertura vigente</Badge>;
-  }
-
-  if (!temCampoCobertura(aluno)) {
-    return <Badge tone="gray">Cobertura nao informada</Badge>;
-  }
-
-  return <Badge tone="amber">Sem cobertura paga</Badge>;
-}
-
-function obterBadgeStatus(status) {
-  return String(status).toLowerCase() === "ativo"
-    ? <Badge tone="green">Ativo</Badge>
-    : <Badge tone="red">Inativo</Badge>;
-}
+const desc = import.meta.env.VITE_ALUNOS_ORDER?.toLowerCase() === "desc";
+const statusOf = (student) => String(student.status_ativo ?? student.status ?? "").toLowerCase();
+const normalized = (value) => String(value ?? "").normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+const coverageOf = (student) => [true, 1].includes(student.cobertura_paga_vigente)
+  || student.cobertura_status === "cobertura_paga_vigente" ? "vigente"
+    : "cobertura_paga_vigente" in student || "cobertura_status" in student ? "sem" : "desconhecida";
+const coverageLabel = { vigente: "Cobertura vigente", sem: "Sem cobertura paga", desconhecida: "Cobertura não informada" };
 
 export default function AlunosPage() {
-  const [alunos, setAlunos] = useState([]);
-  const [busca, setBusca] = useState("");
-  const [paginaAtual, setPaginaAtual] = useState(1);
-  const [itensPorPagina] = useState(10);
-  const navigate = useNavigate();
+  const { currentUnit } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const [students, setStudents] = useState(null);
+  const [lastAccess, setLastAccess] = useState(new Map());
+  const [error, setError] = useState("");
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("");
+  const [plan, setPlan] = useState("");
+  const [page, setPage] = useState(1);
+  const coverage = params.get("cobertura") || "";
 
   useEffect(() => {
-    carregarAlunos();
+    let active = true;
+    fetchAlunos().then((data) => {
+      if (active) setStudents(data.slice().sort((a, b) =>
+        (desc ? -1 : 1) * (Number(a.matricula || a.id) - Number(b.matricula || b.id))));
+    }).catch((failure) => { if (active) setError(getApiErrorMessage(failure)); });
+    fetchTodosAcessos().then((rows) => {
+      if (!active) return;
+      const latest = new Map();
+      for (const row of rows) if (!latest.has(row.aluno_id)) latest.set(row.aluno_id, row.data_hora);
+      setLastAccess(latest);
+    }).catch((failure) => { if (active) setError(getApiErrorMessage(failure)); });
+    return () => { active = false; };
   }, []);
 
-  async function carregarAlunos() {
-    try {
-      const dados = await fetchAlunos();
-      const normalizados = (dados || []).map((aluno) => ({
-        ...aluno,
-        status_ativo: aluno.status_ativo || aluno.status || "inativo",
-        mensalidade_status: aluno.mensalidade_status || "sem_mensalidade",
-      }));
+  const rows = students || [];
+  const activeCount = rows.filter((row) => statusOf(row) === "ativo").length;
+  const inactiveCount = rows.filter((row) => statusOf(row) === "inativo").length;
+  const plans = [...new Set(rows.map((row) => row.plano_nome).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const filtered = rows.filter((row) =>
+    (!status || statusOf(row) === status) && (!coverage || coverageOf(row) === coverage) && (!plan || row.plano_nome === plan)
+    && [row.nome, row.matricula, row.telefone].some((value) => normalized(value).includes(normalized(query.trim()))));
+  const size = 6;
+  const pages = Math.max(1, Math.ceil(filtered.length / size));
+  const activePage = Math.min(page, pages);
 
-      normalizados.sort((a, b) => {
-        const va = Number(a.matricula || a.id || 0);
-        const vb = Number(b.matricula || b.id || 0);
-        return ORDER === "desc" ? vb - va : va - vb;
-      });
-
-      setAlunos(normalizados);
-      setPaginaAtual(1);
-    } catch (error) {
-      console.error("Erro ao buscar alunos.");
-      toast.error(getApiErrorMessage(error));
-    }
-  }
-
-  const totalAlunos = alunos.length;
-  const totalCoberturaVigente = alunos.filter(possuiCoberturaPaga).length;
-  const totalSemCobertura = alunos.filter((aluno) => !possuiCoberturaPaga(aluno)).length;
-  const totalCoberturaNaoInformada = alunos.filter((aluno) => !temCampoCobertura(aluno)).length;
-
-  const termo = busca.toLowerCase();
-  const alunosFiltrados = alunos.filter(
-    (aluno) => (aluno.nome || "").toLowerCase().includes(termo) || String(aluno.matricula || "").includes(busca)
-  );
-
-  const indexUltimoItem = paginaAtual * itensPorPagina;
-  const indexPrimeiroItem = indexUltimoItem - itensPorPagina;
-  const alunosPaginados = alunosFiltrados.slice(indexPrimeiroItem, indexUltimoItem);
-  const totalPaginas = Math.max(1, Math.ceil(alunosFiltrados.length / itensPorPagina));
-
-  const cardsResumo = useMemo(
-    () => [
-      {
-        id: "ativos",
-        label: "Cadastros localizados",
-        value: alunosFiltrados.length,
-        copy: "Resultados no recorte atual de busca.",
-      },
-      {
-        id: "cobertura",
-        label: "Cobertura vigente",
-        value: totalCoberturaVigente,
-        copy: "Alunos com cobertura paga vigente.",
-      },
-      {
-        id: "sem-cobertura",
-        label: "Sem cobertura paga",
-        value: totalSemCobertura,
-        copy: "Sem assumir divida automaticamente.",
-      },
-    ],
-    [alunosFiltrados.length, totalCoberturaVigente, totalSemCobertura]
-  );
-
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        title="Alunos"
-        subtitle="Cadastro, situação operacional e acompanhamento de mensalidades por unidade."
-        actions={
-          <RoleGate permission={UI_PERMISSIONS.ALUNOS_EDITAR}>
-            <Button as={Link} to="/alunos/novo" variant="primary">+ Novo Aluno</Button>
-          </RoleGate>
-        }
-      />
-
-      <div className="ui-status-grid">
-        <KpiCard label="Total de Alunos" value={totalAlunos} icon={<Users size={20} />} tone="blue" />
-        <KpiCard label="Cobertura vigente" value={totalCoberturaVigente} icon={<CheckCircle2 size={20} />} tone="green" />
-        <KpiCard label="Sem cobertura paga" value={totalSemCobertura} icon={<CircleSlash size={20} />} tone="amber" />
-        <KpiCard label="Cobertura nao informada" value={totalCoberturaNaoInformada} icon={<WalletCards size={20} />} tone="gray" />
+  return <div className="gym-module">
+    <PageHeader title="Alunos" subtitle={`Cadastro e situação operacional · ${currentUnit?.nome || "Unidade"}`}
+      actions={<RoleGate permission={UI_PERMISSIONS.ALUNOS_EDITAR}><Button as={Link} to="/alunos/novo"><Plus size={16} /> Novo Aluno</Button></RoleGate>} />
+    {error && <p role="alert">{error}</p>}
+    {!students && !error && <p role="status">Carregando alunos…</p>}
+    {students && <>
+      <div className="ui-status-grid gym-three">
+        <KpiCard label="Total de alunos" value={rows.length} icon={<Users size={25} />} />
+        <KpiCard label="Ativos" value={activeCount} icon={<CheckCircle2 size={25} />} tone="green" subtitle="Status operacional atual" />
+        <KpiCard label="Inativos" value={inactiveCount} icon={<CircleSlash size={25} />} tone="amber" subtitle="Status operacional atual" />
       </div>
-
+      <Card className="gym-panel gym-filters">
+        <Input label="Buscar aluno" placeholder="Nome, matrícula ou telefone" type="search" value={query}
+          onChange={(e) => { setQuery(e.target.value); setPage(1); }} />
+        <Select label="Status operacional" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}>
+          <option value="">Todos</option><option value="ativo">Ativo</option><option value="inativo">Inativo</option>
+        </Select>
+        <Select label="Plano" value={plan} onChange={(e) => { setPlan(e.target.value); setPage(1); }}>
+          <option value="">Todos</option>{plans.map((name) => <option key={name}>{name}</option>)}
+        </Select>
+        <Select label="Cobertura" value={coverage} onChange={(e) => {
+          setParams(e.target.value ? { cobertura: e.target.value } : {}, { replace: true });
+          setPage(1);
+        }}>
+          <option value="">Todas</option>{Object.entries(coverageLabel).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+        </Select>
+        <Button variant="secondary" onClick={() => { setQuery(""); setStatus(""); setPlan(""); setParams({}, { replace: true }); setPage(1); }}>Limpar filtros</Button>
+      </Card>
       <Card>
-        <div className="entity-toolbar">
-          <div className="entity-toolbar__intro">
-            <span className="entity-toolbar__eyebrow">Leitura operacional</span>
-            <div>
-              <h2 className="ui-section-title">Listagem de alunos</h2>
-              <p className="ui-section-subtitle">Consulta rápida, visual mais denso e navegação direta para o perfil.</p>
-            </div>
-          </div>
-          <div className="entity-toolbar__actions">
-            <div className="entity-toolbar__search">
-              <Input
-                type="text"
-                placeholder="Buscar por nome ou matrícula"
-                value={busca}
-                onChange={(event) => {
-                  setBusca(event.target.value);
-                  setPaginaAtual(1);
-                }}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="p-5 space-y-5">
-          <div className="entity-summary-grid">
-            {cardsResumo.map((item) => (
-              <div key={item.id} className="entity-summary-card">
-                <div className="entity-summary-card__label">{item.label}</div>
-                <div className="entity-summary-card__value">{item.value}</div>
-                <div className="entity-summary-card__copy">{item.copy}</div>
-              </div>
-            ))}
-          </div>
-
-          {alunosPaginados.length === 0 ? (
-            <EmptyState title="Nenhum aluno encontrado." description="Tente ajustar a busca ou cadastre um novo aluno." />
-          ) : (
-            <Table>
-              <thead>
-                <tr>
-                  <th>Matrícula</th>
-                  <th>Aluno</th>
-                  <th>Status</th>
-                  <th>Cobertura</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {alunosPaginados.map((aluno) => (
-                  <tr key={aluno.id}>
-                    <td className="font-mono text-sm text-slate-600">{aluno.matricula}</td>
-                    <td>
-                      <div className="students-table__name">
-                        <span className="font-semibold">{aluno.nome}</span>
-                        <span className="students-table__meta">
-                          <Search size={12} className="inline mr-1" />
-                          Acesso rápido ao perfil operacional
-                        </span>
-                      </div>
-                    </td>
-                    <td>{obterBadgeStatus(aluno.status_ativo)}</td>
-                    <td>{obterBadgeCobertura(aluno)}</td>
-                    <td>
-                      <Button size="sm" onClick={() => navigate(`/alunos/${aluno.id}`)}>
-                        Perfil
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
-          )}
-
-          <Pagination page={paginaAtual} totalPages={totalPaginas} onPageChange={setPaginaAtual} />
+        <Table aria-label="Lista de alunos">
+          <thead><tr><th>Aluno</th><th>Plano</th><th>Status operacional</th><th>Cobertura</th><th>Unidade</th><th>Último acesso</th><th>Ações</th></tr></thead>
+          <tbody>{filtered.length ? filtered.slice((activePage - 1) * size, activePage * size).map((row) => {
+            const situation = statusOf(row);
+            const coverage = coverageOf(row);
+            return <tr key={row.id}>
+              <td><StudentIdentity student={row} /></td>
+              <td>{row.plano_nome || "Sem plano"}</td>
+              <td><Badge tone={situation === "ativo" ? "green" : "amber"}>{({ ativo: "Ativo", inativo: "Inativo", bloqueado: "Bloqueado" })[situation] || "Não informado"}</Badge></td>
+              <td><Badge tone={coverage === "vigente" ? "green" : coverage === "sem" ? "amber" : "gray"}><WalletCards size={13} />{coverageLabel[coverage]}</Badge></td>
+              <td>{currentUnit?.nome}</td>
+              <td className="whitespace-nowrap">{accessDateTime(lastAccess.get(row.id))}</td>
+              <td><Button as={Link} to={`/alunos/${row.id}`} size="sm" variant="secondary">Perfil</Button></td>
+            </tr>;
+          }) : <tr><td colSpan={7}>Nenhum aluno encontrado.</td></tr>}</tbody>
+        </Table>
+        <div className="gym-table-footer"><span>{filtered.length} aluno(s)</span><Pagination page={activePage} totalPages={pages} onPageChange={setPage} /></div>
+      </Card>
+      <Card className="gym-panel">
+        <div className="gym-panel__head"><h2 className="ui-section-title">Cobertura paga</h2></div>
+        <div className="gym-filters">
+          {Object.entries(coverageLabel).map(([key, label]) => <Button key={key}
+            variant={coverage === key ? "primary" : "secondary"} aria-pressed={coverage === key}
+            onClick={() => { setParams(coverage === key ? {} : { cobertura: key }, { replace: true }); setPage(1); }}>
+            {label} <strong>{rows.filter((row) => coverageOf(row) === key).length}</strong>
+          </Button>)}
         </div>
       </Card>
-    </div>
-  );
+    </>}
+  </div>;
 }

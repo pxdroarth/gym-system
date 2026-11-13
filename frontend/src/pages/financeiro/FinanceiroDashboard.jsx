@@ -1,209 +1,177 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import Table from "../../components/ui/Table";
+import Badge from "../../components/ui/Badge";
+import { getContasFinanceiras } from "../../services/contasFinanceiras";
+import { useEffect, useState } from "react";
 import { Banknote, CalendarDays, CircleDollarSign, TrendingDown, TrendingUp, Users } from "lucide-react";
 import { getDashboardKPIs } from "../../services/dashboardService";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
-import EmptyState from "../../components/ui/EmptyState";
 import Input from "../../components/ui/Input";
 import KpiCard from "../../components/ui/KpiCard";
+import MovementChart from "../../components/ui/MovementChart";
+import PageHeader from "../../components/ui/PageHeader";
 import PillButton from "../../components/ui/PillButton";
+import useAuth from "../../hooks/useAuth";
 import getApiErrorMessage from "../../utils/getApiErrorMessage";
 
+const periods = [
+  ["diario", "Diário"], ["semanal", "Semanal"], ["mensal", "Mensal"],
+  ["trimestre", "Trimestre"], ["semestre", "Semestre"], ["anual", "Anual"],
+  ["personalizado", "Personalizado"],
+];
+
+const money = (value) => Number(value ?? 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+const display = (iso) => iso.split("-").reverse().join("/");
+const addDays = (iso, days) => {
+  const date = new Date(iso + "T00:00:00Z");
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+
+// Each bucket uses the same scoped KPI endpoint and accounting rules as the totals.
+function buckets(start, end) {
+  const days = (Date.parse(end) - Date.parse(start)) / 86400000 + 1;
+  const size = Math.max(1, Math.ceil(days / 10));
+  const result = [];
+  for (let from = start; from <= end; from = addDays(from, size)) {
+    const until = addDays(from, size - 1);
+    result.push({ start: from, end: until < end ? until : end });
+  }
+  return result;
+}
+
 export default function FinanceiroDashboard() {
-  const [dados, setDados] = useState(null);
-  const [periodo, setPeriodo] = useState("mensal");
-  const [intervaloDatas, setIntervaloDatas] = useState({ inicio: "", fim: "" });
-  const [erro, setErro] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const { currentUnit } = useAuth();
+  const [selection, setSelection] = useState({ periodo: "mensal" });
+  const [custom, setCustom] = useState(false);
+  const [draft, setDraft] = useState({ inicio: "", fim: "" });
+  const [data, setData] = useState(null);
+  const [series, setSeries] = useState(null);
+  const [error, setError] = useState("");
+  const [chartError, setChartError] = useState("");
+  const [accounts, setAccounts] = useState(null);
+  const [accountsError, setAccountsError] = useState("");
 
   useEffect(() => {
-    if (periodo !== "personalizado" || (intervaloDatas.inicio && intervaloDatas.fim)) {
-      carregarKPIs();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [periodo, intervaloDatas]);
-
-  const carregarKPIs = async () => {
-    try {
-      setLoading(true);
-      const filtros = { periodo };
-      if (periodo === "personalizado" && intervaloDatas.inicio && intervaloDatas.fim) {
-        filtros.data_inicio = intervaloDatas.inicio;
-        filtros.data_fim = intervaloDatas.fim;
+    let active = true;
+    setData(null);
+    setSeries(null);
+    setError("");
+    setChartError("");
+    setAccounts(null);
+    setAccountsError("");
+    async function load() {
+      let totals;
+      try {
+        totals = await getDashboardKPIs(selection);
+        if (!active) return;
+        setData(totals);
+      } catch (failure) {
+        if (active) setError(getApiErrorMessage(failure));
+        return;
       }
-      const data = await getDashboardKPIs(filtros);
-      setDados(data);
-      setErro(false);
-    } catch (error) {
-      console.error("Erro ao carregar dashboard financeiro.");
-      setErro(getApiErrorMessage(error));
-    } finally {
-      setLoading(false);
+      const { data_inicio: start, data_fim: end } = totals.periodo_aplicado;
+      const intervals = buckets(start, end);
+      getContasFinanceiras({ perPage: 7, data_inicial: start, data_final: end })
+        .then((result) => { if (active) setAccounts(result.data); })
+        .catch((failure) => { if (active) setAccountsError(getApiErrorMessage(failure)); });
+      try {
+        const results = intervals.length === 1 ? [totals] : await Promise.all(intervals.map((bucket) =>
+          getDashboardKPIs({ periodo: "personalizado", data_inicio: bucket.start, data_fim: bucket.end })));
+        if (!active) return;
+        let cumulative = 0;
+        setSeries(results.map((result, i) => {
+          const bucket = intervals[i];
+          cumulative += Number(result.lucro_real ?? 0);
+          return {
+            label: display(bucket.start).slice(0, 5),
+            fullLabel: bucket.start === bucket.end ? display(bucket.start) : `${display(bucket.start)} a ${display(bucket.end)}`,
+            entries: result.receita_real_total,
+            expenses: -result.despesas_pagas,
+            balance: cumulative,
+          };
+        }));
+      } catch (failure) {
+        if (active) setChartError(getApiErrorMessage(failure));
+      }
     }
-  };
+    load();
+    return () => { active = false; };
+  }, [selection]);
 
-  const periodos = [
-    { key: "diario", label: "Diário" },
-    { key: "semanal", label: "Semanal" },
-    { key: "mensal", label: "Mensal" },
-    { key: "trimestre", label: "Trimestre" },
-    { key: "semestre", label: "Semestre" },
-    { key: "anual", label: "Anual" },
-    { key: "personalizado", label: "Personalizado" },
+  function choose(periodo) {
+    setCustom(periodo === "personalizado");
+    if (periodo !== "personalizado") setSelection({ periodo });
+  }
+
+  const range = data?.periodo_aplicado;
+  const context = range && (range.data_inicio === range.data_fim ? display(range.data_inicio) :
+    `${display(range.data_inicio)} a ${display(range.data_fim)}`);
+  const cards = data && [
+    ["Receita real total", data.receita_real_total, TrendingUp, "green"],
+    ["Despesas pagas", data.despesas_pagas, TrendingDown, "red"],
+    ["Saldo do período", data.saldo_atual, Banknote, "blue"],
+    ["Receitas a receber", data.a_receber, CircleDollarSign, "amber"],
   ];
 
-  const formatarValor = (valor) =>
-    Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
-  const cardsResumo = useMemo(() => {
-    if (!dados) return [];
-    return [
-      {
-        id: "saldo",
-        label: "Saldo atual",
-        value: formatarValor(dados.saldo_atual),
-        copy: "Posição financeira atual dentro do recorte selecionado.",
-      },
-      {
-        id: "lucro",
-        label: "Lucro real",
-        value: formatarValor(dados.lucro_real),
-        copy: "Leitura consolidada do resultado real do período.",
-      },
-      {
-        id: "pendencias",
-        label: "Pressão de caixa",
-        value: formatarValor((dados.a_receber || 0) - (dados.despesas_a_pagar || 0)),
-        copy: "Diferença entre valores ainda a receber e contas em aberto.",
-      },
-    ];
-  }, [dados]);
-
-  return (
-    <div className="space-y-6">
-      <Card className="finance-filter-card">
-        <div className="entity-toolbar">
-          <div className="entity-toolbar__intro">
-            <span className="entity-toolbar__eyebrow">Leitura financeira</span>
-            <div>
-              <h2 className="ui-section-title">Dashboard financeiro</h2>
-              <p className="ui-section-subtitle">Indicadores monetários restritos conforme o período selecionado.</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="finance-filter-bar">
-          <div className="finance-filter-bar__group">
-            {periodos.map((item) => (
-              <PillButton
-                key={item.key}
-                active={periodo === item.key}
-                onClick={() => {
-                  setPeriodo(item.key);
-                  setIntervaloDatas({ inicio: "", fim: "" });
-                }}
-              >
-                {item.label}
-              </PillButton>
-            ))}
-          </div>
-
-          {periodo === "personalizado" && (
-            <div className="finance-filter-bar__group">
-              <Input
-                label="Data Inicial"
-                type="date"
-                value={intervaloDatas.inicio}
-                onChange={(event) => setIntervaloDatas((estado) => ({ ...estado, inicio: event.target.value }))}
-                className="max-w-44"
-              />
-              <Input
-                label="Data Final"
-                type="date"
-                value={intervaloDatas.fim}
-                onChange={(event) => setIntervaloDatas((estado) => ({ ...estado, fim: event.target.value }))}
-                className="max-w-44"
-              />
-              <Button onClick={carregarKPIs} disabled={!intervaloDatas.inicio || !intervaloDatas.fim}>
-                Filtrar
-              </Button>
-            </div>
-          )}
-        </div>
+  return <div className="gym-module">
+    <PageHeader title="Dashboard Financeiro" subtitle={currentUnit?.nome} />
+    <Card className="gym-panel finance-period">
+      <div className="gym-filters" role="group" aria-label="Período">
+        {periods.map(([key, label]) => <PillButton key={key} active={custom ? key === "personalizado" : key === selection.periodo}
+          onClick={() => choose(key)}>{label}</PillButton>)}
+        {context && <span className="gym-period-context"><CalendarDays size={16} /> {context}</span>}
+      </div>
+      {custom && <form className="gym-filters mt-4" onSubmit={(event) => {
+        event.preventDefault();
+        setSelection({ periodo: "personalizado", data_inicio: draft.inicio, data_fim: draft.fim });
+      }}>
+        <Input label="Data inicial" type="date" required value={draft.inicio} onChange={(e) => setDraft({ ...draft, inicio: e.target.value })} />
+        <Input label="Data final" type="date" min={draft.inicio || undefined} required value={draft.fim} onChange={(e) => setDraft({ ...draft, fim: e.target.value })} />
+        <Button type="submit" disabled={!draft.inicio || !draft.fim || draft.inicio > draft.fim}>Aplicar período</Button>
+      </form>}
+    </Card>
+    {error && <p role="alert">{error}</p>}
+    {!data && !error && <p role="status">Carregando indicadores…</p>}
+    {data && <>
+      <div className="ui-status-grid" aria-label="Indicadores financeiros">
+        {cards.map(([label, value, Icon, tone]) => <KpiCard key={label} label={label} value={money(value)} tone={tone}
+          icon={<Icon size={24} />} subtitle={context} />)}
+      </div>
+      <div className="gym-finance-grid">
+        <Card className="gym-panel">
+          <div className="gym-panel__head"><div><h2 className="ui-section-title">Fluxo de caixa</h2><p>{currentUnit?.nome} · {context}</p></div></div>
+          {chartError ? <p role="alert">{chartError}</p> : series ?
+            <MovementChart title="Fluxo de caixa do período" data={series} format={money}
+              bars={[{ key: "entries", label: "Entradas" }, { key: "expenses", label: "Saídas" }]}
+              line={{ key: "balance", label: "Saldo acumulado no recorte" }} /> : <p role="status">Carregando gráfico…</p>}
+        </Card>
+        <Card className="gym-panel">
+          <div className="gym-panel__head"><div><h2 className="ui-section-title">Contas manuais recentes</h2><p>{context}</p></div>
+            <Link to="/financeiro/contas-financeiras">Ver contas →</Link></div>
+          {accountsError ? <p role="alert">{accountsError}</p> : !accounts ? <p role="status">Carregando contas…</p> :
+            <Table aria-label="Contas manuais recentes"><thead><tr><th>Data</th><th>Descrição</th><th>Valor</th><th>Status</th></tr></thead>
+              <tbody>{accounts.length ? accounts.map((account) => <tr key={account.id}>
+                <td>{display(account.data_lancamento.slice(0, 10))}</td><td>{account.descricao}</td>
+                <td>{money(account.tipo === "despesa" ? -account.valor : account.valor)}</td>
+                <td><Badge tone={account.status === "pago" ? "green" : "amber"}>{account.status === "pago" ? "Pago" : "Pendente"}</Badge></td>
+              </tr>) : <tr><td colSpan={4}>Nenhuma conta manual no recorte.</td></tr>}</tbody>
+            </Table>}
+        </Card>
+      </div>
+      <Card className="gym-panel">
+          <div className="gym-panel__head"><div><h2 className="ui-section-title">Resumo do período</h2><p>{context}</p></div></div>
+          <dl className="gym-ledger">
+            <div><dt>Mensalidades recebidas</dt><dd>{money(data.mensalidades_recebidas)}</dd></div>
+            <div><dt>Vendas recebidas</dt><dd>{money(data.vendas_recebidas)}</dd></div>
+            <div><dt>Receitas avulsas</dt><dd>{money(data.receitas_avulsas)}</dd></div>
+            <div><dt>Lucro real</dt><dd>{money(data.lucro_real)}</dd></div>
+            <div><dt>Despesas a pagar</dt><dd>{money(data.despesas_a_pagar)}</dd></div>
+            <div><dt>Pressão de caixa</dt><dd>{money(Number(data.a_receber) - Number(data.despesas_a_pagar))}</dd></div>
+            <div><dt><Users size={15} /> Clientes pendentes</dt><dd>{data.clientes_pendentes}</dd></div>
+          </dl>
       </Card>
-
-      {erro && <Card className="p-4 text-red-700 font-semibold">{erro}</Card>}
-      {loading && <EmptyState title="Carregando dashboard financeiro..." />}
-
-      {dados && !loading && (
-        <>
-          <div className="ui-status-grid">
-            <KpiCard label="Receita real total" value={formatarValor(dados.receita_real_total)} icon={<TrendingUp size={20} />} tone="green" />
-            <KpiCard label="Lucro real" value={formatarValor(dados.lucro_real)} icon={<CircleDollarSign size={20} />} tone="green" />
-            <KpiCard label="Saldo atual" value={formatarValor(dados.saldo_atual)} icon={<Banknote size={20} />} tone="blue" />
-            <KpiCard label="Despesas pagas" value={formatarValor(dados.despesas_pagas)} icon={<TrendingDown size={20} />} tone="red" />
-          </div>
-
-          <div className="finance-grid">
-            <Card className="finance-panel">
-              <div className="entity-toolbar">
-                <div className="entity-toolbar__intro">
-                  <span className="entity-toolbar__eyebrow">Fluxo de caixa</span>
-                  <div>
-                    <h2 className="ui-section-title">Resumo do período</h2>
-                    <p className="ui-section-subtitle">Peso visual maior para os indicadores monetários críticos desta unidade.</p>
-                  </div>
-                </div>
-              </div>
-              <div className="finance-panel__body">
-                <div className="ui-status-grid">
-                  <KpiCard label="Mensalidades recebidas" value={formatarValor(dados.mensalidades_recebidas)} icon={<CalendarDays size={20} />} tone="green" />
-                  <KpiCard label="Vendas recebidas" value={formatarValor(dados.vendas_recebidas)} icon={<CircleDollarSign size={20} />} tone="blue" />
-                  <KpiCard label="Receitas a receber" value={formatarValor(dados.a_receber)} icon={<Banknote size={20} />} tone="amber" />
-                  <KpiCard label="Despesas a pagar" value={formatarValor(dados.despesas_a_pagar)} icon={<TrendingDown size={20} />} tone="amber" />
-                </div>
-              </div>
-            </Card>
-
-            <Card className="finance-panel">
-              <div className="entity-toolbar">
-                <div className="entity-toolbar__intro">
-                  <span className="entity-toolbar__eyebrow">Governança</span>
-                  <div>
-                    <h2 className="ui-section-title">Leitura rápida</h2>
-                    <p className="ui-section-subtitle">Apoio visual sem alterar os cálculos nem a fonte de verdade.</p>
-                  </div>
-                </div>
-              </div>
-              <div className="finance-panel__body">
-                <div className="finance-list">
-                  {cardsResumo.map((card) => (
-                    <div key={card.id} className="finance-glass-card">
-                      <div className="finance-glass-card__label">{card.label}</div>
-                      <div className="finance-glass-card__value">{card.value}</div>
-                      <div className="finance-glass-card__copy">{card.copy}</div>
-                    </div>
-                  ))}
-                  <div className="finance-list__item">
-                    <div>
-                      <div className="finance-list__title">Clientes pendentes</div>
-                      <div className="finance-list__copy">Quantidade de alunos ainda com pressão financeira no período.</div>
-                    </div>
-                    <div className="finance-list__value">{dados.clientes_pendentes ?? 0}</div>
-                  </div>
-                  <div className="finance-list__item">
-                    <div>
-                      <div className="finance-list__title">Variação de receita</div>
-                      <div className="finance-list__copy">Indicador percentual retornado pelo endpoint atual.</div>
-                    </div>
-                    <div className="finance-list__value">{`${Number(dados.variacao_mensal || 0).toFixed(2)}%`}</div>
-                  </div>
-                </div>
-              </div>
-            </Card>
-          </div>
-        </>
-      )}
-    </div>
-  );
+    </>}
+  </div>;
 }
