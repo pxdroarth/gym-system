@@ -1,7 +1,14 @@
-param([switch]$Playwright)
+param(
+  [switch]$Playwright,
+  [string[]]$PlaywrightFiles,
+  [string]$PlaywrightGrep
+)
 
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
+if (!$Playwright -and ($PlaywrightFiles -or $PlaywrightGrep)) {
+  throw 'Use -Playwright para selecionar arquivos ou cenarios.'
+}
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $temp = [IO.Directory]::CreateTempSubdirectory('gym-smoke-').FullName
 $node = (Get-Command node).Source
@@ -83,8 +90,10 @@ try {
       $webStderr = Join-Path $temp 'frontend.stderr'
       $frontend = Start-Process -FilePath $node -ArgumentList @('node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', $frontendPort, '--strictPort', '--open', 'false') -WorkingDirectory (Join-Path $repo 'frontend') -RedirectStandardOutput $webStdout -RedirectStandardError $webStderr -WindowStyle Hidden -PassThru
       Wait-Server $frontend "$env:PLAYWRIGHT_BASE_URL/login" $webStdout $webStderr
+      $playwrightArgs = @('test') + $PlaywrightFiles
+      if ($PlaywrightGrep) { $playwrightArgs += @('--grep', $PlaywrightGrep) }
       Push-Location $repo
-      try { Invoke-Node node_modules/@playwright/test/cli.js test }
+      try { Invoke-Node node_modules/@playwright/test/cli.js @playwrightArgs }
       finally { Pop-Location }
       return
     }
