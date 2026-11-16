@@ -1,98 +1,41 @@
 # Testes E2E
 
-Esta pasta usa Playwright para validar o frontend real no navegador, cobrindo navegacao, autenticacao e fluxos criticos de interface.
+O Playwright usa o frontend e a API reais. O runner prepara um SQLite descartável com dados fictícios, inicia os serviços em portas locais e remove a base ao terminar.
 
-Neste bloco foi criado apenas o setup minimo e incremental.
+## Execução local
 
-## Estrutura atual
-
-```txt
-tests/
-  e2e/
-    playwright/
-      smoke.spec.js
-    fixtures/
-    screenshots/
-    traces/
-```
-
-## Como rodar
-
-Pela raiz:
-
-```cmd
-npm run e2e
-```
-
-Alternativa direta:
-
-```cmd
-tests\scripts\e2e-playwright.cmd
-```
-
-O setup sobe:
-
-- backend em `http://127.0.0.1:3001`
-- backend em `http://localhost:3001`
-- frontend Vite em `http://localhost:5173`
-
-## Auth E2E
-
-Para a suite real de autenticacao, defina credenciais locais por variavel de ambiente:
+Na raiz do repositório, com Node 24.22.3, dependências instaladas no backend e no frontend e PowerShell 7, instale o Chromium uma vez com `npx.cmd playwright install chromium`.
 
 ```powershell
-$env:E2E_LOGIN="admin"
-$env:E2E_PASSWORD="SUA_SENHA_LOCAL"
-npm run e2e:auth
+# Um cenário pelo título no módulo de vendas
+./tests/scripts/smoke-sqlite.ps1 -Playwright -PlaywrightFiles vendas.spec.js -PlaywrightGrep 'operador de acesso'
+
+# Todo o módulo de vendas
+./tests/scripts/smoke-sqlite.ps1 -Playwright -PlaywrightFiles vendas.spec.js
+
+# Suíte crítica, igual à execução automática do PR
+./tests/scripts/smoke-sqlite.ps1 -Playwright -PlaywrightFiles auth.spec.js,vendas.spec.js
+
+# Suíte completa
+./tests/scripts/smoke-sqlite.ps1 -Playwright
 ```
 
-Alternativa CMD:
+`-PlaywrightGrep` aceita uma expressão regular sobre o título do teste. `-PlaywrightFiles` aceita uma lista de filtros de arquivo. Use um cenário para iterar sobre um defeito conhecido e o módulo inteiro para conferir o fluxo junto às recusas. Amplie para a suíte completa ao mudar login, refresh ou logout, permissões por perfil ou troca de unidade. Esses ajustes podem afetar a autenticação, o acesso ao cadastro e o estoque de outra unidade.
 
-```cmd
-set E2E_LOGIN=admin
-set E2E_PASSWORD=SUA_SENHA_LOCAL
-npm run e2e:auth
-```
+O relatório local fica em `tests/e2e/playwright-report/`. Em caso de falha, os resultados podem incluir captura e trace em `tests/e2e/results/`.
 
-Cobertura inicial:
+## Pull requests
 
-- login pela UI
-- acesso a rota protegida
-- reload mantendo sessao via refresh cookie
-- ausencia de bearer em `localStorage` e `sessionStorage`
-- logout
-- bloqueio de rota protegida apos logout
+**Playwright E2E**, no workflow **Node 24**, executa automaticamente `auth.spec.js` e `vendas.spec.js` em PRs abertos, reabertos ou atualizados que estejam prontos para revisão. O evento `ready_for_review` inicia a execução quando o PR sai do rascunho, inclusive sem novo push. O job faz checkout do SHA de origem do PR recebido no evento e verifica o `HEAD` antes de instalar as dependências. Em **Details**, confira a etapa **Verify checked-out commit** e o resultado dos testes para o commit atual. O job **validate** continua executando os smokes de API e o build nos PRs.
 
-Se os browsers ainda nao estiverem instalados, rode:
+## Rodada completa antes do merge
 
-```cmd
-npx playwright install chromium
-```
+Com o disparo manual disponível na branch padrão, abra **Actions → Node 24 → Run workflow**, selecione `main` e informe o número do PR em `pr_number`. A seleção de `main` carrega a definição do workflow. O job **Playwright E2E completo** consulta o SHA atual do PR, faz checkout desse commit e roda todos os arquivos da suíte.
 
-## Venda com SQLite descartável
+Também é possível disparar pelo GitHub CLI, trocando 123 pelo número do PR.
 
 ```powershell
-npx.cmd playwright install chromium
-pwsh -NoProfile -ExecutionPolicy Bypass -File tests/scripts/smoke-sqlite.ps1 -Playwright
+gh workflow run node24.yml --ref main -f pr_number=123
 ```
 
-O runner cria uma cópia temporária do backend, semeia um SQLite descartável e sobe a API e o frontend em portas locais livres. A suíte verifica login, venda pela recepção na Matriz, venda pelo dono na Filial, exibição da venda após um filtro histórico, baixa do estoque e recusa ao operador de acesso. O check nos PRs é **Playwright E2E**, no workflow **Node 24**.
-
-## Cenários futuros
-
-- login pela UI
-- dashboard
-- logout
-- permissoes visuais
-- financeiro restrito
-- historico restrito
-- acesso direto por rota protegida
-- fluxo de pagamento
-- fluxo de aluno
-- consolidado somente leitura
-
-## Estado atual
-
-- sanity test de `/login`
-- screenshots e traces apenas em falha
-- base pronta para blocos de auth, permissoes e acesso
+Confira o número do PR e o SHA no resumo da execução antes de usar o resultado para a rodada final. Se o PR receber outro commit, dispare a suíte completa novamente.

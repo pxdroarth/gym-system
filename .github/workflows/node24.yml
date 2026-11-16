@@ -2,12 +2,21 @@ name: Node 24
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Número do PR a validar com a suíte completa
+        required: true
+        type: string
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
   validate:
+    if: github.event_name == 'pull_request'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v6
@@ -37,12 +46,44 @@ jobs:
         run: npm.cmd run build:frontend
 
   playwright:
-    name: Playwright E2E
+    name: ${{ github.event_name == 'workflow_dispatch' && 'Playwright E2E completo' || 'Playwright E2E' }}
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     runs-on: windows-latest
     steps:
+      - name: Resolve PR head
+        id: target
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_PR: ${{ github.event.pull_request.number }}
+          EVENT_SHA: ${{ github.event.pull_request.head.sha }}
+          MANUAL_PR: ${{ inputs.pr_number }}
+        run: |
+          $pr = $env:EVENT_PR
+          $sha = $env:EVENT_SHA
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+            $pr = $env:MANUAL_PR
+            if ($pr -notmatch '^[1-9][0-9]*$') { throw 'Informe um número de PR válido.' }
+            $sha = gh api "repos/$env:GITHUB_REPOSITORY/pulls/$pr" --jq '.head.sha'
+            if ($LASTEXITCODE -ne 0) { throw "Não foi possível consultar o PR #$pr." }
+          }
+          if ($sha -notmatch '^[0-9a-f]{40}$') { throw 'SHA do PR inválido.' }
+          "sha=$sha" >> $env:GITHUB_OUTPUT
+          "PR #$pr · commit $sha" >> $env:GITHUB_STEP_SUMMARY
       - uses: actions/checkout@v6
         with:
+          ref: ${{ steps.target.outputs.sha }}
           persist-credentials: false
+      - name: Verify checked-out commit
+        shell: pwsh
+        env:
+          EXPECTED_SHA: ${{ steps.target.outputs.sha }}
+        run: |
+          $actual = git rev-parse HEAD
+          if ($LASTEXITCODE -ne 0 -or $actual -ne $env:EXPECTED_SHA) {
+            throw "Commit esperado $env:EXPECTED_SHA, obtido $actual."
+          }
+          Write-Host "Testando commit $actual"
       - uses: actions/setup-node@v6
         with:
           node-version-file: .node-version
@@ -53,6 +94,11 @@ jobs:
       - run: npm.cmd ci
       - run: npm.cmd ci --prefix frontend
       - run: npx.cmd playwright install chromium
-      - name: Run Playwright on disposable SQLite
+      - name: Run critical suite on disposable SQLite
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        run: ./tests/scripts/smoke-sqlite.ps1 -Playwright -PlaywrightFiles auth.spec.js,vendas.spec.js
+      - name: Run full suite on disposable SQLite
+        if: github.event_name == 'workflow_dispatch'
         shell: pwsh
         run: ./tests/scripts/smoke-sqlite.ps1 -Playwright
