@@ -150,10 +150,18 @@ export default function VendasProdutosPage() {
       tentativas.current.set(registro, tentativa);
       try { sessionStorage.setItem(registro, JSON.stringify(tentativa)); } catch { /* storage opcional */ }
       await createVendaProduto(tentativa.payload, tentativa.chave, currentUnit.id);
-      toast.success("Venda registrada com sucesso!");
+      const filtrado = recorte.inicio || recorte.fim;
+      toast.success(filtrado ? "Venda registrada. Exibindo as vendas mais recentes." : "Venda registrada com sucesso!");
       fecharModalVenda();
       carregarProdutos();
-      carregarVendas();
+      if (filtrado) {
+        setDataInicial("");
+        setDataFinal("");
+        setPeriodoRapido("personalizado");
+        setRecorte({ inicio: "", fim: "" });
+      }
+      if (pagina !== 1) setPagina(1);
+      if (!filtrado && pagina === 1) carregarVendas();
     } catch (error) {
       toast.error(getApiErrorMessage(error));
       if (falhaSemConfirmacao(error) || error.response?.status === 408) return;
@@ -198,7 +206,7 @@ export default function VendasProdutosPage() {
       <PageHeader
         title="Vendas de Produtos"
         subtitle={currentUnit?.nome}
-        actions={podeVender && <Button onClick={() => setModalVendaAberto(true)}>+ Registrar Venda</Button>}
+        actions={podeVender && <Button onClick={() => setModalVendaAberto(true)}>Nova venda</Button>}
       />
 
       <div className="ui-status-grid">
