@@ -35,3 +35,24 @@ jobs:
         env:
           NODE_ENV: production
         run: npm.cmd run build:frontend
+
+  playwright:
+    name: Playwright E2E
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+      - run: npm.cmd ci
+      - run: npm.cmd ci --prefix frontend
+      - run: npx.cmd playwright install chromium
+      - name: Run Playwright on disposable SQLite
+        shell: pwsh
+        run: ./tests/scripts/smoke-sqlite.ps1 -Playwright

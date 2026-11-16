@@ -4,6 +4,7 @@ export default function PillButton({ active = false, className = "", children, .
   return (
     <button
       type="button"
+      aria-pressed={active}
       className={["ui-pill-button", active ? "ui-pill-button--active" : "", className].filter(Boolean).join(" ")}
       {...props}
     >

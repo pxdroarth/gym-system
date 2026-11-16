@@ -1,9 +1,33 @@
+param([switch]$Playwright)
+
 $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $false
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $temp = [IO.Directory]::CreateTempSubdirectory('gym-smoke-').FullName
 $node = (Get-Command node).Source
 $api = $null
+$frontend = $null
+
+function Get-FreePort {
+  $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
+  $listener.Start()
+  try { $listener.LocalEndpoint.Port }
+  finally { $listener.Stop() }
+}
+
+function Wait-Server($Process, $Url, $Stdout, $Stderr) {
+  foreach ($attempt in 1..60) {
+    if ($Process.HasExited) { break }
+    try {
+      Invoke-WebRequest $Url -TimeoutSec 2 | Out-Null
+      return
+    } catch {
+      Start-Sleep -Milliseconds 250
+    }
+  }
+  Get-Content -LiteralPath $Stdout, $Stderr
+  throw "Servidor indisponivel: $Url"
+}
 
 function Invoke-Node {
   Write-Host "node $($args -join ' ')"
@@ -31,11 +55,20 @@ try {
   $env:SMOKE_PLATFORM_LOGIN = 'admin'
   $env:SMOKE_PLATFORM_PASSWORD = $env:BOOTSTRAP_ADMIN_PASSWORD
 
-  $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
-  $listener.Start()
-  try { $env:PORT = [string]$listener.LocalEndpoint.Port }
-  finally { $listener.Stop() }
+  $env:PORT = [string](Get-FreePort)
   $baseUrl = "http://127.0.0.1:$env:PORT"
+  if ($Playwright) {
+    do { $frontendPort = Get-FreePort } while ($frontendPort -eq [int]$env:PORT)
+    $env:PLAYWRIGHT_BASE_URL = "http://127.0.0.1:$frontendPort"
+    $env:PLAYWRIGHT_API_URL = $baseUrl
+    $env:CORS_ORIGINS = $env:PLAYWRIGHT_BASE_URL
+    $env:FRONTEND_URL = $env:PLAYWRIGHT_BASE_URL
+    $env:VITE_API_URL = $baseUrl
+    $env:VITE_DEV_AUTO_LOGIN = 'false'
+    $env:E2E_LOGIN = 'owner'
+    $env:E2E_PASSWORD = $env:SEED_DEV_PASSWORD
+    $env:E2E_DISPOSABLE_SQLITE = 'true'
+  }
   $stdout = Join-Path $temp 'api.stdout'
   $stderr = Join-Path $temp 'api.stderr'
   Push-Location $temp
@@ -43,20 +76,17 @@ try {
     Invoke-Node --version
     Invoke-Node backend/scripts/seedDev.js
     $api = Start-Process -FilePath $node -ArgumentList 'backend/server.js' -WorkingDirectory $temp -RedirectStandardOutput $stdout -RedirectStandardError $stderr -WindowStyle Hidden -PassThru
-    $ready = $false
-    foreach ($attempt in 1..30) {
-      if ($api.HasExited) { break }
-      try {
-        Invoke-RestMethod "$baseUrl/health" -TimeoutSec 2 | Out-Null
-        $ready = $true
-        break
-      } catch {
-        Start-Sleep -Milliseconds 250
-      }
-    }
-    if (!$ready) {
-      Get-Content -LiteralPath $stdout, $stderr
-      throw 'A API da base descartavel nao iniciou.'
+    Wait-Server $api "$baseUrl/health" $stdout $stderr
+
+    if ($Playwright) {
+      $webStdout = Join-Path $temp 'frontend.stdout'
+      $webStderr = Join-Path $temp 'frontend.stderr'
+      $frontend = Start-Process -FilePath $node -ArgumentList @('node_modules/vite/bin/vite.js', '--host', '127.0.0.1', '--port', $frontendPort, '--strictPort', '--open', 'false') -WorkingDirectory (Join-Path $repo 'frontend') -RedirectStandardOutput $webStdout -RedirectStandardError $webStderr -WindowStyle Hidden -PassThru
+      Wait-Server $frontend "$env:PLAYWRIGHT_BASE_URL/login" $webStdout $webStderr
+      Push-Location $repo
+      try { Invoke-Node node_modules/@playwright/test/cli.js test }
+      finally { Pop-Location }
+      return
     }
 
     # Identidade prepara a Rede B para os smokes que dependem dela.
@@ -65,14 +95,19 @@ try {
       'smoke-isolamento-transacao', 'smoke-a06-conta-fechamento',
       'smoke-financeiro-isolamento', 'smoke-l02', 'smoke-l02-ciclos',
       'smoke-cobertura', 'smoke-f0-acesso-datas', 'smoke-acesso', 'smoke-l04-integridade',
-      'smoke-diagnostico-consistencia'
+      'smoke-diagnostico-consistencia', 'smoke-l04-estorno-venda'
     )) {
       Invoke-Node "tests/scripts/$smoke.js" "--base-url=$baseUrl" '--db=backend/academia.sqlite'
     }
+    Invoke-Node 'tests/scripts/smoke-l04-estorno-venda-datas.js'
   } finally {
     Pop-Location
   }
 } finally {
+  if ($frontend -and !$frontend.HasExited) {
+    Stop-Process -Id $frontend.Id
+    $frontend.WaitForExit()
+  }
   if ($api -and !$api.HasExited) {
     Stop-Process -Id $api.Id
     $api.WaitForExit()

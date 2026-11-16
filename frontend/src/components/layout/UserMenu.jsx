@@ -24,7 +24,7 @@ export default function UserMenu() {
         <div className="app-topbar__user-name">{user?.nome || user?.login || "Operador"}</div>
         <div className="text-[0.65rem] text-slate-500 font-semibold">{getRoleLabel(user?.papel)}</div>
       </div>
-      <Button variant="ghost" size="sm" onClick={logout} title="Sair" className="border-transparent">
+      <Button variant="ghost" size="sm" onClick={logout} title="Sair" aria-label="Sair" className="border-transparent">
         <LogOut size={14} />
       </Button>
     </div>

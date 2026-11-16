@@ -1,5 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, Boxes, PackagePlus, ShieldAlert } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
+import Input from "../../components/ui/Input";
+import Select from "../../components/ui/Select";
 import { toast } from "react-toastify";
 import { deleteProduto, fetchProdutos } from "../../services/produtoService";
 import Badge from "../../components/ui/Badge";
@@ -27,7 +30,10 @@ function estoqueBaixo(produto) {
 }
 
 export default function ProdutosPage() {
-  const { user } = useAuth();
+  const { user, currentUnit } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const [nivel, setNivel] = useState("");
+  const busca = params.get("busca") || "";
   const podeGerenciar = userHasUiPermission(user, UI_PERMISSIONS.PRODUTOS_GERENCIAR);
   const [produtos, setProdutos] = useState([]);
   const [editProduto, setEditProduto] = useState(null);
@@ -84,11 +90,14 @@ export default function ProdutosPage() {
     [produtos]
   );
 
+  const filtrados = produtos.filter((p) => p.nome.toLocaleLowerCase("pt-BR").includes(busca.trim().toLocaleLowerCase("pt-BR"))
+    && (nivel === "" || (nivel === "zerado" ? Number(p.estoque) === 0 : estoqueBaixo(p) && Number(p.estoque) > 0)));
+
   return (
-    <div className="space-y-6">
+    <div className="gym-module">
       <PageHeader
         title="Produtos"
-        subtitle="Catálogo operacional da unidade, criticidade de estoque e manutenção rápida de itens."
+        subtitle={currentUnit?.nome}
         actions={podeGerenciar && <Button onClick={abrirModalNovo}>+ Novo Produto</Button>}
       />
 
@@ -99,38 +108,18 @@ export default function ProdutosPage() {
         <KpiCard label="Valor estimado" value={formatarMoeda(valorCatalogo)} icon={<ShieldAlert size={20} />} tone="gray" />
       </div>
 
+      <Card className="gym-panel gym-filters">
+        <Input label="Buscar produto" type="search" value={busca}
+          onChange={(event) => setParams(event.target.value ? { busca: event.target.value } : {}, { replace: true })} />
+        <Select label="Estoque" value={nivel} onChange={(event) => setNivel(event.target.value)}>
+          <option value="">Todos</option><option value="baixo">Estoque baixo</option><option value="zerado">Sem estoque</option>
+        </Select>
+        <Button variant="secondary" onClick={() => { setNivel(""); setParams({}, { replace: true }); }}>Limpar filtros</Button>
+      </Card>
       <Card>
-        <div className="entity-toolbar">
-          <div className="entity-toolbar__intro">
-            <span className="entity-toolbar__eyebrow">Catálogo operacional</span>
-            <div>
-              <h2 className="ui-section-title">Produtos cadastrados</h2>
-              <p className="ui-section-subtitle">Leitura mais clara de criticidade, preço e estoque sem alterar o fluxo atual.</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-5 space-y-5">
-          <div className="entity-summary-grid">
-            <div className="entity-summary-card">
-              <div className="entity-summary-card__label">Itens ativos</div>
-              <div className="entity-summary-card__value">{produtos.length}</div>
-              <div className="entity-summary-card__copy">Base atual de produtos da unidade.</div>
-            </div>
-            <div className="entity-summary-card">
-              <div className="entity-summary-card__label">Atenção de estoque</div>
-              <div className="entity-summary-card__value">{totalEstoqueBaixo}</div>
-              <div className="entity-summary-card__copy">Itens com baixo volume para operação.</div>
-            </div>
-            <div className="entity-summary-card">
-              <div className="entity-summary-card__label">Disponibilidade</div>
-              <div className="entity-summary-card__value">{estoqueTotal}</div>
-              <div className="entity-summary-card__copy">Unidades somadas em estoque no momento.</div>
-            </div>
-          </div>
-
-          {produtos.length === 0 ? (
-            <EmptyState title="Nenhum produto encontrado." description="Cadastre o primeiro produto para iniciar o controle." />
+        <div className="p-4">
+          {filtrados.length === 0 ? (
+            <EmptyState title="Nenhum produto encontrado." description="Confira a busca e o filtro de estoque." />
           ) : (
             <Table>
               <thead>
@@ -143,7 +132,7 @@ export default function ProdutosPage() {
                 </tr>
               </thead>
               <tbody>
-                {produtos.map((produto) => (
+                {filtrados.map((produto) => (
                   <tr key={produto.id}>
                     <td>
                       <div className="product-table__item">
@@ -156,7 +145,7 @@ export default function ProdutosPage() {
                         </div>
                         <div className="product-table__name">
                           <span className="font-semibold">{produto.nome}</span>
-                          <span className="product-table__description">{produto.descricao || "Sem descrição operacional."}</span>
+                          <span className="product-table__description">{produto.descricao || "Sem descrição"}</span>
                         </div>
                       </div>
                     </td>

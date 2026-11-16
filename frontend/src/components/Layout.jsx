@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
+import useAuth from "../hooks/useAuth";
 import useMediaQuery, { COMPACT_SHELL_QUERY } from "../hooks/useMediaQuery";
 
 // Desktop: menu lateral fixo (recolhivel pelo botao do topo).
@@ -12,6 +13,7 @@ export default function Layout() {
   const [gavetaAberta, setGavetaAberta] = useState(false);
   const botaoMenuRef = useRef(null);
   const location = useLocation();
+  const { currentUnit } = useAuth();
 
   const fecharGaveta = useCallback((devolverFoco = false) => {
     setGavetaAberta(false);
@@ -54,6 +56,7 @@ export default function Layout() {
         compacto={compacto}
         gavetaAberta={gavetaAberta}
         onFechar={() => fecharGaveta(true)}
+        onAlternar={toggleMenu}
       />
       {compacto && gavetaAberta && (
         <div className="app-drawer-backdrop" onClick={() => fecharGaveta(true)} aria-hidden="true" />
@@ -68,7 +71,7 @@ export default function Layout() {
           botaoMenuRef={botaoMenuRef}
         />
 
-        <main className="app-content" role="main">
+        <main className="app-content" key={currentUnit?.id}>
           <Outlet />
         </main>
       </div>

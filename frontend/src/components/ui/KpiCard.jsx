@@ -15,12 +15,12 @@ export default function KpiCard({ label, value, subtitle, icon, tone = "blue", o
   return (
     <Card className={`ui-kpi-card ${toneClass[tone] || toneClass.blue}`}>
       <Component className="ui-kpi-card__inner" onClick={onClick} type={onClick ? "button" : undefined}>
-        <div>
+        {icon && <div className="ui-kpi-card__icon">{icon}</div>}
+        <div className="ui-kpi-card__text">
           <div className="ui-kpi-card__label">{label}</div>
           <div className="ui-kpi-card__value">{value}</div>
-          {subtitle && <div className="ui-kpi-card__subtitle">{subtitle}</div>}
         </div>
-        {icon && <div className="ui-kpi-card__icon">{icon}</div>}
+        {subtitle && <div className="ui-kpi-card__subtitle">{subtitle}</div>}
       </Component>
     </Card>
   );

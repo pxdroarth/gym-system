@@ -69,7 +69,16 @@ Se os browsers ainda nao estiverem instalados, rode:
 npx playwright install chromium
 ```
 
-## Cenarios futuros
+## Venda com SQLite descartável
+
+```powershell
+npx.cmd playwright install chromium
+pwsh -NoProfile -ExecutionPolicy Bypass -File tests/scripts/smoke-sqlite.ps1 -Playwright
+```
+
+O runner cria uma cópia temporária do backend, semeia um SQLite descartável e sobe a API e o frontend em portas locais livres. A suíte verifica login, venda pela recepção na Matriz, venda pelo dono na Filial, exibição da venda após um filtro histórico, baixa do estoque e recusa ao operador de acesso. O check nos PRs é **Playwright E2E**, no workflow **Node 24**.
+
+## Cenários futuros
 
 - login pela UI
 - dashboard
@@ -80,7 +89,6 @@ npx playwright install chromium
 - acesso direto por rota protegida
 - fluxo de pagamento
 - fluxo de aluno
-- fluxo de venda
 - consolidado somente leitura
 
 ## Estado atual

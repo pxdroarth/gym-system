@@ -6,6 +6,8 @@ import ProtectedRoute from "./components/auth/ProtectedRoute";
 import Layout from "./components/Layout";
 import ToastProvider from "./components/ui/ToastProvider";
 import { AuthProvider } from "./contexts/AuthContext";
+import AcessosPage from "./pages/AcessosPage";
+import RelatoriosPage from "./pages/RelatoriosPage";
 import Dashboard from "./pages/Dashboard";
 import AlunosPage from "./pages/alunos/AlunosPage";
 import FormAlunoPage from "./pages/alunos/FormAlunoPage";
@@ -36,6 +38,8 @@ function App() {
             <Route element={<Layout />}>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/acessos" element={<AcessosPage />} />
+              <Route path="/relatorios" element={<RelatoriosPage />} />
 
               <Route path="/alunos" element={<AlunosPage />} />
               <Route path="/alunos/novo" element={<RoleGate permission={UI_PERMISSIONS.ALUNOS_EDITAR} fallback={<Navigate to="/alunos" replace />}><FormAlunoPage /></RoleGate>} />

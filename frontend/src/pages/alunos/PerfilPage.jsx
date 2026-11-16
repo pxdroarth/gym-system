@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, CalendarPlus, CreditCard, Edit3, Phone, ShieldCheck, UserRound } from "lucide-react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import ToastNotification from "../../components/ToastNotification";
+import { accessDateTime, allowedAccess } from "../../components/AccessHistory";
 import useAuth from "../../hooks/useAuth";
 import ModalContratarRenovarPlano from "./ModalContratarRenovarPlano";
 import Modal from "../../components/ui/Modal";
@@ -16,6 +17,7 @@ import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import EmptyState from "../../components/ui/EmptyState";
+import PageHeader from "../../components/ui/PageHeader";
 import Pagination from "../../components/ui/Pagination";
 import Table from "../../components/ui/Table";
 import { TabButton, Tabs } from "../../components/ui/Tabs";
@@ -116,7 +118,7 @@ function InfoItem({ label, value }) {
 }
 
 export default function PerfilPage() {
-  const { user } = useAuth();
+  const { user, currentUnit } = useAuth();
   const { id } = useParams();
   const navigate = useNavigate();
 
@@ -192,7 +194,7 @@ export default function PerfilPage() {
   }, []);
 
   const planoAtual = useMemo(() => planos.find((plano) => plano.id === aluno?.plano_id), [planos, aluno]);
-  const ultimoAcesso = acessos[0]?.data_hora ? new Date(acessos[0].data_hora).toLocaleString("pt-BR") : "Sem registros";
+  const ultimoAcesso = acessos[0]?.data_hora ? accessDateTime(acessos[0].data_hora) : "Sem registros";
   const mensalidadesPendentes = mensalidades.filter((mensalidade) => mensalidade.status === "em_aberto" || mensalidade.status === "parcial").length;
   const canRegistrarPagamento = userHasUiPermission(user, UI_PERMISSIONS.PAGAMENTOS_REGISTRAR);
   const canContratarRenovar = userHasUiPermission(user, UI_PERMISSIONS.PLANOS_CONTRATAR_RENOVAR) && canRegistrarPagamento;
@@ -301,7 +303,12 @@ export default function PerfilPage() {
   const totalPaginasAcessos = Math.max(1, Math.ceil(totalAcessos / 10));
 
   return (
-    <div className="space-y-6">
+    <div className="gym-module">
+      <nav aria-label="Localização"><Link className="gym-back-link" to="/alunos">Alunos</Link> <span aria-hidden="true">›</span> Perfil do Aluno</nav>
+      <PageHeader title="Perfil do Aluno" subtitle={currentUnit?.nome} actions={<>
+        {canEditarAluno && <Button variant="secondary" onClick={() => navigate(`/alunos/editar/${aluno.id}`)}><Edit3 size={15} /> Editar aluno</Button>}
+        <Button onClick={testarAcesso} disabled={simulandoAcesso}><Activity size={15} /> {simulandoAcesso ? "Testando…" : "Testar acesso"}</Button>
+      </>} />
       <ToastNotification message={toastMsg} onClose={() => setToastMsg(null)} />
 
       <Card className="profile-hero">
@@ -320,16 +327,6 @@ export default function PerfilPage() {
               </div>
             </div>
 
-            <div className="flex gap-2 flex-wrap">
-              {canEditarAluno && (
-                <Button variant="secondary" onClick={() => navigate(`/alunos/editar/${aluno.id}`)}>
-                  <Edit3 size={15} /> Editar
-                </Button>
-              )}
-              <Button onClick={testarAcesso} disabled={simulandoAcesso}>
-                <Activity size={15} /> {simulandoAcesso ? "Testando..." : "Testar Acesso"}
-              </Button>
-            </div>
           </div>
 
           <div className="profile-hero__stats">
@@ -342,7 +339,7 @@ export default function PerfilPage() {
               <div className="profile-hero__stat-value text-base leading-snug">{ultimoAcesso}</div>
             </div>
             <div className="profile-hero__stat">
-              <div className="profile-hero__stat-label">Pendencias admin.</div>
+              <div className="profile-hero__stat-label">Pendências na página de mensalidades</div>
               <div className="profile-hero__stat-value">{mensalidadesPendentes}</div>
             </div>
             <div className="profile-hero__stat">
@@ -370,8 +367,8 @@ export default function PerfilPage() {
           <Card className="p-5">
             <div className="ui-section-header px-0 pt-0">
               <div>
-                <h2 className="ui-section-title">Resumo operacional do aluno</h2>
-                <p className="ui-section-subtitle">Leitura principal do cadastro, situação e plano ativo.</p>
+                <h2 className="ui-section-title">Informações pessoais e operacionais</h2>
+                <p className="ui-section-subtitle">Cadastro, situação e plano atual.</p>
               </div>
             </div>
             <div className="ui-info-grid mt-5">
@@ -388,8 +385,7 @@ export default function PerfilPage() {
           </Card>
 
           <Card className="profile-side-card">
-            <h3 className="profile-side-card__title">Visão rápida</h3>
-            <p className="profile-side-card__copy">Bloco de leitura rápida para operação da unidade, sem alterar regras do domínio.</p>
+            <h3 className="profile-side-card__title">Contato e situação</h3>
 
             <div className="profile-side-list">
               <div className="profile-side-list__item">
@@ -414,6 +410,33 @@ export default function PerfilPage() {
                 <div className="profile-side-list__value">{aluno.status || "-"}</div>
               </div>
             </div>
+          </Card>
+        </div>
+      )}
+
+      {abaAtiva === "informacoes" && (
+        <div className="gym-columns">
+          <Card className="gym-panel">
+            <div className="gym-panel__head">
+              <h2 className="ui-section-title">Últimas mensalidades</h2>
+              <Button size="sm" variant="secondary" onClick={() => setAbaAtiva("mensalidades")}>Ver mensalidades</Button>
+            </div>
+            <Table><thead><tr><th>Vencimento</th><th>Valor</th><th>Situação</th></tr></thead>
+              <tbody>{mensalidades.length ? mensalidades.slice(0, 3).map((item) => <tr key={item.id}>
+                <td>{formatarData(item.vencimento)}</td><td>{formatarMoeda(item.valor_cobrado)}</td><td>{badgeMensalidade(item.status)}</td>
+              </tr>) : <tr><td colSpan={3}>Nenhuma mensalidade registrada.</td></tr>}</tbody>
+            </Table>
+          </Card>
+          <Card className="gym-panel">
+            <div className="gym-panel__head">
+              <h2 className="ui-section-title">Últimos acessos</h2>
+              <Button size="sm" variant="secondary" onClick={() => setAbaAtiva("acessos")}>Ver acessos</Button>
+            </div>
+            <Table><thead><tr><th>Data</th><th>Resultado</th></tr></thead>
+              <tbody>{acessos.length ? acessos.slice(0, 3).map((item) => <tr key={item.id}>
+                <td>{accessDateTime(item.data_hora)}</td><td><Badge tone={allowedAccess(item) ? "green" : "red"}>{allowedAccess(item) ? "Permitido" : "Negado"}</Badge></td>
+              </tr>) : <tr><td colSpan={2}>Nenhum acesso registrado.</td></tr>}</tbody>
+            </Table>
           </Card>
         </div>
       )}
@@ -603,7 +626,7 @@ export default function PerfilPage() {
               <tbody>
                 {acessos.map((acesso) => (
                   <tr key={acesso.id}>
-                    <td>{new Date(acesso.data_hora).toLocaleString("pt-BR")}</td>
+                    <td>{accessDateTime(acesso.data_hora)}</td>
                     <td>{badgeAcesso(acesso.resultado)}</td>
                   </tr>
                 ))}
