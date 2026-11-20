@@ -524,6 +524,18 @@ Decisões de 16/11/2026 aplicadas à venda de produto.
 - **Vendas anteriores.** Vendas sem recebimentos registrados aparecem como "Meio não registrado"; nenhum meio é atribuído sem evidência.
 - **Validação:** `tests/scripts/smoke-l04-venda-pagamento.js` e `tests/e2e/playwright/vendas-pagamento.spec.js`.
 
+### L04 — Estorno de pagamento do aluno
+
+Decisões de 20/11/2026 (sublote A). Segue o modelo do estorno de venda.
+
+- **Papéis.** Solicitam recepção, gestor, financeiro, admin e dono, sempre com motivo. Aprovam no sistema admin e dono. Recepção, financeiro, admin e dono registram a autorização que o dono ou admin deu por WhatsApp ou e-mail, informando autorizador, canal, data e referência. Executam financeiro, admin e dono. Quem solicitou nunca autoriza o próprio pedido e ninguém se informa como autorizador. O dono pode exigir na unidade três contas distintas entre solicitante, autorizador e executor.
+- **Alcance.** Cada pedido estorna um pagamento da mensalidade, sempre pelo valor integral desse pagamento; há no máximo um pedido ativo por pagamento. A competência e as datas de cobertura não mudam.
+- **Meio.** Pagamentos novos gravam o meio (dinheiro, Pix, cartão de crédito ou débito, transferência). Pagamentos anteriores aparecem como "Meio não registrado"; nenhum meio é atribuído sem evidência.
+- **Devolução.** A execução sugere o meio do pagamento. Outro meio exige motivo e referência do comprovante. O operador confirma a devolução ao aluno; para pagamento sem meio registrado, informar o meio da devolução é opcional.
+- **Efeitos.** Numa só transação: pagamento marcado como estornado, contrapartida na data local da unidade, situação da mensalidade recalculada pelo saldo (paga, parcial, em aberto ou vencida), devolução registrada e auditoria. O acesso é reavaliado na hora e o resultado é mostrado ao operador. Mês do pagamento, do lançamento original ou do estorno fechado: recusa sem gravar; após reabertura, a mesma aprovação pode ser executada. Pagamento sem receita original ativa no escopo: `409 PAGAMENTO_SEM_RECEITA_ORIGINAL` (conciliação).
+- **Telas.** No perfil do aluno, o recebimento informa o meio e cada mensalidade abre "Pagamentos e estornos". No Financeiro, a fila "Estornos de pagamento" filtra por estado e permite ao dono ligar as três contas distintas.
+- **Validação:** `tests/scripts/smoke-l04-estorno-pagamento.js` e `tests/e2e/playwright/estorno-pagamento.spec.js`.
+
 ## 15. Critérios de aceite do produto
 
 O produto pode ser considerado pronto para PostgreSQL/deploy de portfólio quando:
