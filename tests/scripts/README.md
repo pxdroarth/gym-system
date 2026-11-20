@@ -313,6 +313,16 @@ node tests\scripts\smoke-l04-estorno-venda.js --base-url=http://localhost:3001 -
 
 Cobre permissões por etapa e papel, pedido único por venda (reenvio e solicitações concorrentes devolvem o existente), execução sem aprovação (inclusive pelas rotas diretas legadas), escopo de Rede e Unidade (também do autorizador externo), autoaprovação antes e depois da mudança de papel, autoautorização, validação da autorização externa, aprovação direta do gestor, autorização externa por WhatsApp e e-mail registrada pelo atendente e pelo financeiro, o atendente solicitando e executando, quantidades inválidas, reposição parcial e zero, corrida entre aprovação direta e registro externo, a mesma aprovação executada em paralelo, repetição, mês fechado com nova tentativa após reabertura e a opção de três contas distintas. Cada recusa confere venda, estoque, lançamentos, estados e auditoria antes e depois.
 
+## `smoke-l04-venda-pagamento.js` (L04 · Pagamento dividido e devolução por meio)
+
+Rode em base descartável semeada, com a API sobre ela. O smoke cria produtos "L04P" na Matriz, vende com pagamento em mais de um meio, solicita, aprova e executa estornos e lê o SQLite só para conferir os efeitos.
+
+```cmd
+node tests\scripts\smoke-l04-venda-pagamento.js --base-url=http://localhost:3001 --db=backend\academia.sqlite
+```
+
+Cobre preço manual recusado, quitação exata em centavos (saldo restante, excedente, meio e valor inválidos), venda de R$ 5 com R$ 2 em dinheiro e R$ 3 no Pix (uma venda, uma baixa, uma receita e dois recebimentos), reenvio e envio simultâneo com a mesma `Idempotency-Key`, recusas por perfil e unidade, vendas anteriores sem meio atribuído, devolução pelos meios originais, devolução de R$ 5 no Pix com motivo e comprovante (R$ 2 líquidos em dinheiro, −R$ 2 no Pix, R$ 0 no total) e a conferência por meio da unidade. Cada recusa confere estoque, vendas, lançamentos, meios, estornos e auditoria antes e depois.
+
 ## `smoke-l04-estorno-venda-datas.js` (L04 · Períodos, data operacional e rollback)
 
 Roda em processo, sobre o SQLite da cópia descartável semeada, e controla só o relógio de negócio (como o `smoke-l02-ciclos.js`). Usa os anos de 2030 e 2031 e grava fechamentos e datas de venda direto na base.

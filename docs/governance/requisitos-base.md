@@ -514,6 +514,16 @@ Regras aprovadas pelo dono em 12/11/2026 e ajustadas no mesmo dia para a operaç
 - **Fora deste sublote:** demais tipos de estorno, estorno financeiro parcial de venda, registro formal de perdas, confirmação automática da autorização externa (integração com WhatsApp ou e-mail) e as decisões sobre o perfil Financeiro criar contas ou marcá-las como pagas.
 - **Validação:** `tests/scripts/smoke-l04-estorno-venda.js`, `tests/scripts/smoke-l04-estorno-venda-datas.js` e `tests/scripts/ui-l04-estorno-venda.py`.
 
+### L04 — Venda no caixa e devolução por meio
+
+Decisões de 16/11/2026 aplicadas à venda de produto.
+
+- **Preço e quitação.** O servidor calcula o total pelo preço de catálogo; preço informado no pedido é recusado (`422 PRECO_MANUAL_NAO_PERMITIDO`). A venda informa os pagamentos por meio (dinheiro, Pix, cartão de crédito ou débito) e só é concluída, com baixa de estoque, quando eles somam exatamente o total, comparados em centavos. A tela mostra total, valor informado e saldo restante.
+- **Registro.** Cada valor por meio é um recebimento vinculado à venda. A receita continua sendo um lançamento único por venda; a conferência por meio soma os recebimentos e as devoluções sem duplicar a receita. O reenvio com a mesma `Idempotency-Key` devolve a venda original.
+- **Devolução.** No estorno aprovado, o operador informa e confirma o que devolveu, por meio, no valor integral. O padrão sugerido são os meios e valores da venda. Outro meio, combinado com o cliente, exige motivo e referência do comprovante. Ficam registrados os valores devolvidos, o motivo, o comprovante, a confirmação, o autorizador e o executor.
+- **Vendas anteriores.** Vendas sem recebimentos registrados aparecem como "Meio não registrado"; nenhum meio é atribuído sem evidência.
+- **Validação:** `tests/scripts/smoke-l04-venda-pagamento.js` e `tests/e2e/playwright/vendas-pagamento.spec.js`.
+
 ## 15. Critérios de aceite do produto
 
 O produto pode ser considerado pronto para PostgreSQL/deploy de portfólio quando:

@@ -20,6 +20,7 @@ import useAuth from "../../hooks/useAuth";
 import { falhaSemConfirmacao } from "../../utils/tentativaPagamento";
 import { UI_PERMISSIONS, userHasUiPermission } from "../../utils/permissions";
 import { EstornoBadge, EstornoVendaModal, usePermissoesEstorno } from "../../components/vendas/EstornoVenda";
+import { ValoresPorMeio, linhaVazia, paraApi, paraCentavos, resumoMeios, situacaoPagamento } from "../../components/vendas/PagamentoPorMeio";
 
 function formatarMoeda(valor) {
   return Number(valor || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -55,6 +56,7 @@ export default function VendasProdutosPage() {
 
   const [produtoSelecionado, setProdutoSelecionado] = useState(null);
   const [quantidade, setQuantidade] = useState(1);
+  const [pagamentos, setPagamentos] = useState([linhaVazia()]);
   const [registrandoVenda, setRegistrandoVenda] = useState(false);
   const [modalVendaAberto, setModalVendaAberto] = useState(false);
 
@@ -112,6 +114,7 @@ export default function VendasProdutosPage() {
   function resetVenda() {
     setQuantidade(1);
     setProdutoSelecionado(null);
+    setPagamentos([linhaVazia()]);
   }
 
   function fecharModalVenda() {
@@ -124,7 +127,11 @@ export default function VendasProdutosPage() {
     if (!podeVender || !currentUnit?.id || registrandoVenda) return;
     if (!produtoSelecionado) return toast.error("Selecione um produto.");
     if (quantidade <= 0) return toast.error("Quantidade deve ser maior que zero.");
-    const registro = `gs.venda.${user?.id}.${currentUnit?.id}.${produtoSelecionado.id}.${quantidade}`;
+    // Venda so com quitacao: os meios precisam somar o total pelo preco de catalogo.
+    const situacao = situacaoPagamento(totalCentavos, pagamentos);
+    if (!situacao.quitado) return toast.error("Complete o pagamento para concluir a venda.");
+    const meios = paraApi(pagamentos);
+    const registro = `gs.venda.${user?.id}.${currentUnit?.id}.${produtoSelecionado.id}.${quantidade}.${meios.map((m) => `${m.meio}:${m.valor}`).join("|")}`;
     let tentativa = tentativas.current.get(registro);
     if (!tentativa) {
       try {
@@ -141,10 +148,11 @@ export default function VendasProdutosPage() {
       setRegistrandoVenda(true);
       tentativa ??= {
         chave: Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => b.toString(16).padStart(2, "0")).join(""),
+        // Sem preco: o servidor usa o preco de catalogo.
         payload: {
           produto_id: produtoSelecionado.id,
           quantidade,
-          preco_unitario: Number(produtoSelecionado.preco),
+          pagamentos: meios,
         },
       };
       tentativas.current.set(registro, tentativa);
@@ -184,6 +192,9 @@ export default function VendasProdutosPage() {
     setRecorte(datas);
   }
 
+  const precoCentavos = produtoSelecionado ? paraCentavos(String(produtoSelecionado.preco)) ?? Math.round(Number(produtoSelecionado.preco) * 100) : 0;
+  const totalCentavos = precoCentavos * (Number.isInteger(Number(quantidade)) && Number(quantidade) > 0 ? Number(quantidade) : 0);
+  const situacaoVenda = situacaoPagamento(totalCentavos, pagamentos);
   const totalPaginas = Math.max(1, Math.ceil(total / limite));
   const totalPagina = vendas.reduce((soma, venda) => soma + valorBruto(venda), 0);
   const ticketMedio = vendas.length > 0 ? totalPagina / vendas.length : 0;
@@ -278,6 +289,7 @@ export default function VendasProdutosPage() {
                   <th>Quantidade</th>
                   <th>Preço Unitário</th>
                   <th>Total</th>
+                  <th>Pagamento</th>
                   <th>Data Venda</th>
                 </tr>
               </thead>
@@ -294,6 +306,11 @@ export default function VendasProdutosPage() {
                     <td>{venda.quantidade}</td>
                     <td>{formatarMoeda(venda.preco_unitario)}</td>
                     <td className="font-semibold">{formatarMoeda(valorBruto(venda))}</td>
+                    <td data-testid="venda-meios">
+                      {venda.pagamento_registrado
+                        ? resumoMeios(venda.meios)
+                        : <span className="text-gray-500">Meio não registrado</span>}
+                    </td>
                     <td>{new Date(venda.data_venda).toLocaleString("pt-BR")}</td>
                   </tr>
                 ))}
@@ -336,16 +353,24 @@ export default function VendasProdutosPage() {
             </Select>
             <Input label="Quantidade" type="number" value={quantidade}
               onChange={(event) => setQuantidade(Number(event.target.value))} min="1" />
-            {produtoSelecionado && <dl className="gym-sale-summary">
-              <div><dt>Preço unitário</dt><dd>{formatarMoeda(produtoSelecionado.preco)}</dd></div>
-              <div><dt>Total estimado</dt><dd>{formatarMoeda(Number(produtoSelecionado.preco) * Number(quantidade || 0))}</dd></div>
-            </dl>}
+            {produtoSelecionado && <>
+              <dl className="gym-sale-summary">
+                <div><dt>Preço de catálogo</dt><dd>{formatarMoeda(precoCentavos / 100)}</dd></div>
+              </dl>
+              <ValoresPorMeio
+                legenda="Pagamento"
+                idPrefixo="venda"
+                totalCentavos={totalCentavos}
+                linhas={pagamentos}
+                onChange={setPagamentos}
+              />
+            </>}
 
             <div className="flex justify-end gap-3 pt-2">
               <Button type="button" variant="ghost" onClick={fecharModalVenda}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={registrandoVenda}>
+              <Button type="submit" disabled={registrandoVenda || !produtoSelecionado || !situacaoVenda.quitado}>
                 {registrandoVenda ? "Registrando..." : "Registrar Venda"}
               </Button>
             </div>

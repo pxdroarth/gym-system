@@ -358,8 +358,10 @@ export async function salvarPoliticaEstornoVenda(contasDistintas) {
   return response.data;
 }
 
-export async function executarEstornoVenda(estornoId, itens) {
-  const response = await api.post(`/vendas-produtos/estornos/${estornoId}/executar`, { itens });
+// `extra`: devolucoes por meio, devolucao_confirmada, motivo_troca_meio e
+// comprovante_referencia (L04, devolucao por meio).
+export async function executarEstornoVenda(estornoId, itens, extra = {}) {
+  const response = await api.post(`/vendas-produtos/estornos/${estornoId}/executar`, { itens, ...extra });
   return response.data;
 }
 

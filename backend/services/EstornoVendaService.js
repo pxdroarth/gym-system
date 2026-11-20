@@ -42,6 +42,8 @@ const AuditService = require('./AuditService');
 const FechamentoMensalService = require('./FechamentoMensalService');
 const ReversaoControladaService = require('./ReversaoControladaService');
 const dataLocal = require('../utils/dataLocal');
+const VendaPagamentoService = require('./VendaPagamentoService');
+const { deCentavos } = require('../utils/dinheiro');
 const { PERMISSIONS, ROLE_PERMISSIONS, roleHasPermission } = require('../constants/userRoles');
 const { USER_SCOPE_STATUS, UNIT_STATUS, TENANT_STATUS } = require('../constants/scope');
 
@@ -447,6 +449,7 @@ async function executar(estornoId, payload = {}, actor, scope) {
     const venda = await obterVenda(tx, estorno.venda_id, scope);
     if (venda.reversao_controlada_id) throw new AppError('Venda ja estornada', 409, 'VENDA_JA_REVERTIDA');
     const item = validarItens(payload.itens, venda);
+    const devolucao = await validarDevolucao(tx, payload, venda, scope);
 
     // Periodos na unidade: mes da venda (data operacional), mes do lancamento
     // de receita original quando diferente (vendas antigas gravadas em UTC) e
@@ -546,6 +549,27 @@ async function executar(estornoId, payload = {}, actor, scope) {
       [reversao.id, lancamentoInverso?.id || null, id]
     );
 
+    // Devolucao ao cliente, por meio, confirmada pelo operador depois de feita.
+    if (devolucao.itens) {
+      await VendaPagamentoService.registrarItens(tx, {
+        venda,
+        estornoId: id,
+        tipo: VendaPagamentoService.TIPO.DEVOLUCAO,
+        itens: devolucao.itens,
+        referencia: devolucao.comprovante,
+        actor,
+        scope,
+        registradoEm: agora,
+      });
+      await tx.run(
+        `UPDATE venda_estorno
+         SET devolucao_meio_alternativo = ?, devolucao_motivo = ?, devolucao_comprovante = ?, devolucao_confirmada_em = ?
+         WHERE id = ?`,
+        [devolucao.alternativo === null ? null : (devolucao.alternativo ? 1 : 0), devolucao.motivo, devolucao.comprovante, agora, id]
+      );
+    }
+    const conferencia = (await VendaPagamentoService.resumoDasVendas(tx, [venda.id], scope)).get(Number(venda.id));
+
     const produtoDepois = venda.produto_id
       ? await tx.get('SELECT * FROM produto WHERE id = ? AND tenant_id = ? AND unit_id = ?', [venda.produto_id, scope.tenant_id, scope.unit_id])
       : null;
@@ -587,6 +611,18 @@ async function executar(estornoId, payload = {}, actor, scope) {
           ? { id: estorno.autorizacao_registrada_por, papel: estorno.autorizacao_registrada_por_papel, em: estorno.autorizacao_registrada_em }
           : null,
         executor: { id: String(actor.id), papel: actor.role, em: agora },
+        devolucao: devolucao.itens
+          ? {
+            itens: devolucao.itens.map((d) => ({ meio: d.meio, valor: deCentavos(d.centavos) })),
+            meios_originais: devolucao.originais.map((d) => ({ meio: d.meio, valor: deCentavos(d.centavos) })),
+            meio_alternativo: devolucao.alternativo,
+            motivo_troca_meio: devolucao.motivo,
+            comprovante_referencia: devolucao.comprovante,
+            confirmada_pelo_operador: true,
+            confirmada_em: agora,
+          }
+          : null,
+        conferencia_por_meio: conferencia.meios,
         ...quantidades,
       },
       tenant_id: scope.tenant_id,
@@ -599,9 +635,58 @@ async function executar(estornoId, payload = {}, actor, scope) {
       produto: produtoDepois,
       lancamento_inverso: lancamentoInverso,
       reversao,
+      conferencia,
       ...quantidades,
     };
   });
+}
+
+// Devolucao por meio na execucao (L04, decisao 16/11/2026).
+// - Venda com pagamento por meio: o operador informa o que devolveu, por meio,
+//   somando o valor integral, e confirma que a devolucao foi feita. O padrao
+//   sugerido sao os meios e valores originais; outro meio (acordo com o
+//   cliente, ex.: faltou dinheiro no caixa) exige motivo e referencia do
+//   comprovante.
+// - Venda anterior ao pagamento por meio: o meio original nao e conhecido e
+//   nao e atribuido. A devolucao e opcional; se informada, registra so o meio
+//   efetivamente usado na devolucao.
+async function validarDevolucao(tx, payload, venda, scope) {
+  const informadas = VendaPagamentoService.normalizarDevolucoes(payload.devolucoes);
+  const resumo = (await VendaPagamentoService.resumoDasVendas(tx, [venda.id], scope)).get(Number(venda.id));
+  const originais = resumo.recebimentos.map((r) => ({ meio: r.meio, centavos: Math.round(r.valor * 100) }));
+  const registrado = resumo.pagamento_registrado;
+  if (!informadas) {
+    if (!registrado) return { itens: null, originais: [], alternativo: null, motivo: null, comprovante: null };
+    throw new AppError('Informe o que foi devolvido ao cliente, por meio', 422, 'DEVOLUCAO_OBRIGATORIA', {
+      sugestao: originais.map((o) => ({ meio: o.meio, valor: deCentavos(o.centavos) })),
+    });
+  }
+  if (payload.devolucao_confirmada !== true) {
+    throw new AppError('Confirme que a devolucao ao cliente foi feita antes de executar', 422, 'DEVOLUCAO_NAO_CONFIRMADA');
+  }
+  const totalCentavos = Math.round(Number(venda.valor_total || 0) * 100);
+  const informado = VendaPagamentoService.somaCentavos(informadas);
+  if (informado !== totalCentavos) {
+    throw new AppError('O estorno e integral: os valores devolvidos devem somar o total da venda', 422, 'DEVOLUCAO_DIFERENTE_DO_TOTAL', {
+      total: deCentavos(totalCentavos), informado: deCentavos(informado),
+    });
+  }
+  const texto = (valor) => String(valor ?? '').trim();
+  const motivo = texto(payload.motivo_troca_meio) || null;
+  const comprovante = texto(payload.comprovante_referencia) || null;
+  if (comprovante && comprovante.length > 500) {
+    throw new AppError('Referencia do comprovante muito longa', 400, 'COMPROVANTE_INVALIDO');
+  }
+  const alternativo = registrado ? !VendaPagamentoService.mesmosMeiosEValores(informadas, originais) : null;
+  if (alternativo) {
+    if (!motivo || motivo.length < 3) {
+      throw new AppError('Informe o motivo da devolucao em outro meio', 422, 'MOTIVO_TROCA_MEIO_OBRIGATORIO');
+    }
+    if (!comprovante || comprovante.length < 3) {
+      throw new AppError('Informe a referencia do comprovante da devolucao', 422, 'COMPROVANTE_OBRIGATORIO');
+    }
+  }
+  return { itens: informadas, originais, alternativo, motivo: alternativo ? motivo : null, comprovante };
 }
 
 async function listar(scope, filtros = {}) {
@@ -619,8 +704,9 @@ async function listar(scope, filtros = {}) {
     where += ' AND e.venda_id = ?';
     params.push(Number(filtros.venda_id));
   }
-  return runQuery(
-    `SELECT e.*, v.produto_id, v.produto_nome, v.quantidade, v.preco_unitario, v.valor_total, v.data_venda
+  const linhas = await runQuery(
+    `SELECT e.*, v.produto_id, v.produto_nome, v.quantidade, v.preco_unitario, v.valor_total, v.data_venda,
+            v.reversao_controlada_id AS venda_reversao_id
      FROM venda_estorno e
      JOIN venda_produto v ON v.id = e.venda_id AND v.tenant_id = e.tenant_id AND v.unit_id = e.unit_id
      ${where}
@@ -628,6 +714,10 @@ async function listar(scope, filtros = {}) {
      LIMIT 200`,
     params
   );
+  // Meios e valores da venda (recebidos e devolvidos) para o detalhe do estorno.
+  const ids = [...new Set(linhas.map((l) => Number(l.venda_id)))];
+  const resumos = await VendaPagamentoService.resumoDasVendas({ all: runQuery }, ids, scope);
+  return linhas.map((l) => ({ ...l, conferencia: resumos.get(Number(l.venda_id)) }));
 }
 
 // Contas da unidade que podem autorizar (para o registro de autorizacao

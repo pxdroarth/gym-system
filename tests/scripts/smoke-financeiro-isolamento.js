@@ -124,7 +124,7 @@ async function popular(a) {
   a.mensalidade = dado(r)?.id;
   r = await req('POST', '/pagamentos', { token: t, unit, body: { mensalidade_id: a.mensalidade, valor_pago: 80, data_pagamento: hoje } });
   a.pagamento = r.j?.id;
-  r = await req('POST', '/vendas-produtos', { token: t, unit, body: { produto_id: a.produto, quantidade: 2 } });
+  r = await req('POST', '/vendas-produtos', { token: t, unit, body: { produto_id: a.produto, quantidade: 2, pagamentos: [{ meio: 'dinheiro', valor: 60 }] } });
   a.venda = r.j?.id;
   const faltando = ['categoria', 'conta', 'ativo', 'orcamento', 'produto', 'plano', 'aluno', 'mensalidade', 'pagamento', 'venda'].filter((k) => !a[k]);
   check(`setup ${a.tag}: categoria, conta, ativo, orcamento, produto, plano, aluno, mensalidade, pagamento e venda`, faltando.length === 0, faltando.length ? `faltando: ${faltando.join(',')}` : '');

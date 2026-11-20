@@ -364,7 +364,7 @@ router.get('/', async (req, res) => {
     `, params);
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message, code: error.code });
   }
 });
 
@@ -387,7 +387,7 @@ router.get('/:id', async (req, res) => {
     if (!row) return res.status(404).json({ error: 'Plano não encontrado' });
     res.json(row);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message, code: error.code });
   }
 });
 
@@ -431,7 +431,7 @@ router.post('/', requirePermission(PERMISSIONS.PLANOS_GERENCIAR), async (req, re
     const criado = await runGet('SELECT * FROM plano WHERE id = ? AND tenant_id = ?', [result.lastID, scope.tenant_id]);
     res.status(201).json(criado);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message, code: error.code });
   }
 });
 
@@ -519,7 +519,7 @@ router.delete('/:id', requirePermission(PERMISSIONS.PLANOS_GERENCIAR), async (re
     if (result.changes === 0) return res.status(404).json({ error: 'Plano não encontrado para deletar' });
     res.json({ message: 'Plano deletado com sucesso' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message, code: error.code });
   }
 });
 

@@ -5,6 +5,8 @@ const VendaService = require('../services/VendaService');
 const AuditService = require('../services/AuditService');
 const ReversaoControladaService = require('../services/ReversaoControladaService');
 const EstornoVendaService = require('../services/EstornoVendaService');
+const VendaPagamentoService = require('../services/VendaPagamentoService');
+const { deCentavos } = require('../utils/dinheiro');
 const { PERMISSIONS, USER_ROLES } = require('../constants/userRoles');
 const { requirePermission, assertActiveOperator } = require('../middlewares/requirePermission');
 const AppError = require('../errors/AppError');
@@ -41,7 +43,62 @@ router.get('/', async (req, res, next) => {
     `, [...params, parseInt(limite), offset]);
 
     const countResult = await runGet(`SELECT COUNT(*) as total FROM venda_produto vp ${filtros}`, params);
-    res.json({ vendas, total: countResult?.total || 0, pagina: Number(pagina), limite: Number(limite) });
+    // Meios por venda; vendas anteriores ao pagamento por meio vem com
+    // pagamento_registrado = false (sem meio atribuido).
+    const resumos = await VendaPagamentoService.resumoDasVendas({ all: runQuery }, vendas.map((v) => v.id), scope);
+    res.json({
+      vendas: vendas.map((v) => ({ ...v, ...resumos.get(Number(v.id)) })),
+      total: countResult?.total || 0,
+      pagina: Number(pagina),
+      limite: Number(limite),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Conferencia por meio (L04): soma recebimentos e devolucoes por meio nas
+// vendas da unidade, no intervalo de data da venda. A receita continua sendo
+// o lancamento unico de cada venda; aqui so se detalha o meio movimentado.
+// Vendas anteriores ao pagamento por meio entram em "sem_meio_registrado".
+router.get('/conferencia-meios', async (req, res, next) => {
+  try {
+    const scope = requireScope(req);
+    const params = [scope.tenant_id, scope.unit_id];
+    let filtro = '';
+    const data = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? String(v) : null);
+    if (data(req.query.data_inicial)) { filtro += ' AND DATE(vp.data_venda) >= DATE(?)'; params.push(data(req.query.data_inicial)); }
+    if (data(req.query.data_final)) { filtro += ' AND DATE(vp.data_venda) <= DATE(?)'; params.push(data(req.query.data_final)); }
+    const linhas = await runQuery(`
+      SELECT p.meio,
+             SUM(CASE WHEN p.tipo = 'recebimento' THEN p.valor_centavos ELSE 0 END) AS recebido,
+             SUM(CASE WHEN p.tipo = 'devolucao' THEN p.valor_centavos ELSE 0 END) AS devolvido
+      FROM venda_pagamento p
+      JOIN venda_produto vp ON vp.id = p.venda_id AND vp.tenant_id = p.tenant_id AND vp.unit_id = p.unit_id
+      WHERE vp.deleted_at IS NULL AND vp.tenant_id = ? AND vp.unit_id = ?${filtro}
+      GROUP BY p.meio`, params);
+    const semMeio = await runGet(`
+      SELECT COUNT(*) AS vendas, COALESCE(SUM(vp.valor_total), 0) AS valor
+      FROM venda_produto vp
+      WHERE vp.deleted_at IS NULL AND vp.tenant_id = ? AND vp.unit_id = ?${filtro}
+        AND NOT EXISTS (SELECT 1 FROM venda_pagamento p WHERE p.venda_id = vp.id AND p.tipo = 'recebimento')`, params);
+    const meios = VendaPagamentoService.MEIOS_VALORES
+      .map((meio) => {
+        const l = linhas.find((x) => x.meio === meio) || { recebido: 0, devolvido: 0 };
+        return {
+          meio,
+          rotulo: VendaPagamentoService.MEIOS[meio],
+          recebido: deCentavos(l.recebido),
+          devolvido: deCentavos(l.devolvido),
+          liquido: deCentavos(l.recebido - l.devolvido),
+        };
+      });
+    const soma = (campo) => deCentavos(meios.reduce((s, m) => s + Math.round(m[campo] * 100), 0));
+    res.json({
+      meios,
+      total: { recebido: soma('recebido'), devolvido: soma('devolvido'), liquido: soma('liquido') },
+      sem_meio_registrado: { vendas: semMeio?.vendas || 0, valor: Number(semMeio?.valor || 0) },
+    });
   } catch (error) {
     next(error);
   }
@@ -172,7 +229,8 @@ router.get('/:id', async (req, res, next) => {
       [id, scope.tenant_id, scope.unit_id]
     );
     if (!venda) return res.status(404).json({ error: 'Venda nao encontrada' });
-    res.json(venda);
+    const resumo = (await VendaPagamentoService.resumoDasVendas({ all: runQuery }, [venda.id], scope)).get(Number(venda.id));
+    res.json({ ...venda, ...resumo });
   } catch (error) {
     next(error);
   }

@@ -69,7 +69,7 @@ router.get('/', async (req, res) => {
     `, params);
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message, code: error.code });
   }
 });
 
@@ -83,7 +83,7 @@ router.get('/:id', async (req, res) => {
     if (!row) return res.status(404).json({ error: 'Produto não encontrado' });
     res.json(row);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message, code: error.code });
   }
 });
 
@@ -168,7 +168,7 @@ router.patch('/:id/estoque', gerenciarProdutos, async (req, res) => {
     const atualizado = await runGet('SELECT * FROM produto WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
     res.json(atualizado);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message, code: error.code });
   }
 });
 
@@ -193,7 +193,7 @@ router.delete('/:id', gerenciarProdutos, async (req, res) => {
     if (result.changes === 0) return res.status(404).json({ error: 'Produto não encontrado para deletar' });
     res.json({ message: 'Produto deletado com sucesso' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message, code: error.code });
   }
 });
 
