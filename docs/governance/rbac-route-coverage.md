@@ -13,7 +13,7 @@ Mapear como as rotas de negócio do backend estão protegidas hoje, sem alterar 
 | `POST /mensalidades`, `PUT`, `PATCH /:id/status`, `DELETE` | `mensalidades:gerenciar`. Desconto excepcional em criação exige permissão e motivo. Edição comum não concede desconto. |
 | `PATCH /mensalidades/:id/desconto` | `mensalidades:desconto`. Motivo, cobrança em aberto sem pagamento, período editável e auditoria. |
 | `POST /pagamentos` | `pagamentos:registrar` inclui recepção e gestor. Mantém escopo, saldo, pagamento parcial e chave de idempotência. |
-| Estorno e reversões de pagamentos, mensalidades, vendas e contas | Guardas anteriores continuam validando papel e escopo. A execução direta exige aprovação e está bloqueada com `409 REVERSAO_APROVACAO_NECESSARIA`. Abrange aliases e exclusão de conta paga. Edição comum de conta paga não pode neutralizar valor, tipo, data ou status. O estorno de venda passou a ter fluxo próprio de solicitação, autorização (direta ou externa registrada) e execução (seção "L04 · Estorno de venda"). Pagamentos, mensalidades e contas seguem bloqueados. |
+| Estorno e reversões de pagamentos, mensalidades, vendas e contas | Guardas anteriores continuam validando papel e escopo. A execução direta exige aprovação e está bloqueada com `409 REVERSAO_APROVACAO_NECESSARIA`. Abrange aliases e exclusão de conta paga. Edição comum de conta paga não pode neutralizar valor, tipo, data ou status. O estorno de venda e o de pagamento do aluno passaram a ter fluxo próprio de solicitação, autorização (direta ou externa registrada) e execução (seções "L04 · Estorno de venda" e "L04 · Estorno de pagamento do aluno"). Mensalidades e contas seguem bloqueadas. |
 | `/fechamento-mensal/:ano/:mes` | Conferência com Financeiro. Fechar exige admin ou dono na unidade. Reabrir exige dono, motivo e auditoria. Política master pendente. |
 | `/tenant-dashboard/resumo` | Relatório filtrado pelos vínculos do admin. Integral requer `relatorios:rede_integral`. |
 | `POST/PUT/DELETE /planos`, `/plano-contas` e `/planoContas` | Permissões distintas de catálogo e financeiro da Rede, disponíveis ao dono. O fluxo combinado Contratar/Renovar usa permissão própria de operação. |
@@ -46,6 +46,23 @@ As rotas valem nos dois aliases, `/vendas-produtos` e `/vendasProdutos`, que mon
 | `PATCH /estornos/politica` (`contas_distintas` booleano) | Papel `owner` | Somente o dono; demais: `403 PERMISSAO_NEGADA`. Auditado. |
 
 `platform_admin` e `operador_acesso` não recebem essas permissões; a atuação do suporte depende do sublote de controles master. As reversões diretas de venda (`POST /:id/reverter` nos dois aliases e `POST /reversoes/vendas/:id`) continuam bloqueadas com `409 REVERSAO_APROVACAO_NECESSARIA`. Validação em [smoke-l04-estorno-venda.js](../../tests/scripts/smoke-l04-estorno-venda.js), [smoke-l04-estorno-venda-datas.js](../../tests/scripts/smoke-l04-estorno-venda-datas.js) e [ui-l04-estorno-venda.py](../../tests/scripts/ui-l04-estorno-venda.py).
+
+## L04 · Estorno de pagamento do aluno
+
+Rotas em `/pagamentos`. Cada etapa exige a própria permissão e a unidade selecionada; o serviço repete identidade, papel, Rede e Unidade dentro da transação. Registro de outra Rede ou unidade pelo ID: `404`. Regras em [L04 — Estorno de pagamento do aluno](requisitos-base.md#l04--estorno-de-pagamento-do-aluno).
+
+| Rota | Permissão | Papéis e recusas |
+|---|---|---|
+| `POST /` e contratação em `/planos` (com `forma_pagamento` opcional) | `pagamentos:registrar` | Meio fora de `dinheiro`, `pix`, `cartao_credito`, `cartao_debito`, `transferencia`: `400 FORMA_PAGAMENTO_INVALIDA`, sem gravar. |
+| `POST /:id/estornos` (com `motivo`) | `pagamentos:estorno_solicitar` | Recepção, gestor, financeiro, admin e dono. Pedido ativo existente: `200` com `Idempotent-Replayed: true`. Pagamento já estornado: `409 PAGAMENTO_JA_ESTORNADO`. |
+| `POST /estornos/:estornoId/aprovar` | `pagamentos:estorno_aprovar` | Admin e dono. Quem solicitou: `403 AUTOAPROVACAO_PROIBIDA`. |
+| `POST /estornos/:estornoId/autorizacao-externa` (`autorizador_id`, `canal`, `autorizado_em`, `referencia`) | `pagamentos:estorno_registrar_autorizacao` | Recepção, financeiro, admin e dono. Própria conta: `403 AUTOAUTORIZACAO_PROIBIDA`; solicitante: `403 AUTOAPROVACAO_PROIBIDA`; autorizador sem `pagamentos:estorno_aprovar` na unidade: `422 AUTORIZADOR_SEM_PERMISSAO`; data anterior ao pagamento ou posterior ao registro: `400 DATA_AUTORIZACAO_INVALIDA`. |
+| `POST /estornos/:estornoId/executar` (`devolucoes`, `devolucao_confirmada`, `motivo_troca_meio`, `comprovante_referencia`) | `pagamentos:estorno_executar` | Financeiro, admin e dono. Sem aprovação: `409 REVERSAO_APROVACAO_NECESSARIA`. Três contas exigidas: `403 CONTAS_DISTINTAS_EXIGIDAS`. Período fechado: `409` sem gravar. Sem receita original: `409 PAGAMENTO_SEM_RECEITA_ORIGINAL`. Devolução que não soma o valor, sem confirmação ou em outro meio sem motivo e comprovante: recusa sem gravar. |
+| `GET /estornos` (filtros `status`, `pagamento_id`, `mensalidade_id`, `aluno_id`) e `GET /estornos/politica` | Qualquer uma das quatro acima | Recepção, gestor, financeiro, admin e dono. |
+| `GET /estornos/autorizadores` | `pagamentos:estorno_registrar_autorizacao` | Contas ativas da unidade com `pagamentos:estorno_aprovar`, sem a do operador. |
+| `PATCH /estornos/politica` (`contas_distintas`) | Papel `owner` | Demais: `403 PERMISSAO_NEGADA`. Auditado. |
+
+`platform_admin` e `operador_acesso` não recebem essas permissões. `POST /pagamentos/:id/estornar` continua bloqueado com `409 REVERSAO_APROVACAO_NECESSARIA`. Validação em [smoke-l04-estorno-pagamento.js](../../tests/scripts/smoke-l04-estorno-pagamento.js) e [estorno-pagamento.spec.js](../../tests/e2e/playwright/estorno-pagamento.spec.js).
 
 ## Categorias encontradas
 
@@ -217,7 +234,7 @@ Impacto atual:
 ### Mensalidades e pagamentos
 
 - listagens dependem de escopo; as escritas de mensalidades têm permissões de emissão, gestão ou desconto
-- reversão e estorno de pagamento exigem `reversao:executar`
+- reversão direta de pagamento exige `reversao:executar` e continua bloqueada; o estorno de pagamento do aluno segue o fluxo próprio (seção "L04 · Estorno de pagamento do aluno")
 - registrar pagamento exige `pagamentos:registrar`
 
 ### Financeiro
@@ -230,6 +247,7 @@ Impacto atual:
 
 - consultas usam escopo; registro nos dois aliases usa `vendas:registrar`
 - estorno segue solicitação (`vendas:estorno_solicitar`), aprovação direta (`vendas:estorno_aprovar`) ou registro de autorização externa (`vendas:estorno_registrar_autorizacao`) e execução (`vendas:estorno_executar`); a unidade pode exigir três contas distintas; a reversão direta continua bloqueada
+- estorno de pagamento do aluno segue o mesmo modelo com `pagamentos:estorno_solicitar`, `pagamentos:estorno_aprovar`, `pagamentos:estorno_registrar_autorizacao` e `pagamentos:estorno_executar`
 
 ### Fechamento mensal
 

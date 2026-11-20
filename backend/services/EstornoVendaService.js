@@ -781,4 +781,21 @@ module.exports = {
   definirPolitica,
   dataOperacionalDaVenda,
   conferirJanelaDaAutorizacao,
+  // Partes do fluxo reaproveitadas pelo estorno de pagamento do aluno
+  // (EstornoPagamentoService): mesmas regras de autorizacao externa,
+  // janela de datas e estados do pedido.
+  comum: {
+    STATUS,
+    CANAL_SISTEMA,
+    exigirEscopo,
+    exigirPermissao,
+    exigirId,
+    mesmaConta,
+    instanteUtc,
+    mesDe,
+    recusarPorStatus,
+    contaAutorizadora,
+    validarDadosExternos,
+    limiteInferiorDaVenda,
+  },
 };

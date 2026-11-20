@@ -970,6 +970,87 @@ async function ensurePagamentoParcialColumns() {
 // quitada e 'devolucao' no estorno executado. A receita continua sendo um
 // unico lancamento por venda; esta tabela detalha o meio movimentado para a
 // conferencia. Vendas anteriores ficam sem linhas (meio nao registrado).
+// L04 sublote A (20/11/2026): meio do pagamento da mensalidade e estorno de
+// pagamento com solicitacao, autorizacao e execucao, como o estorno de venda.
+// Pagamentos anteriores ficam com forma_pagamento nulo (meio nao registrado).
+async function ensurePagamentoEstorno() {
+  await addColumnIfMissing('pagamento', 'forma_pagamento TEXT');
+  await runExecute(`
+    CREATE TABLE IF NOT EXISTS pagamento_estorno (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id INTEGER NOT NULL,
+      unit_id INTEGER NOT NULL,
+      pagamento_id INTEGER NOT NULL,
+      mensalidade_id INTEGER NOT NULL,
+      aluno_id INTEGER,
+      status TEXT NOT NULL CHECK (status IN ('solicitada', 'aprovada', 'executada', 'encerrada')),
+      motivo TEXT NOT NULL,
+      valor_estornado REAL NOT NULL,
+      meio_original TEXT,
+      solicitado_por TEXT NOT NULL,
+      solicitado_por_nome TEXT,
+      solicitado_por_papel TEXT,
+      solicitado_em TEXT NOT NULL,
+      aprovado_por TEXT,
+      aprovado_por_nome TEXT,
+      aprovado_por_papel TEXT,
+      aprovado_em TEXT,
+      autorizacao_canal TEXT,
+      autorizacao_referencia TEXT,
+      autorizacao_registrada_por TEXT,
+      autorizacao_registrada_por_nome TEXT,
+      autorizacao_registrada_por_papel TEXT,
+      autorizacao_registrada_em TEXT,
+      executado_por TEXT,
+      executado_por_nome TEXT,
+      executado_por_papel TEXT,
+      executado_em TEXT,
+      data_operacao TEXT,
+      contas_distintas_exigidas INTEGER,
+      status_mensalidade_depois TEXT,
+      reversao_controlada_id INTEGER,
+      lancamento_inverso_id INTEGER,
+      devolucao_meio_alternativo INTEGER,
+      devolucao_motivo TEXT,
+      devolucao_comprovante TEXT,
+      devolucao_confirmada_em TEXT,
+      encerrado_em TEXT,
+      encerrado_motivo TEXT,
+      FOREIGN KEY (pagamento_id) REFERENCES pagamento(id)
+    )
+  `);
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_pagamento_estorno_scope_status ON pagamento_estorno (tenant_id, unit_id, status)');
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_pagamento_estorno_aluno ON pagamento_estorno (aluno_id)');
+  await runExecute(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uidx_pagamento_estorno_ativo
+    ON pagamento_estorno (pagamento_id) WHERE status IN ('solicitada', 'aprovada')
+  `);
+  await runExecute(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uidx_pagamento_estorno_executado
+    ON pagamento_estorno (pagamento_id) WHERE status = 'executada'
+  `);
+  await runExecute(`
+    CREATE TABLE IF NOT EXISTS pagamento_devolucao (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id INTEGER NOT NULL,
+      unit_id INTEGER NOT NULL,
+      pagamento_id INTEGER NOT NULL,
+      pagamento_estorno_id INTEGER NOT NULL,
+      meio TEXT NOT NULL CHECK (meio IN ('dinheiro', 'pix', 'cartao_credito', 'cartao_debito', 'transferencia')),
+      valor_centavos INTEGER NOT NULL CHECK (valor_centavos > 0),
+      comprovante_referencia TEXT,
+      registrado_por TEXT,
+      registrado_por_nome TEXT,
+      registrado_em TEXT NOT NULL,
+      FOREIGN KEY (pagamento_id) REFERENCES pagamento(id),
+      FOREIGN KEY (pagamento_estorno_id) REFERENCES pagamento_estorno(id)
+    )
+  `);
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_pagamento_devolucao_scope ON pagamento_devolucao (tenant_id, unit_id, meio)');
+  // Opcao da unidade: tres contas distintas tambem no estorno de pagamento.
+  await addColumnIfMissing('unit', 'estorno_pagamento_contas_distintas INTEGER NOT NULL DEFAULT 0');
+}
+
 async function ensureVendaPagamento() {
   await runExecute(`
     CREATE TABLE IF NOT EXISTS venda_pagamento (
@@ -1097,6 +1178,7 @@ async function ensureSchema() {
   `);
   await ensureVendaEstorno();
   await ensureVendaPagamento();
+  await ensurePagamentoEstorno();
   await ensureUsuarioInterno(defaultScope);
   await ensureLegacyUserScopes(defaultScope);
   await backfillDefaultScope(defaultScope.tenantId, defaultScope.unitId);

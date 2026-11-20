@@ -40,6 +40,7 @@ export const menu = [
       { to: "/financeiro/contas-financeiras", label: "Contas Financeiras" },
       { to: "/financeiro/plano-contas", label: "Plano de Contas" },
       { to: "/financeiro/estornos-venda", label: "Estornos de venda" },
+      { to: "/financeiro/estornos-pagamento", label: "Estornos de pagamento" },
     ],
   },
   { to: "/acessos", label: "Acessos", icon: Radio, permission: UI_PERMISSIONS.NAV_DASHBOARD },

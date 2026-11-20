@@ -104,7 +104,8 @@ try {
       'smoke-isolamento-transacao', 'smoke-a06-conta-fechamento',
       'smoke-financeiro-isolamento', 'smoke-l02', 'smoke-l02-ciclos',
       'smoke-cobertura', 'smoke-f0-acesso-datas', 'smoke-acesso', 'smoke-l04-integridade',
-      'smoke-diagnostico-consistencia', 'smoke-l04-estorno-venda', 'smoke-l04-venda-pagamento'
+      'smoke-diagnostico-consistencia', 'smoke-l04-estorno-venda', 'smoke-l04-venda-pagamento',
+      'smoke-l04-estorno-pagamento'
     )) {
       Invoke-Node "tests/scripts/$smoke.js" "--base-url=$baseUrl" '--db=backend/academia.sqlite'
     }

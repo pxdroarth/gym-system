@@ -13,6 +13,7 @@ const tabs = [
   { to: "contas-financeiras", path: "contas-financeiras", label: "Contas Financeiras", icon: WalletCards },
   { to: "plano-contas", path: "plano-contas", label: "Plano de Contas", icon: FileText },
   { to: "estornos-venda", path: "estornos-venda", label: "Estornos de venda", icon: RotateCcw },
+  { to: "estornos-pagamento", path: "estornos-pagamento", label: "Estornos de pagamento", icon: RotateCcw },
 ];
 
 export default function FinanceiroLayout() {

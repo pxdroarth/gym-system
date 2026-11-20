@@ -74,6 +74,9 @@ const MENSAGENS = {
   COMPROVANTE_OBRIGATORIO: "Informe a referência do comprovante da devolução.",
   PAGAMENTO_VALOR_INVALIDO: "Valores com no máximo duas casas decimais e maiores que zero.",
   PAGAMENTO_MEIO_INVALIDO: "Meio de devolução inválido.",
+  PAGAMENTO_JA_ESTORNADO: "Este pagamento já foi estornado.",
+  PAGAMENTO_SEM_RECEITA_ORIGINAL: "O pagamento não tem o lançamento de receita original nesta unidade. Peça a conciliação no Financeiro; a autorização continua válida.",
+  MENSALIDADE_JA_REVERTIDA: "A mensalidade deste pagamento já foi revertida.",
 };
 
 export function mensagemRecusaEstorno(error) {
@@ -112,7 +115,7 @@ function formatarMoeda(valor) {
 // mostrados e informados nele, independente do relogio do navegador.
 const FUSO_UNIDADE = import.meta.env.VITE_APP_TIMEZONE || "America/Sao_Paulo";
 
-function formatarHorario(valor) {
+export function formatarHorario(valor) {
   return valor ? new Date(valor).toLocaleString("pt-BR", { timeZone: FUSO_UNIDADE }) : "—";
 }
 
@@ -122,7 +125,7 @@ function pessoa(nome, id, papel) {
 }
 
 // Valor inicial do campo datetime-local: agora, em horas e minutos, no fuso da unidade.
-function agoraLocal() {
+export function agoraLocal() {
   const partes = new Intl.DateTimeFormat("en-CA", {
     timeZone: FUSO_UNIDADE,
     hourCycle: "h23",
@@ -145,7 +148,7 @@ export function origemAutorizacao(p) {
 }
 
 // Etapas do pedido: quem atuou em cada uma e quando.
-function EtapasPedido({ p }) {
+export function EtapasPedido({ p }) {
   const externa = p.autorizacao_canal && p.autorizacao_canal !== "sistema";
   return (
     <dl className="mt-1 grid gap-1 text-sm" aria-label={`Etapas do pedido ${p.id}`}>
@@ -187,8 +190,8 @@ function EtapasPedido({ p }) {
         <div>
           <dt className="inline font-medium">Execução: </dt>
           <dd className="inline">
-            {pessoa(p.executado_por_nome, p.executado_por, p.executado_por_papel)} em {formatarHorario(p.executado_em)} ·{" "}
-            {p.quantidade_reposta} de {p.quantidade_vendida} reposta(s) ao estoque
+            {pessoa(p.executado_por_nome, p.executado_por, p.executado_por_papel)} em {formatarHorario(p.executado_em)}
+            {p.quantidade_vendida != null && <> · {p.quantidade_reposta} de {p.quantidade_vendida} reposta(s) ao estoque</>}
           </dd>
         </div>
       )}
