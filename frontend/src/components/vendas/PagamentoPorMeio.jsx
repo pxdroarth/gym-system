@@ -70,7 +70,7 @@ export function resumoMeios(meios = []) {
 
 // Editor de valores por meio com total, informado e saldo.
 // `rotuloSaldo` muda o texto ("Faltam" na venda, "Faltam devolver" no estorno).
-export function ValoresPorMeio({ legenda, totalCentavos, linhas, onChange, rotuloSaldo = "Faltam", idPrefixo }) {
+export function ValoresPorMeio({ legenda, totalCentavos, linhas, onChange, rotuloSaldo = "Faltam", idPrefixo, meios = MEIOS }) {
   const situacao = situacaoPagamento(totalCentavos, linhas);
   const atualizar = (indice, campo, valor) => onChange(linhas.map((l, i) => (i === indice ? { ...l, [campo]: valor } : l)));
   const completar = () => {
@@ -78,7 +78,7 @@ export function ValoresPorMeio({ legenda, totalCentavos, linhas, onChange, rotul
     const vazia = linhas.findIndex((l) => l.valor === "");
     const valor = (situacao.restante / 100).toFixed(2).replace(".", ",");
     if (vazia >= 0) atualizar(vazia, "valor", valor);
-    else onChange([...linhas, { meio: MEIOS.find((m) => !linhas.some((l) => l.meio === m.value))?.value || "pix", valor }]);
+    else onChange([...linhas, { meio: meios.find((m) => !linhas.some((l) => l.meio === m.value))?.value || "pix", valor }]);
   };
 
   return (
@@ -92,7 +92,7 @@ export function ValoresPorMeio({ legenda, totalCentavos, linhas, onChange, rotul
             value={linha.meio}
             onChange={(e) => atualizar(indice, "meio", e.target.value)}
           >
-            {MEIOS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+            {meios.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
           </Select>
           <Input
             id={`${idPrefixo}-valor-${indice}`}
@@ -111,9 +111,9 @@ export function ValoresPorMeio({ legenda, totalCentavos, linhas, onChange, rotul
         </div>
       ))}
       <div className="gym-pay__actions">
-        {linhas.length < MEIOS.length + 2 && (
+        {linhas.length < meios.length + 2 && (
           <Button type="button" size="sm" variant="secondary"
-            onClick={() => onChange([...linhas, linhaVazia(MEIOS.find((m) => !linhas.some((l) => l.meio === m.value))?.value || "pix")])}>
+            onClick={() => onChange([...linhas, linhaVazia(meios.find((m) => !linhas.some((l) => l.meio === m.value))?.value || "pix")])}>
             Adicionar meio
           </Button>
         )}

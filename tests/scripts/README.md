@@ -301,7 +301,7 @@ node tests/scripts/smoke-l02-ciclos.js
 | `smoke-a06-conta-fechamento.js` | O dono reabre as unidades da fixture com motivo, conforme a DN-3. As verificações A-06 de meses de origem e destino e de isolamento permanecem. | A interface nova de fechamento é de outro sublote. A regra A-06 mantém sua cobertura neste smoke. |
 | `smoke-financeiro-isolamento.js` | Financeiro pode conferir, mas o estorno direto fica bloqueado e não gera contrapartida. Reabertura exige dono com motivo. A Rede Beta agora fecha e reabre de fato seu período, com status e unidade verificados, antes de confirmar que o período da Alfa permaneceu intacto. Os testes de categorias de Rede para leitura e lançamentos automáticos continuam. | Contrapartida de execução aprovada preserva valor e origem e usa somente categoria válida da própria Rede, inclusive nos registros legados. |
 
-Os estornos de pagamento, mensalidade e conta permanecem bloqueados até o fluxo próprio. O estorno de venda já tem solicitação, autorização (direta ou externa registrada) e execução, validados nos smokes `smoke-l04-estorno-venda*` abaixo.
+Os estornos de mensalidade e de baixa de conta permanecem bloqueados até o fluxo próprio. O estorno de venda e o estorno de pagamento do aluno já têm solicitação, autorização (direta ou externa registrada) e execução, validados nos smokes `smoke-l04-estorno-venda*` e `smoke-l04-estorno-pagamento.js` abaixo. A rota direta `POST /pagamentos/:id/estornar` continua bloqueada.
 
 ## `smoke-l04-estorno-venda.js` (L04 · Estorno de venda pela API)
 
@@ -322,6 +322,16 @@ node tests\scripts\smoke-l04-venda-pagamento.js --base-url=http://localhost:3001
 ```
 
 Cobre preço manual recusado, quitação exata em centavos (saldo restante, excedente, meio e valor inválidos), venda de R$ 5 com R$ 2 em dinheiro e R$ 3 no Pix (uma venda, uma baixa, uma receita e dois recebimentos), reenvio e envio simultâneo com a mesma `Idempotency-Key`, recusas por perfil e unidade, vendas anteriores sem meio atribuído, devolução pelos meios originais, devolução de R$ 5 no Pix com motivo e comprovante (R$ 2 líquidos em dinheiro, −R$ 2 no Pix, R$ 0 no total) e a conferência por meio da unidade. Cada recusa confere estoque, vendas, lançamentos, meios, estornos e auditoria antes e depois.
+
+## `smoke-l04-estorno-pagamento.js` (L04 · Estorno de pagamento do aluno)
+
+Rode em base descartável semeada, com a API sobre ela. O smoke cria alunos "L04A" com mensalidades de R$ 100 na Matriz, registra pagamentos com e sem meio, solicita, autoriza e executa estornos, fecha e reabre o mês corrente, liga e desliga a opção de três contas e lê o SQLite só para conferir os efeitos.
+
+```cmd
+node tests\scripts\smoke-l04-estorno-pagamento.js --base-url=http://localhost:3001 --db=backend\academia.sqlite
+```
+
+Cobre o meio gravado nos pagamentos novos (meio inválido recusado), permissões por etapa e papel (recepção solicita e registra autorização, só dono e admin aprovam, financeiro executa), pedido único por pagamento, execução sem aprovação e rota direta bloqueada, escopo de Rede e Unidade, autoaprovação e autoautorização, aprovação direta com devolução pelo meio original (mensalidade volta a parcial, acesso bloqueado, contrapartida na data local), repetição, autorização externa com devolução em outro meio (motivo e comprovante obrigatórios), pagamento sem meio registrado, execuções concorrentes, mês fechado com nova tentativa após reabertura, três contas distintas e a fila do Financeiro. Cada recusa confere pagamentos, mensalidade, lançamentos, estados e auditoria antes e depois.
 
 ## `smoke-l04-estorno-venda-datas.js` (L04 · Períodos, data operacional e rollback)
 

@@ -11,7 +11,8 @@ import ModalNovaMensalidade from "./ModalNovaMensalidade";
 import { fetchAcessos, simularAcesso } from "../../services/acessoService";
 import { fetchAlunoById } from "../../services/alunoService";
 import { fetchMensalidadesPorAluno, emitirMensalidadePadrao, preverMensalidadePadrao, concederDescontoMensalidade } from "../../services/mensalidadeService";
-import { registrarPagamento } from "../../services/pagamentoService";
+import { fetchPagamentosAluno, registrarPagamento } from "../../services/pagamentoService";
+import { MEIOS_PAGAMENTO, PagamentosMensalidadeModal, usePermissoesEstornoPagamento } from "../../components/pagamentos/EstornoPagamento";
 import { fetchPlanos } from "../../services/planoService";
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
@@ -127,6 +128,11 @@ export default function PerfilPage() {
   const [abaAtiva, setAbaAtiva] = useState("informacoes");
   const [previaPadrao, setPreviaPadrao] = useState(null);
   const [valoresPagamento, setValoresPagamento] = useState({});
+  // Meio do recebimento por mensalidade (L04, sublote A); padrao dinheiro.
+  const [meiosPagamento, setMeiosPagamento] = useState({});
+  const [pagamentosAluno, setPagamentosAluno] = useState([]);
+  const [mensalidadePagamentos, setMensalidadePagamentos] = useState(null);
+  const permEstornoPagamento = usePermissoesEstornoPagamento();
   const [emitindoMensalidade, setEmitindoMensalidade] = useState(false);
   const [mensalidades, setMensalidades] = useState([]);
   const [totalMensalidades, setTotalMensalidades] = useState(0);
@@ -160,6 +166,7 @@ export default function PerfilPage() {
       const data = await fetchMensalidadesPorAluno(id, paginaMensalidade, 10);
       setMensalidades(data.mensalidades || []);
       setTotalMensalidades(data.total || 0);
+      fetchPagamentosAluno(id).then(setPagamentosAluno).catch(() => setPagamentosAluno([]));
     } catch (error) {
       setMensalidades([]);
       setToastMsg(getApiErrorMessage(error));
@@ -252,6 +259,7 @@ export default function PerfilPage() {
     const tentativa = tentativaPendente(mensalidade.id) || abrirTentativa(mensalidade.id, {
       mensalidade_id: mensalidade.id,
       valor_pago: valor ? Number(valor) : saldo,
+      forma_pagamento: meiosPagamento[mensalidade.id] || "dinheiro",
     });
 
     try {
@@ -518,8 +526,26 @@ export default function PerfilPage() {
                           Conceder desconto
                         </Button>
                       )}
+                      {pagamentosAluno.some((p) => p.mensalidade_id === mensalidade.id) && (
+                        <Button size="sm" variant="ghost" onClick={() => setMensalidadePagamentos(mensalidade)}
+                          data-testid={`pagamentos-mensalidade-${mensalidade.id}`}>
+                          Pagamentos{permEstornoPagamento.algum ? " e estornos" : ""}
+                        </Button>
+                      )}
                       {["em_aberto", "parcial", "vencido"].includes(mensalidade.status) && canRegistrarPagamento ? (
                         <div className="flex flex-wrap items-center gap-2">
+                          <select
+                            className="ui-select w-36"
+                            aria-label="Meio do recebimento"
+                            value={tentativaPendente(mensalidade.id)?.payload.forma_pagamento ?? meiosPagamento[mensalidade.id] ?? "dinheiro"}
+                            disabled={Boolean(tentativaPendente(mensalidade.id)) || carregandoPagamentoId === mensalidade.id}
+                            onChange={(event) => {
+                              const meio = event.target.value;
+                              setMeiosPagamento((meios) => ({ ...meios, [mensalidade.id]: meio }));
+                            }}
+                          >
+                            {MEIOS_PAGAMENTO.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+                          </select>
                           <input
                             className="ui-input w-28"
                             type="number" min="0.01" step="0.01"
@@ -570,6 +596,15 @@ export default function PerfilPage() {
               canNext={paginaMensalidade * 10 < totalMensalidades}
             />
           </div>
+
+          {mensalidadePagamentos && (
+            <PagamentosMensalidadeModal
+              mensalidade={mensalidadePagamentos}
+              pagamentos={pagamentosAluno}
+              onClose={() => setMensalidadePagamentos(null)}
+              onChanged={async () => { await Promise.all([carregarAluno(), carregarMensalidades(), carregarAcessos()]); }}
+            />
+          )}
 
           {showModal && (
             <ModalNovaMensalidade

@@ -222,6 +222,53 @@ export async function registrarPagamento(payload, chaveIdempotencia = null) {
   return response.data;
 }
 
+// ---------- Estorno de pagamento do aluno (L04, sublote A) ----------
+export async function fetchPagamentosAluno(alunoId) {
+  const response = await api.get(`/pagamentos/aluno/${alunoId}`);
+  return response.data;
+}
+
+export async function fetchEstornosPagamento(params = {}) {
+  const response = await api.get('/pagamentos/estornos', { params });
+  return response.data;
+}
+
+export async function solicitarEstornoPagamento(pagamentoId, motivo) {
+  const response = await api.post(`/pagamentos/${pagamentoId}/estornos`, { motivo });
+  return response.data;
+}
+
+export async function aprovarEstornoPagamento(estornoId) {
+  const response = await api.post(`/pagamentos/estornos/${estornoId}/aprovar`);
+  return response.data;
+}
+
+export async function registrarAutorizacaoExternaEstornoPagamento(estornoId, dados) {
+  const response = await api.post(`/pagamentos/estornos/${estornoId}/autorizacao-externa`, dados);
+  return response.data;
+}
+
+export async function fetchAutorizadoresEstornoPagamento() {
+  const response = await api.get('/pagamentos/estornos/autorizadores');
+  return response.data;
+}
+
+// `dados`: devolucoes por meio, devolucao_confirmada, motivo_troca_meio e comprovante_referencia.
+export async function executarEstornoPagamento(estornoId, dados = {}) {
+  const response = await api.post(`/pagamentos/estornos/${estornoId}/executar`, dados);
+  return response.data;
+}
+
+export async function fetchPoliticaEstornoPagamento() {
+  const response = await api.get('/pagamentos/estornos/politica');
+  return response.data;
+}
+
+export async function salvarPoliticaEstornoPagamento(contasDistintas) {
+  const response = await api.patch('/pagamentos/estornos/politica', { contas_distintas: contasDistintas });
+  return response.data;
+}
+
 // ============ ACESSOS ============
 export async function fetchAcessos(alunoId, pagina = 1, limite = 10) {
   const response = await api.get(`/acessos/aluno/${alunoId}`, {

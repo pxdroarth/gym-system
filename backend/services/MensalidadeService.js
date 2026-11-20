@@ -695,6 +695,8 @@ async function registrarPagamentoNoContexto(payload = {}, actor, scope = null, t
   if (valorCentavos === null || valorCentavos <= 0) {
     throw new AppError('valor_pago invalido (use valor positivo com ate duas casas decimais)', 400, 'VALOR_PAGO_INVALIDO');
   }
+  // Meio do pagamento (L04, sublote A). Import tardio para evitar ciclo de require.
+  const meioPagamento = require('./EstornoPagamentoService').normalizarMeioPagamento(forma_pagamento);
 
   const chave = normalizarChaveIdempotencia(payload.chave_idempotencia);
   const hash = chave
@@ -777,11 +779,11 @@ async function registrarPagamentoNoContexto(payload = {}, actor, scope = null, t
   const insert = await tx.run(
     `INSERT INTO pagamento
       (mensalidade_id, data_pagamento, valor_pago, valor_previsto, tenant_id, unit_id,
-       chave_idempotencia, idempotencia_hash, created_at, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?)`,
+       chave_idempotencia, idempotencia_hash, created_at, created_by, forma_pagamento)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?)`,
     [
       mensalidade.id, dataPagamentoFinal, valor, Number(mensalidade.valor_cobrado || 0), tenantFinal, unitFinal,
-      chave, hash, actor?.id || null,
+      chave, hash, actor?.id || null, meioPagamento,
     ]
   );
   const pagamentoId = insert.lastID;
@@ -814,6 +816,7 @@ async function registrarPagamentoNoContexto(payload = {}, actor, scope = null, t
     mensalidade_id: mensalidade.id,
     data_pagamento: dataPagamentoFinal,
     valor_pago: valor,
+    forma_pagamento: meioPagamento,
     status_mensalidade: novoStatus,
     lancamento_id: lancamentoId,
     valor_cobrado: depois.valor_cobrado,

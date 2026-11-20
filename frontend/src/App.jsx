@@ -19,6 +19,7 @@ import ContasFinanceirasPage from "./pages/financeiro/ContasFinanceirasPage";
 import FinanceiroLayout from "./pages/financeiro/FinanceiroLayout";
 import PlanoContasPage from "./pages/financeiro/PlanoContasPage";
 import EstornosVendaPage from "./pages/financeiro/EstornosVendaPage";
+import EstornosPagamentoPage from "./pages/financeiro/EstornosPagamentoPage";
 import OnboardingTenantPage from "./pages/platform/OnboardingTenantPage";
 import PlanoAssociadosPage from "./pages/planos/associacoes/PlanoAssociadosPage";
 import PlanosPage from "./pages/planos/PlanosPage";
@@ -61,6 +62,7 @@ function App() {
                 <Route path="contas-financeiras" element={<ContasFinanceirasPage />} />
                 <Route path="plano-contas" element={<PlanoContasPage />} />
                 <Route path="estornos-venda" element={<EstornosVendaPage />} />
+                <Route path="estornos-pagamento" element={<EstornosPagamentoPage />} />
               </Route>
             </Route>
           </Route>

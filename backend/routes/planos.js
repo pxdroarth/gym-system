@@ -311,6 +311,7 @@ router.post(
       const pagamento = await MensalidadeService.registrarPagamento({
         mensalidade_id: mensalidade.id,
         valor_pago: valorPago,
+        forma_pagamento: req.body?.forma_pagamento,
       }, actor, scope, tx);
 
       const mensalidadeAtualizada = await tx.get(
