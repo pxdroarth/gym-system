@@ -170,7 +170,7 @@ router.get('/pesquisa', async (req, res) => {
 
     res.json({ alunos: lista, total: totalRow.total, pagina, limite });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message, code: error.code });
   }
 });
 
@@ -184,7 +184,7 @@ router.get('/', async (req, res) => {
     `, [dataLocalISO(), scope.tenant_id, scope.unit_id]);
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message, code: error.code });
   }
 });
 
@@ -263,7 +263,7 @@ router.get('/:id/debito', async (req, res) => {
     );
     res.json({ em_debito: row.total > 0 });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message, code: error.code });
   }
 });
 
@@ -380,7 +380,7 @@ router.get('/:id', async (req, res) => {
     if (!row) return res.status(404).json({ error: 'Aluno não encontrado' });
     res.json(row);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    res.status(error.statusCode || 500).json({ error: error.message, code: error.code });
   }
 });
 
