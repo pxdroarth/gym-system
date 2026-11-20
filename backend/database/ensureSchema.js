@@ -966,6 +966,38 @@ async function ensurePagamentoParcialColumns() {
 // original, o estado, os autores e os horarios de solicitacao, aprovacao e
 // execucao. A aprovacao e consumida uma vez (status aprovada -> executada) e o
 // indice unico impede duas execucoes para a mesma venda.
+// L04 (16/11/2026): valores por meio de cada venda. 'recebimento' na venda
+// quitada e 'devolucao' no estorno executado. A receita continua sendo um
+// unico lancamento por venda; esta tabela detalha o meio movimentado para a
+// conferencia. Vendas anteriores ficam sem linhas (meio nao registrado).
+async function ensureVendaPagamento() {
+  await runExecute(`
+    CREATE TABLE IF NOT EXISTS venda_pagamento (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id INTEGER NOT NULL,
+      unit_id INTEGER NOT NULL,
+      venda_id INTEGER NOT NULL,
+      venda_estorno_id INTEGER,
+      tipo TEXT NOT NULL CHECK (tipo IN ('recebimento', 'devolucao')),
+      meio TEXT NOT NULL CHECK (meio IN ('dinheiro', 'pix', 'cartao_credito', 'cartao_debito')),
+      valor_centavos INTEGER NOT NULL CHECK (valor_centavos > 0),
+      comprovante_referencia TEXT,
+      registrado_por TEXT,
+      registrado_por_nome TEXT,
+      registrado_em TEXT NOT NULL,
+      FOREIGN KEY (venda_id) REFERENCES venda_produto(id),
+      FOREIGN KEY (venda_estorno_id) REFERENCES venda_estorno(id)
+    )
+  `);
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_venda_pagamento_venda ON venda_pagamento (venda_id, tipo)');
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_venda_pagamento_scope ON venda_pagamento (tenant_id, unit_id, tipo, meio)');
+  // Devolucao registrada na execucao do estorno.
+  await addColumnIfMissing('venda_estorno', 'devolucao_meio_alternativo INTEGER');
+  await addColumnIfMissing('venda_estorno', 'devolucao_motivo TEXT');
+  await addColumnIfMissing('venda_estorno', 'devolucao_comprovante TEXT');
+  await addColumnIfMissing('venda_estorno', 'devolucao_confirmada_em TEXT');
+}
+
 async function ensureVendaEstorno() {
   await runExecute(`
     CREATE TABLE IF NOT EXISTS venda_estorno (
@@ -1064,6 +1096,7 @@ async function ensureSchema() {
     WHERE chave_idempotencia IS NOT NULL
   `);
   await ensureVendaEstorno();
+  await ensureVendaPagamento();
   await ensureUsuarioInterno(defaultScope);
   await ensureLegacyUserScopes(defaultScope);
   await backfillDefaultScope(defaultScope.tenantId, defaultScope.unitId);

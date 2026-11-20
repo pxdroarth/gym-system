@@ -114,7 +114,9 @@ async def main():
     produto = json.loads(urllib.request.urlopen(req).read())
     vendas = []
     for qtd in (3, 1, 1):
-        s, v = api("POST", "/vendas-produtos", owner, {"produto_id": produto["id"], "quantidade": qtd}, unit=matriz)
+        # Venda quitada no caixa: preco de catalogo R$ 12 pago em dinheiro.
+        s, v = api("POST", "/vendas-produtos", owner, {"produto_id": produto["id"], "quantidade": qtd,
+                                                      "pagamentos": [{"meio": "dinheiro", "valor": 12 * qtd}]}, unit=matriz)
         vendas.append(v["id"])
     check("setup: tres vendas do produto de R$ 12 na Matriz", s == 201, s)
     va, vb, vc = vendas
@@ -166,6 +168,8 @@ async def main():
         await alerta.wait_for()
         check("atendente: quantidade 4 de 3 recusada na tela", "entre zero e a quantidade vendida" in await alerta.inner_text())
         await campo.fill("1")
+        # Devolucao sugerida pelos meios da venda (R$ 36 em dinheiro), confirmada pelo operador.
+        await page.get_by_label("Confirmo que a devolução ao cliente foi feita nesses valores").check()
         await page.get_by_role("button", name="Executar estorno").click()
         await page.get_by_text("Período fechado.", exact=False).first.wait_for()
         await page.screenshot(path=f"{SHOTS}/2-atendente-periodo-fechado.png")

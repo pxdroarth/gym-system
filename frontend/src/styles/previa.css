@@ -93,6 +93,22 @@
 .gym-sale-summary { display: grid; gap: 10px; border-radius: 8px; background: var(--surface-muted); padding: 14px; }
 .gym-sale-summary > div { display: flex; justify-content: space-between; gap: 8px; }
 .gym-sale-summary dd { font-weight: 700; }
+.gym-pay { display: grid; gap: 10px; border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px; min-width: 0; }
+.gym-pay__legend { font-weight: 650; padding: 0 4px; }
+.gym-pay__row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 10px; align-items: end; }
+.gym-pay__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.gym-pay__status dd { font-variant-numeric: tabular-nums; }
+.gym-pay__status.is-pending dd { color: var(--color-warning-strong, #b45309); }
+.gym-pay__status.is-ok dd { color: var(--color-success-strong, #15803d); }
+.gym-pay__note { color: var(--text-muted); font-size: 13px; }
+.gym-pay__caption { caption-side: top; text-align: left; font-weight: 650; padding: 8px 12px; }
+.gym-pay__done { margin-top: 6px; display: grid; gap: 2px; }
+.app-shell .gym-pay-table th, .app-shell .gym-pay-table td, .ui-modal .gym-pay-table th, .ui-modal .gym-pay-table td { white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (max-width: 560px) {
+  .gym-pay__row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .gym-pay__row > :last-child:nth-child(3) { grid-column: 1 / -1; justify-self: end; }
+  .ui-modal .gym-pay-table th, .ui-modal .gym-pay-table td { padding-inline: 8px; font-size: 12px; }
+}
 .app-shell .ui-status-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 22px; }
 .app-shell .ui-kpi-card__inner {
   display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 16px;

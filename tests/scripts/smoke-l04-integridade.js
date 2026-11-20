@@ -111,7 +111,9 @@ async function main() {
   const id = criacao.json.id;
   const rotaProduto = `/produtos/${id}`;
   const rotaVendas = '/vendas-produtos';
-  const pedido = { produto_id: id, quantidade: 3 };
+  // Venda quitada no caixa (L04): preco de catalogo R$ 25 e pagamento por meio.
+  const pedidoDe = (quantidade) => ({ produto_id: id, quantidade, pagamentos: [{ meio: 'dinheiro', valor: 25 * quantidade }] });
+  const pedido = pedidoDe(3);
   const opcoes = { ...naRecepcao, body: pedido, key: marca };
   await negar('operador de acesso nao vende', 'POST', rotaVendas, { ...opcoes, token: operador.token }, 403, 'PERMISSAO_NEGADA');
   await negar('recepcao nao ajusta estoque por PATCH', 'PATCH', `${rotaProduto}/estoque`,
@@ -188,7 +190,7 @@ async function main() {
 
   try {
     await run("UPDATE plano_contas SET tipo = 'receita', tenant_id = ? WHERE id = 2", [outra.tenant_id]);
-    const concorrente = { ...opcoes, key: randomUUID(), body: { ...pedido, quantidade: 1 } };
+    const concorrente = { ...opcoes, key: randomUUID(), body: pedidoDe(1) };
     const respostas = await Promise.all([request('POST', rotaVendas, concorrente), request('POST', rotaVendas, concorrente)]);
     check('chave concorrente cria uma venda', respostas.map((r) => r.status).sort(), [200, 201]);
     check('chave concorrente devolve a mesma venda', respostas[0].json.id, respostas[1].json.id);

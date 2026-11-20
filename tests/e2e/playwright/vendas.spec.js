@@ -55,6 +55,10 @@ test.describe('Cadastro de venda', () => {
       const dialog = page.getByRole('dialog', { name: 'Registrar Venda' });
       await dialog.getByLabel('Produto').selectOption(String(before.id));
       await dialog.getByLabel('Quantidade').fill(String(quantity));
+      // Venda so conclui quitada: o total vem do preco de catalogo.
+      const total = (Math.round(Number(before.preco) * 100) * quantity / 100).toFixed(2).replace('.', ',');
+      await dialog.getByLabel('Valor 1 (R$)').fill(total);
+      await expect(dialog.getByTestId('venda-saldo')).toHaveText('Quitado');
       const pending = watchResponse(page, 'POST', '/vendas-produtos');
       await dialog.getByRole('button', { name: 'Registrar Venda', exact: true }).click();
       const response = await pending;
@@ -84,7 +88,7 @@ test.describe('Cadastro de venda', () => {
     await expect(page.getByRole('button', { name: /Nova venda|Registrar Venda/i })).toHaveCount(0);
     const response = await request.post(`${api}/vendas-produtos`, {
       headers: { Authorization: authorization, 'X-Unit-Id': String(unit.id) },
-      data: { produto_id: before.id, quantidade: quantity },
+      data: { produto_id: before.id, quantidade: quantity, pagamentos: [{ meio: 'dinheiro', valor: Number(before.preco) * quantity }] },
     });
     expect(response.status()).toBe(403);
     expect((await response.json()).code).toBe('PERMISSAO_NEGADA');

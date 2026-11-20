@@ -59,6 +59,11 @@ async function main() {
   const produtoId = prod.lastID;
   const estoque = async () => (await runGet('SELECT estoque FROM produto WHERE id = ?', [produtoId])).estoque;
   const item = (q) => [{ produto_id: produtoId, quantidade_reposta: q }];
+  // Devolucao confirmada pelo meio da venda (dinheiro), no valor integral.
+  const devolucao = async (estornoId) => {
+    const e = await runGet('SELECT valor_estornado FROM venda_estorno WHERE id = ?', [estornoId]);
+    return { devolucoes: [{ meio: 'dinheiro', valor: e.valor_estornado }], devolucao_confirmada: true };
+  };
 
   async function fechar(ano, mes) {
     await runExecute(
@@ -78,7 +83,7 @@ async function main() {
   // pedido, a data do lancamento original.
   async function vendaAprovada(qtd, dataVendaUtc, dataLancamento) {
     agora = new Date();
-    const { venda } = await VendaService.registrarVenda({ produto_id: produtoId, quantidade: qtd }, vendedor, scope);
+    const { venda } = await VendaService.registrarVenda({ produto_id: produtoId, quantidade: qtd, pagamentos: [{ meio: 'dinheiro', valor: 10 * qtd }] }, vendedor, scope);
     await runExecute('UPDATE venda_produto SET data_venda = ? WHERE id = ?', [dataVendaUtc, venda.id]);
     if (dataLancamento) {
       await runExecute("UPDATE conta_financeira SET data_lancamento = ? WHERE origem = 'venda_produto' AND origem_id = ?", [dataLancamento, venda.id]);
@@ -103,7 +108,7 @@ async function main() {
 
   async function recusa423(label, vendaId, estornoId, trecho) {
     const antes = await foto(vendaId, estornoId);
-    const r = await espera(Estorno.executar(estornoId, { itens: item(1) }, vendedor, scope));
+    const r = await espera(Estorno.executar(estornoId, { itens: item(1), ...(await devolucao(estornoId)) }, vendedor, scope));
     const depois = await foto(vendaId, estornoId);
     check(`${label} -> 423 PERIODO_FECHADO (${trecho})`, !r.ok && r.error.statusCode === 423 && r.error.code === 'PERIODO_FECHADO'
       && String(r.error.message).includes(trecho), r.ok ? 'executou' : `${r.error.statusCode} ${r.error.code} ${r.error.message}`);
@@ -122,7 +127,7 @@ async function main() {
   await fechar(2030, 9);
   await recusa423('mes da venda (09/2030) fechado, estorno em 10/2030 aberto', a.venda.id, a.estornoId, 'mes da venda');
   await reabrir(2030, 9);
-  let r = await espera(Estorno.executar(a.estornoId, { itens: item(1) }, vendedor, scope));
+  let r = await espera(Estorno.executar(a.estornoId, { itens: item(1), ...(await devolucao(a.estornoId)) }, vendedor, scope));
   check('apos reabrir 09/2030, a mesma aprovacao executa -> ok', r.ok, r.ok ? '' : `${r.error.code} ${r.error.message}`);
   check('contrapartida datada no dia do estorno (10/10/2030)', r.ok && r.valor.lancamento_inverso.data_lancamento === '2030-10-10', r.ok && r.valor.lancamento_inverso.data_lancamento);
 
@@ -132,7 +137,7 @@ async function main() {
   await fechar(2030, 11);
   await recusa423('mes do estorno (11/2030) fechado, venda em 10/2030 aberta', b.venda.id, b.estornoId, 'mes do estorno');
   await reabrir(2030, 11);
-  r = await espera(Estorno.executar(b.estornoId, { itens: item(1) }, vendedor, scope));
+  r = await espera(Estorno.executar(b.estornoId, { itens: item(1), ...(await devolucao(b.estornoId)) }, vendedor, scope));
   check('apos reabrir 11/2030, a mesma aprovacao executa -> ok', r.ok, r.ok ? '' : `${r.error.code} ${r.error.message}`);
 
   // ---------- mes da venda pelo fuso: UTC daria o mes errado ----------
@@ -159,7 +164,7 @@ async function main() {
   agora = new Date('2030-11-30T23:30:00-03:00');
   await fechar(2030, 12);
   const est = await estoque();
-  r = await espera(Estorno.executar(e.estornoId, { itens: item(2) }, vendedor, scope));
+  r = await espera(Estorno.executar(e.estornoId, { itens: item(2), ...(await devolucao(e.estornoId)) }, vendedor, scope));
   check('30/11 23h30 com 12/2030 fechado e 11 aberto -> executa', r.ok, r.ok ? '' : `${r.error.code} ${r.error.message}`);
   check('contrapartida em 30/11/2030 (UTC daria 01/12) e data_operacao igual', r.ok && r.valor.lancamento_inverso.data_lancamento === '2030-11-30'
     && r.valor.estorno.data_operacao === '2030-11-30', r.ok && [r.valor.lancamento_inverso.data_lancamento, r.valor.estorno.data_operacao]);
@@ -174,7 +179,7 @@ async function main() {
   // ---------- virada do dia ----------
   const g = await vendaAprovada(1, '2031-01-10 15:00:00');
   agora = new Date('2031-01-15T22:00:00-03:00');
-  r = await espera(Estorno.executar(g.estornoId, { itens: item(0) }, vendedor, scope));
+  r = await espera(Estorno.executar(g.estornoId, { itens: item(0), ...(await devolucao(g.estornoId)) }, vendedor, scope));
   check('15/01 22h em Brasilia: contrapartida em 15/01/2031 (UTC daria 16/01)', r.ok && r.valor.lancamento_inverso.data_lancamento === '2031-01-15',
     r.ok ? r.valor.lancamento_inverso.data_lancamento : r.error.message);
 
@@ -187,12 +192,12 @@ async function main() {
     if (entry.action === 'executar_estorno_venda') throw new Error('falha simulada na auditoria');
     return original(entry, client);
   });
-  r = await espera(Estorno.executar(h.estornoId, { itens: item(2) }, vendedor, scope));
+  r = await espera(Estorno.executar(h.estornoId, { itens: item(2), ...(await devolucao(h.estornoId)) }, vendedor, scope));
   falha.mock.restore();
   const depois = await foto(h.venda.id, h.estornoId);
   check('falha na auditoria (ultima gravacao) -> erro propagado', !r.ok && /falha simulada/.test(r.error.message), r.ok ? 'executou' : r.error.message);
   check('rollback: estoque, contrapartida, reversao, venda e aprovacao intactos', antes === depois, antes === depois ? '' : `${antes} -> ${depois}`);
-  r = await espera(Estorno.executar(h.estornoId, { itens: item(2) }, vendedor, scope));
+  r = await espera(Estorno.executar(h.estornoId, { itens: item(2), ...(await devolucao(h.estornoId)) }, vendedor, scope));
   check('depois do rollback, a mesma aprovacao executa -> ok, repoe 2', r.ok && r.valor.quantidade_reposta === 2, r.ok ? '' : r.error.message);
 
   // ---------- receita original ausente no escopo: exige conciliacao ----------
@@ -200,7 +205,7 @@ async function main() {
   async function recusaSemReceita(label, vendaId, estornoId) {
     const antes = await foto(vendaId, estornoId);
     const lancAntes = await runGet('SELECT COUNT(*) AS n, ROUND(COALESCE(SUM(valor), 0), 2) AS s FROM conta_financeira WHERE deleted_at IS NULL');
-    const res = await espera(Estorno.executar(estornoId, { itens: item(1) }, vendedor, scope));
+    const res = await espera(Estorno.executar(estornoId, { itens: item(1), ...(await devolucao(estornoId)) }, vendedor, scope));
     const depois = await foto(vendaId, estornoId);
     const lancDepois = await runGet('SELECT COUNT(*) AS n, ROUND(COALESCE(SUM(valor), 0), 2) AS s FROM conta_financeira WHERE deleted_at IS NULL');
     check(`${label} -> 409 VENDA_SEM_RECEITA_ORIGINAL com acao de conciliacao`, !res.ok && res.error.statusCode === 409
@@ -222,7 +227,7 @@ async function main() {
   await recusaSemReceita('receita original excluida', i.venda.id, i.estornoId);
   await recusaSemReceita('receita original so em outra unidade', j.venda.id, j.estornoId);
   await runExecute('UPDATE conta_financeira SET deleted_at = NULL WHERE origem = ? AND origem_id = ?', ['venda_produto', i.venda.id]);
-  r = await espera(Estorno.executar(i.estornoId, { itens: item(2) }, vendedor, scope));
+  r = await espera(Estorno.executar(i.estornoId, { itens: item(2), ...(await devolucao(i.estornoId)) }, vendedor, scope));
   check('apos a conciliacao (receita restaurada), a mesma aprovacao executa -> ok', r.ok && Number(r.valor.lancamento_inverso.valor) === 20,
     r.ok ? '' : `${r.error.code} ${r.error.message}`);
 
@@ -260,7 +265,7 @@ async function main() {
   // Venda real ha 3 horas, no segundo 59 do minuto; pedido aberto agora.
   const instanteVenda = new Date(Math.floor((Date.now() - 3 * 3600 * 1000) / MIN) * MIN + 59000);
   agora = new Date();
-  const { venda: vk } = await VendaService.registrarVenda({ produto_id: produtoId, quantidade: 1 }, vendedor, scope);
+  const { venda: vk } = await VendaService.registrarVenda({ produto_id: produtoId, quantidade: 1, pagamentos: [{ meio: 'dinheiro', valor: 10 }] }, vendedor, scope);
   await runExecute('UPDATE venda_produto SET data_venda = ? WHERE id = ?', [instanteVenda.toISOString().slice(0, 19).replace('T', ' '), vk.id]);
   const { estorno: ek } = await Estorno.solicitar(vk.id, { motivo: 'autorizacao anterior ao pedido' }, vendedor, scope);
   const registrar = (quando) => espera(Estorno.registrarAutorizacaoExterna(ek.id, {
@@ -304,7 +309,7 @@ async function main() {
   const anteontemLocal = deslocarData(hojeLocal, -2);
   async function pedidoLegado(motivo) {
     agora = new Date();
-    const { venda } = await VendaService.registrarVenda({ produto_id: produtoId, quantidade: 1 }, vendedor, scope);
+    const { venda } = await VendaService.registrarVenda({ produto_id: produtoId, quantidade: 1, pagamentos: [{ meio: 'dinheiro', valor: 10 }] }, vendedor, scope);
     await runExecute('UPDATE venda_produto SET data_venda = ? WHERE id = ?', [ontemLocal, venda.id]);
     const { estorno } = await Estorno.solicitar(venda.id, { motivo }, vendedor, scope);
     return { venda, estorno };

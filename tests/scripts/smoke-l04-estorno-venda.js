@@ -122,7 +122,7 @@ async function semEfeito(label, vendaId, chamada, status, codigo) {
   check('setup: produto R$ 10 com estoque 80 na Matriz', pr.status === 201 && produto.id, pr.status);
 
   async function vender(qtd) {
-    const r = await req('POST', '/vendas-produtos', { s: owner, unit: matriz, body: { produto_id: produto.id, quantidade: qtd } });
+    const r = await req('POST', '/vendas-produtos', { s: owner, unit: matriz, body: { produto_id: produto.id, quantidade: qtd, pagamentos: [{ meio: 'dinheiro', valor: 10 * qtd }] } });
     if (r.s !== 201) throw new Error(`venda: ${r.s} ${r.code}`);
     return r.j;
   }
@@ -131,7 +131,12 @@ async function semEfeito(label, vendaId, chamada, status, codigo) {
   const solicitar = (s, vendaId, motivo = 'Cliente devolveu', unit) => req('POST', `/vendas-produtos/${vendaId}/estornos`, { s, unit, body: { motivo } });
   const aprovar = (s, eid, unit, alias = 'vendas-produtos') => req('POST', `/${alias}/estornos/${eid}/aprovar`, { s, unit });
   const externa = (s, eid, body, unit, alias = 'vendas-produtos') => req('POST', `/${alias}/estornos/${eid}/autorizacao-externa`, { s, unit, body });
-  const executar = (s, eid, itens, unit, alias = 'vendas-produtos') => req('POST', `/${alias}/estornos/${eid}/executar`, { s, unit, body: { itens } });
+  // Devolucao confirmada pelo mesmo meio da venda (dinheiro), no valor integral do pedido.
+  const devolucao = async (eid) => {
+    const e = await q1('SELECT valor_estornado FROM venda_estorno WHERE id = ?', [eid]);
+    return e ? { devolucoes: [{ meio: 'dinheiro', valor: e.valor_estornado }], devolucao_confirmada: true } : {};
+  };
+  const executar = async (s, eid, itens, unit, alias = 'vendas-produtos') => req('POST', `/${alias}/estornos/${eid}/executar`, { s, unit, body: { itens, ...(await devolucao(eid)) } });
   const item = (quantidade) => [{ produto_id: produto.id, quantidade_reposta: quantidade }];
   const agoraISO = () => new Date().toISOString();
   // Horario de parede no fuso da unidade, como o formulario envia (horas e minutos).

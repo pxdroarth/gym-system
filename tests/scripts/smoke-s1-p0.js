@@ -130,7 +130,7 @@ async function negar(label, fotoArgs, chamada, statusEsperado, codigoEsperado) {
     return r.j;
   }
   async function vender(unit, produtoId, quantidade = 2) {
-    const r = await req('POST', '/vendas-produtos', { token: owner.token, unit, body: { produto_id: produtoId, quantidade } });
+    const r = await req('POST', '/vendas-produtos', { token: owner.token, unit, body: { produto_id: produtoId, quantidade, pagamentos: [{ meio: 'dinheiro', valor: 25 * quantidade }] } });
     if (r.s !== 201) throw new Error(`setup venda: ${r.s} ${r.code}`);
     return r.j;
   }
@@ -293,7 +293,7 @@ async function negar(label, fotoArgs, chamada, statusEsperado, codigoEsperado) {
   async function tentativaVenda(label, unit, produtoId, statusEsperado, codigoEsperado) {
     const e0 = (await q1('SELECT estoque FROM produto WHERE id = ?', [produtoId])).estoque;
     const v0 = (await q1('SELECT COUNT(*) AS n FROM venda_produto WHERE produto_id = ?', [produtoId])).n;
-    const resp = await req('POST', '/vendas-produtos', { token: owner.token, unit, body: { produto_id: produtoId, quantidade: 1 } });
+    const resp = await req('POST', '/vendas-produtos', { token: owner.token, unit, body: { produto_id: produtoId, quantidade: 1, pagamentos: [{ meio: 'dinheiro', valor: 25 }] } });
     const e1 = (await q1('SELECT estoque FROM produto WHERE id = ?', [produtoId])).estoque;
     const v1 = (await q1('SELECT COUNT(*) AS n FROM venda_produto WHERE produto_id = ?', [produtoId])).n;
     check(`${label} -> ${statusEsperado}${codigoEsperado ? ` ${codigoEsperado}` : ''}`, resp.s === statusEsperado && (!codigoEsperado || resp.code === codigoEsperado), `${resp.s} ${resp.code || ''}`);

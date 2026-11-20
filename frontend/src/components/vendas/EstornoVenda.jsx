@@ -17,6 +17,16 @@ import {
   registrarAutorizacaoExternaEstornoVenda,
   solicitarEstornoVenda,
 } from "../../services/vendaProdutoService";
+import {
+  ConferenciaMeios,
+  ValoresPorMeio,
+  centavosDe,
+  linhaVazia,
+  mesmosMeios,
+  paraApi,
+  rotuloMeio,
+  situacaoPagamento,
+} from "./PagamentoPorMeio";
 
 // Estorno de venda (L04, DN-3). Fluxo padrao: o atendente, o gestor, o
 // financeiro, o admin ou o dono solicitam com motivo; o gestor (ou dono/admin)
@@ -57,6 +67,13 @@ const MENSAGENS = {
   MOTIVO_OBRIGATORIO: "Informe o motivo do estorno.",
   PERMISSAO_NEGADA: "Seu papel não pode executar esta etapa do estorno.",
   UNIT_FORBIDDEN: "A unidade selecionada não está autorizada para você.",
+  DEVOLUCAO_OBRIGATORIA: "Informe o que foi devolvido ao cliente, por meio.",
+  DEVOLUCAO_NAO_CONFIRMADA: "Confirme que a devolução ao cliente foi feita.",
+  DEVOLUCAO_DIFERENTE_DO_TOTAL: "O estorno é integral: os valores devolvidos precisam somar o total da venda.",
+  MOTIVO_TROCA_MEIO_OBRIGATORIO: "Informe o motivo da devolução em outro meio.",
+  COMPROVANTE_OBRIGATORIO: "Informe a referência do comprovante da devolução.",
+  PAGAMENTO_VALOR_INVALIDO: "Valores com no máximo duas casas decimais e maiores que zero.",
+  PAGAMENTO_MEIO_INVALIDO: "Meio de devolução inválido.",
 };
 
 export function mensagemRecusaEstorno(error) {
@@ -192,6 +209,12 @@ export function EstornoVendaModal({ venda, onClose, onChanged }) {
   const [motivo, setMotivo] = useState("");
   const [quantidade, setQuantidade] = useState("");
   const [externa, setExterna] = useState({ autorizador_id: "", canal: "whatsapp", quando: agoraLocal(), referencia: "" });
+  // Devolucao por meio na execucao (L04, 16/11/2026).
+  const [devolucao, setDevolucao] = useState([linhaVazia()]);
+  const [devolucaoConfirmada, setDevolucaoConfirmada] = useState(false);
+  const [motivoTroca, setMotivoTroca] = useState("");
+  const [comprovante, setComprovante] = useState("");
+  const [registrarMeioLegado, setRegistrarMeioLegado] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState("");
 
@@ -219,6 +242,23 @@ export function EstornoVendaModal({ venda, onClose, onChanged }) {
   const aberto = pedidos.find((p) => p.status === "aprovada") || pedidos.find((p) => p.status === "solicitada");
   const valorTotal = venda.valor_total ?? Number(venda.preco_unitario || 0) * Number(venda.quantidade || 0);
   const podeRegistrar = perm.registrar && aberto?.status === "solicitada";
+  // Meios e valores da venda: do pedido (conferencia) ou da linha da lista.
+  const conferencia = pedidos.find((p) => p.status === "executada")?.conferencia
+    || pedidos[0]?.conferencia
+    || (venda.recebimentos ? venda : null);
+  const originais = conferencia?.recebimentos || [];
+  const pagamentoRegistrado = Boolean(conferencia?.pagamento_registrado);
+  const totalCentavos = centavosDe(valorTotal);
+
+  // Sugestao: devolver pelos mesmos meios e valores da venda.
+  function sugerirMesmosMeios() {
+    setDevolucao(originais.length
+      ? originais.map((o) => ({ meio: o.meio, valor: Number(o.valor).toFixed(2).replace(".", ",") }))
+      : [linhaVazia()]);
+  }
+  useEffect(() => {
+    if (aberto?.status === "aprovada") sugerirMesmosMeios();
+  }, [aberto?.id, aberto?.status, originais.length]);
 
   useEffect(() => {
     if (!podeRegistrar) return;
@@ -237,6 +277,10 @@ export function EstornoVendaModal({ venda, onClose, onChanged }) {
       setMotivo("");
       setQuantidade("");
       setExterna({ autorizador_id: "", canal: "whatsapp", quando: agoraLocal(), referencia: "" });
+      setDevolucaoConfirmada(false);
+      setMotivoTroca("");
+      setComprovante("");
+      setRegistrarMeioLegado(false);
       await carregar();
       onChanged?.();
     } catch (error) {
@@ -256,6 +300,32 @@ export function EstornoVendaModal({ venda, onClose, onChanged }) {
     && (mesmaConta(aberto.solicitado_por, meuId) || mesmaConta(aberto.aprovado_por, meuId));
   const qtdNumero = quantidade === "" ? NaN : Number(quantidade);
   const qtdValida = Number.isInteger(qtdNumero) && qtdNumero >= 0 && qtdNumero <= Number(venda.quantidade || 0);
+  const informaDevolucao = pagamentoRegistrado || registrarMeioLegado;
+  const situacaoDevolucao = situacaoPagamento(totalCentavos, devolucao);
+  const devolucaoApi = paraApi(devolucao);
+  const meioAlternativo = pagamentoRegistrado && situacaoDevolucao.quitado && !mesmosMeios(devolucaoApi, originais);
+
+  function enviarExecucao(event) {
+    event.preventDefault();
+    if (!qtdValida) return setErro(MENSAGENS.QUANTIDADE_REPOSTA_INVALIDA);
+    const extra = {};
+    if (informaDevolucao) {
+      if (!situacaoDevolucao.quitado) return setErro(MENSAGENS.DEVOLUCAO_DIFERENTE_DO_TOTAL);
+      if (meioAlternativo && motivoTroca.trim().length < 3) return setErro(MENSAGENS.MOTIVO_TROCA_MEIO_OBRIGATORIO);
+      if (meioAlternativo && comprovante.trim().length < 3) return setErro(MENSAGENS.COMPROVANTE_OBRIGATORIO);
+      if (!devolucaoConfirmada) return setErro(MENSAGENS.DEVOLUCAO_NAO_CONFIRMADA);
+      Object.assign(extra, {
+        devolucoes: devolucaoApi,
+        devolucao_confirmada: true,
+        motivo_troca_meio: meioAlternativo ? motivoTroca.trim() : undefined,
+        comprovante_referencia: comprovante.trim() || undefined,
+      });
+    }
+    return agir(
+      () => executarEstornoVenda(aberto.id, [{ produto_id: venda.produto_id, quantidade_reposta: qtdNumero }], extra),
+      "Estorno executado."
+    );
+  }
 
   function enviarExterna(event) {
     event.preventDefault();
@@ -293,6 +363,8 @@ export function EstornoVendaModal({ venda, onClose, onChanged }) {
           </div>
         </div>
 
+        <ConferenciaMeios conferencia={conferencia} titulo={executado ? "Conferência por meio (venda estornada)" : "Meios e valores da venda"} />
+
         {politica.contas_distintas && (
           <p className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800" data-testid="aviso-tres-contas">
             Esta unidade exige três contas distintas: solicitante, autorizador e executor.
@@ -316,6 +388,18 @@ export function EstornoVendaModal({ venda, onClose, onChanged }) {
                 </div>
                 <div>Motivo: {p.motivo}</div>
                 <EtapasPedido p={p} />
+                {p.status === "executada" && p.conferencia?.devolucoes?.length > 0 && (
+                  <div className="gym-pay__done" data-testid="devolucao-registrada">
+                    <div className="font-medium">
+                      Devolvido: {p.conferencia.devolucoes.filter((d) => d.venda_estorno_id === p.id)
+                        .map((d) => `${d.rotulo || rotuloMeio(d.meio)} ${formatarMoeda(d.valor)}`).join(" · ")}
+                      {p.devolucao_meio_alternativo === 1 && <Badge tone="amber" className="ml-2">Outro meio</Badge>}
+                    </div>
+                    {p.devolucao_motivo && <div>Motivo da troca de meio: {p.devolucao_motivo}</div>}
+                    {p.devolucao_comprovante && <div>Comprovante: {p.devolucao_comprovante}</div>}
+                    {p.devolucao_confirmada_em && <div>Devolução confirmada pelo operador em {formatarHorario(p.devolucao_confirmada_em)}</div>}
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -403,21 +487,7 @@ export function EstornoVendaModal({ venda, onClose, onChanged }) {
             )}
 
             {perm.executar && aberto?.status === "aprovada" && (
-              <form
-                noValidate
-                className="space-y-2"
-                onSubmit={(event) => {
-                  event.preventDefault();
-                  if (!qtdValida) {
-                    setErro(MENSAGENS.QUANTIDADE_REPOSTA_INVALIDA);
-                    return;
-                  }
-                  agir(
-                    () => executarEstornoVenda(aberto.id, [{ produto_id: venda.produto_id, quantidade_reposta: qtdNumero }]),
-                    "Estorno executado."
-                  );
-                }}
-              >
+              <form noValidate className="space-y-3" onSubmit={enviarExecucao} aria-label="Executar estorno">
                 <Input
                   label={`Unidades recebidas em condição de venda (0 a ${venda.quantidade})`}
                   type="number"
@@ -431,6 +501,45 @@ export function EstornoVendaModal({ venda, onClose, onChanged }) {
                   O valor da venda é estornado por inteiro. Só a quantidade informada volta ao estoque; itens consumidos,
                   avariados ou não devolvidos ficam fora do estoque disponível.
                 </p>
+                {!pagamentoRegistrado && (
+                  <label className="flex items-center gap-2 text-sm">
+                    <input type="checkbox" checked={registrarMeioLegado} onChange={(e) => setRegistrarMeioLegado(e.target.checked)} />
+                    Registrar o meio usado na devolução (o meio da venda original não foi registrado)
+                  </label>
+                )}
+                {informaDevolucao && (
+                  <>
+                    <ValoresPorMeio
+                      legenda="Devolução ao cliente"
+                      idPrefixo="devolucao"
+                      rotuloSaldo="Faltam devolver"
+                      totalCentavos={totalCentavos}
+                      linhas={devolucao}
+                      onChange={setDevolucao}
+                    />
+                    {pagamentoRegistrado && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                        <span>Sugestão: devolver pelos mesmos meios e valores da venda.</span>
+                        <Button type="button" size="sm" variant="ghost" onClick={sugerirMesmosMeios}>Usar os meios da venda</Button>
+                      </div>
+                    )}
+                    {meioAlternativo && (
+                      <p className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800" data-testid="aviso-meio-alternativo">
+                        Devolução em meio diferente da venda. Registre o motivo combinado com o cliente e a referência do comprovante.
+                      </p>
+                    )}
+                    {meioAlternativo && (
+                      <Input label="Motivo da devolução em outro meio" value={motivoTroca} maxLength={300}
+                        onChange={(e) => setMotivoTroca(e.target.value)} />
+                    )}
+                    <Input label={meioAlternativo ? "Referência do comprovante" : "Referência do comprovante (opcional)"} value={comprovante}
+                      maxLength={500} onChange={(e) => setComprovante(e.target.value)} />
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={devolucaoConfirmada} onChange={(e) => setDevolucaoConfirmada(e.target.checked)} />
+                      Confirmo que a devolução ao cliente foi feita nesses valores
+                    </label>
+                  </>
+                )}
                 {bloqueioTresContas && <p className="text-sm text-amber-700">{MENSAGENS.CONTAS_DISTINTAS_EXIGIDAS}</p>}
                 <div className="flex justify-end">
                   <Button type="submit" variant="danger" disabled={enviando || bloqueioTresContas}>
