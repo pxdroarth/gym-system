@@ -39,7 +39,8 @@ Troque `L01` pelo ID autorizado na execução seguinte.
 | L04 | Sete decisões operacionais aprovadas em 16/11/2026. Veja [escopo restante e critérios de aceite](#l04--decisões-aprovadas-em-16112026). Preço manual fora da regra de catálogo do piloto, registro formal de perdas, estorno financeiro parcial de venda e permissões de criação e baixa de contas pelo Financeiro seguem no backlog. |
 | L07–L09 | Tratamento de cadastros duplicados, seleção das unidades do plano, momento em que mudanças afetam um ciclo pago, dependentes e transferência de unidade do contrato. |
 | L11–L12 | Oferta SaaS, ativação, atraso, suspensão e primeiro gateway. |
-| L16, L18–L21 | Segundo fornecedor, política de recorrência do aluno, modelo de catraca e conduta durante indisponibilidade. |
+| L16, L18–L21 | Segundo fornecedor, política de recorrência do aluno e modelo de catraca. A conduta durante indisponibilidade foi decidida em 20/11/2026 (ADR-003). |
+| L05 em diante | Arquitetura, migração, plugins, interface, acesso local e backup decididos em 20/11/2026. Veja [diretrizes de arquitetura](gym-system-diretrizes-arquitetura-em-avaliacao.md#decisões-de-arquitetura-aprovadas-em-20112026). |
 
 Registre cada decisão com data, cenário, regra aprovada e lotes afetados. Quando uma escolha já constar dos requisitos aprovados, referencie o registro existente.
 
@@ -71,18 +72,19 @@ O dono aprovou o L01, integrado em `ba5e23c`. O L02 foi concluído e integrado �
 | L07.1 | Histórico fictício de 12 meses para desenvolvimento | L04 e L06 | Fila | Carga reproduzível com cadastros e operações datados durante os 12 meses. Vendas, pagamentos, estoque e caixa conciliáveis por unidade. |
 | L08 | Unidades do plano e direitos por ciclo | L06, regra de vigência | Fila | Cobertura do titular e dependentes segue as unidades e o ciclo aprovados. |
 | L09 | Visita à filial e aceite multiunidade | L07–L08 | Fila | Uma mensalidade no caixa da unidade do contrato e visita na unidade autorizada. |
-| L10 | Base dos conectores | L05, contratos das categorias | Fila | Adaptadores registrados por tipo, com configuração e credenciais no escopo correto. |
+| L10 | Base dos conectores | L05, contratos das categorias | Fila | Plugins registrados por categoria, com configuração e credenciais no escopo correto: serviços da internet na API central e equipamentos na API local de acesso (ADR-002). Ordem: Acesso, Pagamentos, Mensagens e Fiscal. |
 | L11 | Ativação e ciclo da assinatura SaaS | L09, oferta e política de ativação | Fila | Ativação, atraso e encerramento seguem os estados comerciais aprovados. |
 | L12 | Primeiro gateway e webhooks da assinatura SaaS | L10–L11 | Fila | Aviso autenticado e repetido gera uma baixa no fluxo e na rede corretos, em sandbox. |
-| L13 | Ensaio da migração do banco | L09, modelo alvo | Fila | IDs, totais e isolamento reconciliados em PostgreSQL, com procedimento de reversão. |
-| L14 | Exportação de dados, backup e restauração | L13 | Fila | Exportação autorizada e restauração ensaiada em ambiente isolado. |
+| L13 | Ensaio da migração do banco | L05, modelo alvo (ADR-004) | Fila | IDs, totais e isolamento reconciliados em PostgreSQL gerenciado (Supabase), trocando só a camada de banco, com smokes e Playwright aprovados e procedimento de reversão. |
+| L13.1 | TypeScript e NestJS por módulo | L13 (ADR-004) | Fila | Módulos migrados um a um com as rotas Express legadas rodando no NestJS durante a transição; smokes e Playwright inalterados aprovados a cada módulo. |
+| L14 | Exportação de dados, backup e restauração | L13 | Fila | Rotinas agendadas de backup na central e na academia, retenção 7/4/12, cópia criptografada fora do provedor, teste periódico de restauração e alerta de falha (ADR-006). Exportação autorizada e restauração ensaiada em ambiente isolado. |
 | L15 | Preparação da publicação e monitoramento | L12–L14 | Fila | Ambiente de homologação, publicação e reversão documentadas, com sinais de operação monitoráveis. |
 | L16 | Segundo conector de referência | L10, L12, fornecedor escolhido | Fila | Outra categoria, como mensagens ou ERP, usa o fluxo comum de conectores. |
 | L17 | Gestão de conectores por academia | L12, L16 | Fila | Duas redes ativam, trocam e desligam conexões. Cobranças novas e anteriores seguem a conexão adequada. |
 | L18 | Cobrança recorrente do aluno | L03, L12, L17 | Fila | Pagamento confirmado atualiza uma vez a mensalidade e a cobertura do aluno no escopo do contrato. |
 | L19 | Conciliação, falhas e cancelamento da recorrência | L18 | Fila | Falha, reenvio, estorno e cancelamento têm efeitos financeiros e de cobertura verificáveis. |
-| L20 | Integração da catraca piloto | L09, L17, equipamento definido | Fila | Dispositivo cadastrado na unidade aplica a decisão de acesso e registra entradas. |
-| L21 | Indisponibilidade e conciliação das entradas | L20 | Fila | A política de indisponibilidade funciona e reenvios geram um único evento. |
+| L20 | API local de acesso e catraca piloto | L09, L17, equipamento definido (ADR-001, ADR-002) | Fila | API local na academia decide com a regra compartilhada, aplica o plugin da catraca e registra entradas em disco local, com credencial de dispositivo revogável. |
+| L21 | Indisponibilidade e conciliação das entradas | L20 (ADR-003) | Fila | Decisão pela cópia local por até 24 horas sem sincronizar, depois só liberação manual. Envio das entradas em lote à central, com reenvios gerando um único evento. |
 | L22 | Relatórios, impressão e aceite final | L15, L17, L19, L21 | Fila | Tela, papel, PDF e planilha apresentam escopo e totais consistentes. Fluxos acordados homologados. |
 
 ## L01 · Prompt pronto para execução
@@ -226,6 +228,19 @@ No piloto, o acesso é pré-pago por período. Uma compra anual quitada, inclusi
 ### L07.1 · Histórico fictício de 12 meses
 
 Ampliar o gerador de desenvolvimento para criar 12 meses consecutivos de registros exclusivamente sintéticos, com cadastros e matrículas de alunos distribuídos ao longo do ano. Incluir planos e vigências, mensalidades e pagamentos, vendas e devoluções, estoque, contas a pagar e a receber, caixa, fechamentos e acessos, conforme os módulos disponíveis. Usar Matriz e Filial nos cenários de multiunidade. A carga deve ser reproduzível em base de desenvolvimento descartável, com relacionamentos válidos e valores conciliáveis por unidade, mês e meio de pagamento. Incluir casos de quitação, pagamento parcial, vencimento, estorno e divergência registrada. O L04 e a homologação inicial do L05 usam dados de teste focados nas respectivas jornadas.
+
+## Decisões de arquitetura de 20/11/2026
+
+Registradas como ADR-001 a ADR-006 nas [diretrizes de arquitetura](gym-system-diretrizes-arquitetura-em-avaliacao.md#decisões-de-arquitetura-aprovadas-em-20112026). Resumo:
+
+- **Topologia:** API central SaaS modular (gestão, login, financeiro, relatórios) e API local de acesso em cada academia, com a regra de acesso compartilhada.
+- **Plugins:** contrato por categoria, mantidos pela equipe. Internet na central, equipamentos na API local. Ordem: Acesso, Pagamentos, Mensagens, Fiscal.
+- **Acesso sem internet:** decisão local por até 24 horas e envio das entradas em lote à central.
+- **Migração:** depois do L05; primeiro PostgreSQL (Supabase), depois TypeScript e NestJS módulo a módulo.
+- **Interface:** uma interface web responsiva, Electron como casca desktop, instalação pelo navegador no celular; app do aluno depois do piloto final.
+- **Backup:** rotinas agendadas na central e na academia, retenção 7/4/12, perda máxima de 24 horas e teste de restauração.
+
+O L04 segue na pilha atual. Os lotes L10, L13, L13.1, L14, L20 e L21 foram ajustados no quadro.
 
 ## Atualização auditada em 16/11/2026
 

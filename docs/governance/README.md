@@ -20,6 +20,7 @@ Esta pasta concentra os documentos que orientam decisões de produto, permissõe
 | `smoke-tests.md` | Roteiro manual, automação e verificações de ambiente, sessão, permissões e fluxos críticos. | Smokes automatizados em SQLite no CI. Aceites manuais do piloto seguem no Kanban. |
 | `readme-audit.md` | Registra a auditoria dos READMEs de 11/05/2026. | Registro histórico. |
 | `gym-system-contexto-e-kanban.md` | Sequência de lotes, decisões, estado e evidências de execução. | Acompanhamento vigente do piloto. |
+| `gym-system-diretrizes-arquitetura-em-avaliacao.md` | Diretrizes do proprietário e decisões de arquitetura (ADR-001 a ADR-006, 20/11/2026). | Orienta os lotes a partir do L05. |
 
 ## Como usar estes documentos
 
