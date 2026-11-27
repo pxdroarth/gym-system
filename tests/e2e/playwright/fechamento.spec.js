@@ -34,7 +34,9 @@ const hoje = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Pau
 
 async function abrirMes(page, periodo) {
   await page.goto('/financeiro/fechamento');
-  await page.getByLabel('Mês').fill(periodo);
+  await page.getByLabel('Mês', { exact: true }).fill(periodo);
+  // A tela so mostra a situacao do mes pedido por ultimo.
+  await expect(page.getByTestId('status-fechamento')).toHaveAttribute('data-periodo', periodo);
 }
 
 test.describe('Fechamento mensal', () => {
@@ -71,8 +73,16 @@ test.describe('Fechamento mensal', () => {
   });
 
   test('admin fecha um mês sem divergência; só o dono reabre com motivo', async ({ page, browser }) => {
+    // Reproduz o CI lento: a resposta do mes atual chega depois da de 06/2032.
+    const [anoAtual, mesAtual] = hoje().split('-').map(Number);
+    await page.route(new RegExp(`/fechamento-mensal/${anoAtual}/${mesAtual}$`), async (route) => {
+      await new Promise((r) => setTimeout(r, 1500));
+      await route.continue();
+    });
     await signIn(page, 'admin.academia');
     await abrirMes(page, '2032-06');
+    await page.waitForTimeout(1800);
+    await expect(page.getByTestId('status-fechamento')).toHaveAttribute('data-periodo', '2032-06');
     await expect(page.getByTestId('sem-divergencias')).toBeVisible();
     const fechar = watchResponse(page, 'POST', '/fechamento-mensal/2032/6/fechar');
     await page.getByRole('button', { name: 'Fechar mês' }).click();

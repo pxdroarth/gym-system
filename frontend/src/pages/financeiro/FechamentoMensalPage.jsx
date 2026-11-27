@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "react-toastify";
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
@@ -53,12 +53,18 @@ export default function FechamentoMensalPage() {
   const [motivoReabertura, setMotivoReabertura] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [ano, mes] = periodo.split("-").map(Number);
+  // Troca rapida de mes: so a resposta do pedido mais recente atualiza a tela.
+  const ultimoPedido = useRef(0);
 
   async function carregar() {
+    const pedido = ++ultimoPedido.current;
     setErro("");
+    setDados(null);
     try {
-      setDados(await fetchFechamentoMes(ano, mes));
+      const resposta = await fetchFechamentoMes(ano, mes);
+      if (pedido === ultimoPedido.current) setDados(resposta);
     } catch (error) {
+      if (pedido !== ultimoPedido.current) return;
       setErro(getApiErrorMessage(error));
       setDados(null);
     }
@@ -131,8 +137,8 @@ export default function FechamentoMensalPage() {
       <div className="p-5 space-y-5">
         <div className="flex flex-wrap items-end gap-3">
           <Input label="Mês" type="month" value={periodo} onChange={(e) => e.target.value && setPeriodo(e.target.value)} />
-          <div className="pb-2" data-testid="status-fechamento">
-            <Badge tone={STATUS[status]?.tone || "gray"}>{STATUS[status]?.label || status}</Badge>
+          <div className="pb-2" data-testid="status-fechamento" data-periodo={dados ? `${analise?.ano}-${String(analise?.mes).padStart(2, "0")}` : ""}>
+            {dados ? <Badge tone={STATUS[status]?.tone || "gray"}>{STATUS[status]?.label || status}</Badge> : <span className="text-sm text-gray-500">Carregando…</span>}
           </div>
           {fechamento?.fechado_em && fechado && (
             <span className="pb-2 text-sm text-gray-600">
