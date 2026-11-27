@@ -353,6 +353,16 @@ node tests\scripts\smoke-l04-estorno-baixa.js --base-url=http://localhost:3001 -
 
 Cobre a baixa com data, responsável e meio (inválido recusado sem baixar, conta criada já paga, meio opcional), a data estimada das contas pagas antes do sublote, a volta direta a pendente bloqueada, permissões por etapa e papel, conta pendente, sem motivo, de outra unidade ou derivada, pedido único (reenvio e concorrência), execução sem aprovação, autoaprovação, autorização externa (data anterior à baixa, registrador como autorizador, autorizador sem permissão), execução com a conta voltando a pendente sem lançamento inverso, repetição, nova baixa e novo pedido, mês fechado com nova tentativa após reabertura, três contas distintas e a fila do Financeiro. Cada recusa confere conta, estornos e auditoria antes e depois.
 
+## `smoke-l04-fechamento.js` (L04 · Fechamento mensal com conferência por meio e ressalva)
+
+Rode em base descartável semeada, com a API sobre ela. O smoke registra pagamentos, uma venda, baixas de contas e um estorno com devolução em outro meio no mês corrente da Matriz, e grava direto no SQLite um lançamento órfão em 03/2032 (mês sem uso nos demais smokes) para criar a divergência; ao final o lançamento é removido e o mês fica reaberto.
+
+```cmd
+node tests\scripts\smoke-l04-fechamento.js --base-url=http://localhost:3001 --db=backend\academia.sqlite
+```
+
+Cobre a soma por meio (pagamento estornado fora da entrada, devolução em outro meio na saída, venda, baixas a receber e a pagar), o que entrou sem meio registrado, o isolamento da Filial, o bloqueio por divergência sem gravar, as recusas da ressalva (motivo, evidência, valor, responsável ausente ou sem acesso ao Financeiro), o Financeiro sem permissão de fechar, o fechamento com ressalva e sua auditoria, a trava de lançamentos no mês fechado, o histórico, a reabertura só pelo dono com motivo e o fechamento normal sem divergência.
+
 ## `smoke-l04-estorno-venda-datas.js` (L04 · Períodos, data operacional e rollback)
 
 Roda em processo, sobre o SQLite da cópia descartável semeada, e controla só o relógio de negócio (como o `smoke-l02-ciclos.js`). Usa os anos de 2030 e 2031 e grava fechamentos e datas de venda direto na base.

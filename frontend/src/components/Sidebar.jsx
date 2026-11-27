@@ -42,6 +42,7 @@ export const menu = [
       { to: "/financeiro/estornos-venda", label: "Estornos de venda" },
       { to: "/financeiro/estornos-pagamento", label: "Estornos de pagamento" },
       { to: "/financeiro/estornos-baixa", label: "Estornos de baixa" },
+      { to: "/financeiro/fechamento", label: "Fechamento mensal" },
     ],
   },
   { to: "/acessos", label: "Acessos", icon: Radio, permission: UI_PERMISSIONS.NAV_DASHBOARD },

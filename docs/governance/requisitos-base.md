@@ -557,6 +557,16 @@ Decisões de 20/11 e 26/11/2026 (sublote C). Vale para contas manuais; lançamen
 - **Períodos.** O mês da conta e o mês da baixa precisam estar abertos; após reabertura, a mesma aprovação pode ser executada.
 - **Validação:** `tests/scripts/smoke-l04-estorno-baixa.js` e `tests/e2e/playwright/estorno-baixa.spec.js`.
 
+### L04 — Fechamento mensal com conferência por meio
+
+Decisão 6 de 16/11/2026 e decisões de 27/11/2026 (sublote D).
+
+- **Conferência.** Para cada meio (dinheiro, Pix, cartão de crédito e de débito, transferência, boleto), o mês mostra o que entrou e saiu: vendas (recebimentos e devoluções, pela data da venda), mensalidades (pagamentos não estornados, pela data do pagamento; devoluções de estorno, pela data do estorno) e contas manuais (baixas a receber e a pagar, pela data da baixa). O que entrou sem meio registrado aparece à parte, sem meio atribuído.
+- **Divergências.** Mensalidade paga sem lançamento, venda sem entrada, lançamento sem origem e venda de produto inexistente. Com divergência, o mês não fecha.
+- **Ressalva.** Dono ou admin pode fechar com ressalva, informando motivo, evidência, valor opcional e um responsável pelo acompanhamento com acesso ao Financeiro. A ressalva, as divergências e a conferência do momento ficam gravadas no fechamento e na auditoria. As diferenças de caixa do turno entram nessa regra no sublote E.
+- **Reabertura.** Só o dono reabre, com motivo e auditoria.
+- **Validação:** `tests/scripts/smoke-l04-fechamento.js` e `tests/e2e/playwright/fechamento.spec.js`.
+
 ## 15. Critérios de aceite do produto
 
 O produto pode ser considerado pronto para PostgreSQL/deploy de portfólio quando:

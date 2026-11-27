@@ -1,6 +1,6 @@
 import React from "react";
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { BarChart3, FileText, RotateCcw, WalletCards } from "lucide-react";
+import { BarChart3, CalendarCheck, FileText, RotateCcw, WalletCards } from "lucide-react";
 import RoleGate from "../../components/auth/RoleGate";
 import Card from "../../components/ui/Card";
 import PageHeader from "../../components/ui/PageHeader";
@@ -15,6 +15,7 @@ const tabs = [
   { to: "estornos-venda", path: "estornos-venda", label: "Estornos de venda", icon: RotateCcw },
   { to: "estornos-pagamento", path: "estornos-pagamento", label: "Estornos de pagamento", icon: RotateCcw },
   { to: "estornos-baixa", path: "estornos-baixa", label: "Estornos de baixa", icon: RotateCcw },
+  { to: "fechamento", path: "fechamento", label: "Fechamento mensal", icon: CalendarCheck },
 ];
 
 export default function FinanceiroLayout() {

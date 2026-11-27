@@ -93,6 +93,18 @@ Rotas em `/contas-financeiras` (atrás de `financeiro:acessar`), sempre na unida
 
 `platform_admin` não recebe essas permissões. `POST /:id/reverter` (cancelamento com lançamento inverso) segue bloqueado. Validação em [smoke-l04-estorno-baixa.js](../../tests/scripts/smoke-l04-estorno-baixa.js) e [estorno-baixa.spec.js](../../tests/e2e/playwright/estorno-baixa.spec.js).
 
+## L04 · Fechamento mensal
+
+Rotas em `/fechamento-mensal` (atrás de `financeiro:acessar`), sempre na unidade selecionada. Regras em [L04 — Fechamento mensal com conferência por meio](requisitos-base.md#l04--fechamento-mensal-com-conferência-por-meio).
+
+| Rota | Permissão | Papéis e recusas |
+|---|---|---|
+| `GET /`, `GET /responsaveis`, `GET /:ano/:mes` e `GET /:ano/:mes/analisar` | `financeiro:acessar` | Financeiro, admin e dono. `/:ano/:mes` traz o fechamento gravado (ou nulo), as divergências e a conferência por meio. |
+| `POST /:ano/:mes/fechar` (com `ressalva` opcional: `motivo`, `evidencia`, `valor`, `responsavel_id`) | `fechamento:fechar` | Admin e dono. Divergência sem ressalva: `409 FECHAMENTO_COM_DIVERGENCIA`, sem gravar. Ressalva incompleta: `400 RESSALVA_*`; responsável sem acesso ao Financeiro da unidade: `422 RESSALVA_RESPONSAVEL_INVALIDO`. Auditado como `fechar_periodo` ou `fechar_periodo_com_ressalva`. |
+| `POST /:ano/:mes/reabrir` (com `motivo`) | `fechamento:reabrir` | Somente o dono. Sem motivo: `400 MOTIVO_OBRIGATORIO`. |
+
+Validação em [smoke-l04-fechamento.js](../../tests/scripts/smoke-l04-fechamento.js) e [fechamento.spec.js](../../tests/e2e/playwright/fechamento.spec.js).
+
 ## Categorias encontradas
 
 ### 1. Públicas
