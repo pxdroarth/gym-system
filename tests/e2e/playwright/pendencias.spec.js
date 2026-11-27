@@ -164,12 +164,16 @@ test.describe('Pendências por estorno e contato com o aluno', () => {
 
     await signIn(page, 'recepcao');
     await page.goto(`/alunos/editar/${aluno.id}`);
+    // Espera o formulario carregar o aluno: a carga sobrescreveria o que fosse digitado antes.
+    await expect(page.locator('input[name="nome"]')).toHaveValue(aluno.nome);
     const campo = page.getByLabel('E-mail (opcional):');
     await expect(campo).toHaveValue('');
     await campo.fill('Novo.Aluno@Exemplo.com');
     const salvar = watchResponse(page, 'PUT', `/alunos/${aluno.id}`);
     await page.getByRole('button', { name: 'Salvar' }).click();
-    expect((await salvar).status()).toBe(200);
+    const resposta = await salvar;
+    expect(resposta.status()).toBe(200);
+    expect(resposta.request().postDataJSON().email).toBe('Novo.Aluno@Exemplo.com');
     await page.goto(`/alunos/${aluno.id}`);
     await expect(page.getByText('novo.aluno@exemplo.com').first()).toBeVisible();
 
