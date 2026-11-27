@@ -64,6 +64,18 @@ Rotas em `/pagamentos`. Cada etapa exige a própria permissão e a unidade selec
 
 `platform_admin` e `operador_acesso` não recebem essas permissões. `POST /pagamentos/:id/estornar` continua bloqueado com `409 REVERSAO_APROVACAO_NECESSARIA`. Validação em [smoke-l04-estorno-pagamento.js](../../tests/scripts/smoke-l04-estorno-pagamento.js) e [estorno-pagamento.spec.js](../../tests/e2e/playwright/estorno-pagamento.spec.js).
 
+## L04 · Pendências por estorno e contato com o aluno
+
+Rotas em `/pendencias`, sempre na unidade selecionada. Regras em [L04 — Pendências por estorno e contato com o aluno](requisitos-base.md#l04--pendências-por-estorno-e-contato-com-o-aluno).
+
+| Rota | Permissão | Papéis e recusas |
+|---|---|---|
+| `GET /` (filtro `aluno_id`) e `GET /resumo` | `pendencias:ver` | Recepção, gestor, financeiro, admin e dono. Operador de acesso: `403`. Sem sessão: `401`. |
+| `GET /contatos?aluno_id=` | `pendencias:ver` | Aluno de outra unidade ou Rede: `404 ALUNO_NAO_ENCONTRADO`. |
+| `POST /contatos` (`aluno_id`, `canal` `whatsapp`/`email`/`telefone`/`presencial`, `mensalidade_id` e `observacao` opcionais) | `alunos:contato_registrar` | Recepção, gestor, financeiro, admin e dono. Canal inválido: `400 CONTATO_CANAL_INVALIDO`; WhatsApp sem telefone ou e-mail sem e-mail: `422 CONTATO_SEM_TELEFONE`/`CONTATO_SEM_EMAIL`; aluno ou mensalidade fora do escopo: `404`. Auditado como `registrar_contato_aluno`. |
+
+`POST /alunos` e `PUT /alunos/:id` aceitam `email` opcional; formato inválido: `400 ALUNO_EMAIL_INVALIDO`. A avaliação de acesso passa a devolver `pendencia` com `meses`, `meses_cobertos`, `cobertura_ate` e `saldo_em_aberto` quando o motivo é `cobertura_proporcional` ou `cobertura_proporcional_encerrada`. `platform_admin` não recebe as duas permissões. Validação em [smoke-l04-pendencias.js](../../tests/scripts/smoke-l04-pendencias.js) e [pendencias.spec.js](../../tests/e2e/playwright/pendencias.spec.js).
+
 ## Categorias encontradas
 
 ### 1. Públicas
