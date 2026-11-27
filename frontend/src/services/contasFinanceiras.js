@@ -17,8 +17,50 @@ export async function atualizarContaFinanceira(id, dados) {
   return data;
 }
 
-export async function marcarComoPago(id) {
-  const { data } = await api.patch(`/contas-financeiras/${id}/status`, { status: "pago" });
+// Baixa: meio opcional (L04 sublote C).
+export async function marcarComoPago(id, meio) {
+  const { data } = await api.patch(`/contas-financeiras/${id}/status`, { status: "pago", ...(meio ? { meio_baixa: meio } : {}) });
+  return data;
+}
+
+// ---------- Estorno de baixa de conta (L04, sublote C) ----------
+export async function fetchEstornosBaixa(params = {}) {
+  const { data } = await api.get("/contas-financeiras/estornos-baixa", { params });
+  return data;
+}
+
+export async function solicitarEstornoBaixa(contaId, motivo) {
+  const { data } = await api.post(`/contas-financeiras/${contaId}/estornos-baixa`, { motivo });
+  return data;
+}
+
+export async function aprovarEstornoBaixa(estornoId) {
+  const { data } = await api.post(`/contas-financeiras/estornos-baixa/${estornoId}/aprovar`);
+  return data;
+}
+
+export async function registrarAutorizacaoExternaEstornoBaixa(estornoId, dados) {
+  const { data } = await api.post(`/contas-financeiras/estornos-baixa/${estornoId}/autorizacao-externa`, dados);
+  return data;
+}
+
+export async function executarEstornoBaixa(estornoId) {
+  const { data } = await api.post(`/contas-financeiras/estornos-baixa/${estornoId}/executar`);
+  return data;
+}
+
+export async function fetchAutorizadoresEstornoBaixa() {
+  const { data } = await api.get("/contas-financeiras/estornos-baixa/autorizadores");
+  return data;
+}
+
+export async function fetchPoliticaEstornoBaixa() {
+  const { data } = await api.get("/contas-financeiras/estornos-baixa/politica");
+  return data;
+}
+
+export async function salvarPoliticaEstornoBaixa(contasDistintas) {
+  const { data } = await api.patch("/contas-financeiras/estornos-baixa/politica", { contas_distintas: contasDistintas });
   return data;
 }
 

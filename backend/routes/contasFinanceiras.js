@@ -5,8 +5,9 @@ const AppError = require('../errors/AppError');
 const AuditService = require('../services/AuditService');
 const FechamentoMensalService = require('../services/FechamentoMensalService');
 const ReversaoControladaService = require('../services/ReversaoControladaService');
-const { PERMISSIONS } = require('../constants/userRoles');
-const { requirePermission } = require('../middlewares/requirePermission');
+const EstornoBaixaContaService = require('../services/EstornoBaixaContaService');
+const { PERMISSIONS, USER_ROLES, roleHasPermission } = require('../constants/userRoles');
+const { requirePermission, assertActiveOperator } = require('../middlewares/requirePermission');
 const { actorWithScope, requireScope } = require('../helpers/scope');
 
 function validarDataLancamento(data) {
@@ -105,6 +106,73 @@ router.get('/', async (req, res, next) => {
   }
 });
 
+// ---------- Estorno de baixa de conta (L04, sublote C) ----------
+// Cada etapa exige a propria permissao e o escopo da unidade; o servico repete
+// identidade, papel, Rede e Unidade dentro da transacao. Voltar uma conta paga
+// a pendente pelas rotas comuns continua recusado (409 REVERSAO_APROVACAO_NECESSARIA).
+const ESTORNO_BAIXA_PERMISSIONS = [
+  PERMISSIONS.CONTAS_BAIXA_ESTORNO_SOLICITAR,
+  PERMISSIONS.CONTAS_BAIXA_ESTORNO_APROVAR,
+  PERMISSIONS.CONTAS_BAIXA_ESTORNO_REGISTRAR_AUTORIZACAO,
+  PERMISSIONS.CONTAS_BAIXA_ESTORNO_EXECUTAR,
+];
+function requireAlgumaPermissaoEstornoBaixa(req, _res, next) {
+  try {
+    const operator = assertActiveOperator(req);
+    if (!ESTORNO_BAIXA_PERMISSIONS.some((p) => roleHasPermission(operator.papel, p))) {
+      throw new AppError('Permissao negada para esta acao', 403, 'PERMISSAO_NEGADA', { papel: operator.papel });
+    }
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+const ator = (req, scope) => actorWithScope(AuditService.getActorFromRequest(req), scope);
+const etapa = (fn) => async (req, res, next) => {
+  try {
+    const scope = requireScope(req);
+    res.json(await fn(req, scope));
+  } catch (error) {
+    next(error);
+  }
+};
+
+router.get('/estornos-baixa', requireAlgumaPermissaoEstornoBaixa, etapa((req, scope) => EstornoBaixaContaService.listar(scope, req.query || {})));
+router.get('/estornos-baixa/politica', requireAlgumaPermissaoEstornoBaixa, etapa((req, scope) => EstornoBaixaContaService.obterPolitica(scope)));
+router.patch('/estornos-baixa/politica', async (req, res, next) => {
+  try {
+    const operator = assertActiveOperator(req);
+    const scope = requireScope(req);
+    if (operator.papel !== USER_ROLES.OWNER) {
+      throw new AppError('Somente o dono pode configurar a politica de estorno', 403, 'PERMISSAO_NEGADA');
+    }
+    res.json(await EstornoBaixaContaService.definirPolitica(req.body?.contas_distintas, ator(req, scope), scope));
+  } catch (error) {
+    next(error);
+  }
+});
+router.get('/estornos-baixa/autorizadores', requirePermission(PERMISSIONS.CONTAS_BAIXA_ESTORNO_REGISTRAR_AUTORIZACAO),
+  etapa((req, scope) => EstornoBaixaContaService.listarAutorizadores(scope, ator(req, scope))));
+router.post('/estornos-baixa/:estornoId/autorizacao-externa', requirePermission(PERMISSIONS.CONTAS_BAIXA_ESTORNO_REGISTRAR_AUTORIZACAO),
+  etapa((req, scope) => EstornoBaixaContaService.registrarAutorizacaoExterna(req.params.estornoId, req.body || {}, ator(req, scope), scope)));
+router.post('/estornos-baixa/:estornoId/aprovar', requirePermission(PERMISSIONS.CONTAS_BAIXA_ESTORNO_APROVAR),
+  etapa((req, scope) => EstornoBaixaContaService.aprovar(req.params.estornoId, ator(req, scope), scope)));
+router.post('/estornos-baixa/:estornoId/executar', requirePermission(PERMISSIONS.CONTAS_BAIXA_ESTORNO_EXECUTAR),
+  etapa((req, scope) => EstornoBaixaContaService.executar(req.params.estornoId, ator(req, scope), scope)));
+router.post('/:id/estornos-baixa', requirePermission(PERMISSIONS.CONTAS_BAIXA_ESTORNO_SOLICITAR), async (req, res, next) => {
+  try {
+    const scope = requireScope(req);
+    const { estorno, existente } = await EstornoBaixaContaService.solicitar(req.params.id, req.body || {}, ator(req, scope), scope);
+    if (existente) {
+      res.set('Idempotent-Replayed', 'true');
+      return res.status(200).json({ ...estorno, pedido_existente: true });
+    }
+    return res.status(201).json(estorno);
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.post('/', async (req, res, next) => {
   const body = req.body || {};
   const { descricao, tipo, valor, data_lancamento, status, plano_contas_id, observacao } = body;
@@ -113,6 +181,7 @@ router.post('/', async (req, res, next) => {
     validarDataLancamento(data_lancamento);
     const erro = validarCamposObrigatorios(body, ['descricao', 'tipo', 'valor', 'status']);
     if (erro) return res.status(400).json({ error: erro });
+    const meioBaixa = EstornoBaixaContaService.normalizarMeioBaixa(body.meio_baixa);
     const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
     const criada = await runTransaction(async (tx) => {
       await FechamentoMensalService.assertPeriodoEditavelPorData(data_lancamento, 'criacao de conta financeira', tx, scope);
@@ -123,6 +192,7 @@ router.post('/', async (req, res, next) => {
         (descricao, tipo, valor, data_lancamento, status, plano_contas_id, observacao, origem, tenant_id, unit_id, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, 'conta_financeira', ?, ?, datetime('now'), datetime('now'))
       `, [descricao, tipo, valor, data_lancamento, status, categoria, observacao || null, scope.tenant_id, scope.unit_id]);
+      if (status === 'pago') await EstornoBaixaContaService.gravarBaixa(tx, result.lastID, actor, meioBaixa);
 
       const after = await tx.get('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [result.lastID, scope.tenant_id, scope.unit_id]);
       await AuditService.logAction({
@@ -191,6 +261,9 @@ router.put('/:id', async (req, res, next) => {
           plano_contas_id = ?, observacao = ?, updated_at = datetime('now')
         WHERE id = ?
       `, [descricao, tipo, valor, dataDestino, status, categoria, observacao || null, id]);
+      if (before.status !== 'pago' && status === 'pago') {
+        await EstornoBaixaContaService.gravarBaixa(tx, id, actor, EstornoBaixaContaService.normalizarMeioBaixa(req.body?.meio_baixa));
+      }
 
       const after = await tx.get('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
       await AuditService.logAction({
@@ -237,6 +310,9 @@ router.patch('/:id/status', async (req, res, next) => {
         'UPDATE conta_financeira SET status = ?, updated_at = datetime(\'now\') WHERE id = ?',
         [status, id]
       );
+      if (before.status !== 'pago' && status === 'pago') {
+        await EstornoBaixaContaService.gravarBaixa(tx, id, actor, EstornoBaixaContaService.normalizarMeioBaixa(req.body?.meio_baixa));
+      }
 
       const after = await tx.get('SELECT * FROM conta_financeira WHERE id = ? AND tenant_id = ? AND unit_id = ?', [id, scope.tenant_id, scope.unit_id]);
       await AuditService.logAction({

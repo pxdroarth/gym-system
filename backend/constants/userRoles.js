@@ -58,6 +58,13 @@ const PERMISSIONS = Object.freeze({
   // Pendencias por estorno e contato com o aluno (L04, sublote B; decisoes de
   // 20/11 e 26/11/2026): recepcao, gestor, financeiro, admin e dono.
   PENDENCIAS_VER: 'pendencias:ver',
+  // Estorno de baixa de conta financeira (L04, sublote C; decisoes de 20/11 e
+  // 26/11/2026): solicitar (financeiro, admin, dono), aprovar (admin e dono),
+  // registrar autorizacao externa e executar (financeiro, admin, dono).
+  CONTAS_BAIXA_ESTORNO_SOLICITAR: 'contas:baixa_estorno_solicitar',
+  CONTAS_BAIXA_ESTORNO_APROVAR: 'contas:baixa_estorno_aprovar',
+  CONTAS_BAIXA_ESTORNO_REGISTRAR_AUTORIZACAO: 'contas:baixa_estorno_registrar_autorizacao',
+  CONTAS_BAIXA_ESTORNO_EXECUTAR: 'contas:baixa_estorno_executar',
   ALUNOS_CONTATO_REGISTRAR: 'alunos:contato_registrar',
   ACESSO_LIBERACAO_MANUAL: 'acesso:liberacao_manual',
   ACESSO_CREDENCIAIS_VISUALIZAR: 'acesso:credenciais_visualizar',
@@ -101,6 +108,10 @@ const ESTORNO_VENDA_PERMISSIONS = [
   PERMISSIONS.PAGAMENTOS_ESTORNO_EXECUTAR,
   PERMISSIONS.PENDENCIAS_VER,
   PERMISSIONS.ALUNOS_CONTATO_REGISTRAR,
+  PERMISSIONS.CONTAS_BAIXA_ESTORNO_SOLICITAR,
+  PERMISSIONS.CONTAS_BAIXA_ESTORNO_APROVAR,
+  PERMISSIONS.CONTAS_BAIXA_ESTORNO_REGISTRAR_AUTORIZACAO,
+  PERMISSIONS.CONTAS_BAIXA_ESTORNO_EXECUTAR,
 ];
 
 const ROLE_PERMISSIONS = Object.freeze({
@@ -143,6 +154,9 @@ const ROLE_PERMISSIONS = Object.freeze({
     PERMISSIONS.PAGAMENTOS_ESTORNO_EXECUTAR,
     PERMISSIONS.PENDENCIAS_VER,
     PERMISSIONS.ALUNOS_CONTATO_REGISTRAR,
+    PERMISSIONS.CONTAS_BAIXA_ESTORNO_SOLICITAR,
+    PERMISSIONS.CONTAS_BAIXA_ESTORNO_REGISTRAR_AUTORIZACAO,
+    PERMISSIONS.CONTAS_BAIXA_ESTORNO_EXECUTAR,
   ],
   [USER_ROLES.RECEPCAO]: [
     PERMISSIONS.VENDAS_REGISTRAR,

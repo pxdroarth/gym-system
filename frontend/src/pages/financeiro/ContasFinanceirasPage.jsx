@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   deletarContaFinanceira,
   getContasFinanceiras,
-  marcarComoPago,
 } from "../../services/contasFinanceiras";
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
@@ -14,6 +13,7 @@ import Select from "../../components/ui/Select";
 import Table from "../../components/ui/Table";
 import { getApiErrorMessage } from "../../utils/getApiErrorMessage";
 import ContaFinanceiraModal from "./modals/ContaFinanceiraModal";
+import { BaixaContaModal, EstornoBaixaModal, TextoBaixa, usePermissoesEstornoBaixa } from "../../components/financeiro/EstornoBaixaConta";
 
 const perPage = 10;
 
@@ -99,14 +99,10 @@ export default function ContasFinanceirasPage() {
     [contas]
   );
 
-  async function confirmarPagamento(id) {
-    try {
-      await marcarComoPago(id);
-      carregar(page);
-    } catch (error) {
-      alert(getApiErrorMessage(error));
-    }
-  }
+  // Baixa com meio opcional e estorno de baixa (L04, sublote C).
+  const permEstornoBaixa = usePermissoesEstornoBaixa();
+  const [contaBaixa, setContaBaixa] = useState(null);
+  const [contaEstorno, setContaEstorno] = useState(null);
 
   async function excluirConta(id) {
     if (!window.confirm("Deseja realmente excluir esta conta?")) return;
@@ -204,12 +200,12 @@ export default function ContasFinanceirasPage() {
               </thead>
               <tbody>
                 {contas.map((conta) => (
-                  <tr key={conta.id}>
+                  <tr key={conta.id} data-conta-id={conta.id}>
                     <td className="font-semibold">{conta.descricao}</td>
                     <td>{tipoBadge(conta.tipo)}</td>
                     <td className="font-semibold">{formatarMoeda(conta.valor)}</td>
                     <td>{conta.plano_nome || "-"}</td>
-                    <td>{statusBadge(conta.status)}</td>
+                    <td>{statusBadge(conta.status)}<TextoBaixa conta={conta} /></td>
                     <td>
                       {conta.data_lancamento
                         ? new Date(conta.data_lancamento).toLocaleDateString("pt-BR")
@@ -217,8 +213,13 @@ export default function ContasFinanceirasPage() {
                     </td>
                     <td>
                       <div className="flex gap-2 flex-wrap">
+                        {conta.status === "pago" && permEstornoBaixa.algum && (
+                          <Button size="sm" variant="ghost" onClick={() => setContaEstorno(conta)}>
+                            Estorno da baixa
+                          </Button>
+                        )}
                         {conta.status === "pendente" && (
-                          <Button size="sm" variant="success" onClick={() => confirmarPagamento(conta.id)}>
+                          <Button size="sm" variant="success" onClick={() => setContaBaixa(conta)}>
                             Confirmar
                           </Button>
                         )}
@@ -242,6 +243,9 @@ export default function ContasFinanceirasPage() {
           <div className="text-sm text-slate-500">{total} registro(s) encontrado(s)</div>
         </div>
       </Card>
+
+      {contaBaixa && <BaixaContaModal conta={contaBaixa} onClose={() => setContaBaixa(null)} onBaixada={() => carregar(page)} />}
+      {contaEstorno && <EstornoBaixaModal conta={contaEstorno} onClose={() => setContaEstorno(null)} onChanged={() => carregar(page)} />}
 
       <ContaFinanceiraModal
         aberto={modalAberto}

@@ -973,6 +973,67 @@ async function ensurePagamentoParcialColumns() {
 // L04 sublote A (20/11/2026): meio do pagamento da mensalidade e estorno de
 // pagamento com solicitacao, autorizacao e execucao, como o estorno de venda.
 // Pagamentos anteriores ficam com forma_pagamento nulo (meio nao registrado).
+// L04 sublote C (decisoes de 20/11 e 26/11/2026): data, responsavel e meio da
+// baixa de conta e o fluxo de estorno de baixa. Contas manuais ja pagas recebem
+// a data da conta como data da baixa, marcada como estimada (idempotente).
+async function ensureEstornoBaixaConta() {
+  await addColumnIfMissing('conta_financeira', 'data_baixa TEXT');
+  await addColumnIfMissing('conta_financeira', 'data_baixa_estimada INTEGER');
+  await addColumnIfMissing('conta_financeira', 'baixa_meio TEXT');
+  await addColumnIfMissing('conta_financeira', 'baixa_por TEXT');
+  await addColumnIfMissing('conta_financeira', 'baixa_por_nome TEXT');
+  await addColumnIfMissing('conta_financeira', 'baixa_em TEXT');
+  await runExecute(`
+    UPDATE conta_financeira
+    SET data_baixa = substr(data_lancamento, 1, 10), data_baixa_estimada = 1
+    WHERE status = 'pago' AND data_baixa IS NULL AND origem = 'conta_financeira' AND data_lancamento IS NOT NULL
+  `);
+  await runExecute(`
+    CREATE TABLE IF NOT EXISTS conta_baixa_estorno (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id INTEGER NOT NULL,
+      unit_id INTEGER NOT NULL,
+      conta_id INTEGER NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('solicitada', 'aprovada', 'executada', 'encerrada')),
+      motivo TEXT NOT NULL,
+      valor REAL NOT NULL,
+      tipo_conta TEXT,
+      data_baixa TEXT,
+      data_baixa_estimada INTEGER,
+      baixa_meio TEXT,
+      solicitado_por TEXT NOT NULL,
+      solicitado_por_nome TEXT,
+      solicitado_por_papel TEXT,
+      solicitado_em TEXT NOT NULL,
+      aprovado_por TEXT,
+      aprovado_por_nome TEXT,
+      aprovado_por_papel TEXT,
+      aprovado_em TEXT,
+      autorizacao_canal TEXT,
+      autorizacao_referencia TEXT,
+      autorizacao_registrada_por TEXT,
+      autorizacao_registrada_por_nome TEXT,
+      autorizacao_registrada_por_papel TEXT,
+      autorizacao_registrada_em TEXT,
+      executado_por TEXT,
+      executado_por_nome TEXT,
+      executado_por_papel TEXT,
+      executado_em TEXT,
+      data_operacao TEXT,
+      contas_distintas_exigidas INTEGER,
+      encerrado_em TEXT,
+      encerrado_motivo TEXT,
+      FOREIGN KEY (conta_id) REFERENCES conta_financeira(id)
+    )
+  `);
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_conta_baixa_estorno_scope_status ON conta_baixa_estorno (tenant_id, unit_id, status)');
+  await runExecute(`
+    CREATE UNIQUE INDEX IF NOT EXISTS uidx_conta_baixa_estorno_ativo
+    ON conta_baixa_estorno (conta_id) WHERE status IN ('solicitada', 'aprovada')
+  `);
+  await addColumnIfMissing('unit', 'estorno_baixa_contas_distintas INTEGER NOT NULL DEFAULT 0');
+}
+
 // L04 sublote B (decisoes de 20/11 e 26/11/2026): e-mail opcional do aluno e
 // registro das tentativas de contato sobre pendencias.
 async function ensureAlunoContato() {
@@ -1203,6 +1264,7 @@ async function ensureSchema() {
   await ensureVendaPagamento();
   await ensurePagamentoEstorno();
   await ensureAlunoContato();
+  await ensureEstornoBaixaConta();
   await ensureUsuarioInterno(defaultScope);
   await ensureLegacyUserScopes(defaultScope);
   await backfillDefaultScope(defaultScope.tenantId, defaultScope.unitId);

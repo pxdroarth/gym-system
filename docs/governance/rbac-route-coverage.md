@@ -13,7 +13,7 @@ Mapear como as rotas de negócio do backend estão protegidas hoje, sem alterar 
 | `POST /mensalidades`, `PUT`, `PATCH /:id/status`, `DELETE` | `mensalidades:gerenciar`. Desconto excepcional em criação exige permissão e motivo. Edição comum não concede desconto. |
 | `PATCH /mensalidades/:id/desconto` | `mensalidades:desconto`. Motivo, cobrança em aberto sem pagamento, período editável e auditoria. |
 | `POST /pagamentos` | `pagamentos:registrar` inclui recepção e gestor. Mantém escopo, saldo, pagamento parcial e chave de idempotência. |
-| Estorno e reversões de pagamentos, mensalidades, vendas e contas | Guardas anteriores continuam validando papel e escopo. A execução direta exige aprovação e está bloqueada com `409 REVERSAO_APROVACAO_NECESSARIA`. Abrange aliases e exclusão de conta paga. Edição comum de conta paga não pode neutralizar valor, tipo, data ou status. O estorno de venda e o de pagamento do aluno passaram a ter fluxo próprio de solicitação, autorização (direta ou externa registrada) e execução (seções "L04 · Estorno de venda" e "L04 · Estorno de pagamento do aluno"). Mensalidades e contas seguem bloqueadas. |
+| Estorno e reversões de pagamentos, mensalidades, vendas e contas | Guardas anteriores continuam validando papel e escopo. A execução direta exige aprovação e está bloqueada com `409 REVERSAO_APROVACAO_NECESSARIA`. Abrange aliases e exclusão de conta paga. Edição comum de conta paga não pode neutralizar valor, tipo, data ou status. O estorno de venda, o de pagamento do aluno e o de baixa de conta passaram a ter fluxo próprio de solicitação, autorização (direta ou externa registrada) e execução (seções "L04 · Estorno de venda", "L04 · Estorno de pagamento do aluno" e "L04 · Estorno de baixa de conta"). A reversão de mensalidade inteira e o cancelamento de conta com lançamento inverso seguem bloqueados. |
 | `/fechamento-mensal/:ano/:mes` | Conferência com Financeiro. Fechar exige admin ou dono na unidade. Reabrir exige dono, motivo e auditoria. Política master pendente. |
 | `/tenant-dashboard/resumo` | Relatório filtrado pelos vínculos do admin. Integral requer `relatorios:rede_integral`. |
 | `POST/PUT/DELETE /planos`, `/plano-contas` e `/planoContas` | Permissões distintas de catálogo e financeiro da Rede, disponíveis ao dono. O fluxo combinado Contratar/Renovar usa permissão própria de operação. |
@@ -75,6 +75,23 @@ Rotas em `/pendencias`, sempre na unidade selecionada. Regras em [L04 — Pendê
 | `POST /contatos` (`aluno_id`, `canal` `whatsapp`/`email`/`telefone`/`presencial`, `mensalidade_id` e `observacao` opcionais) | `alunos:contato_registrar` | Recepção, gestor, financeiro, admin e dono. Canal inválido: `400 CONTATO_CANAL_INVALIDO`; WhatsApp sem telefone ou e-mail sem e-mail: `422 CONTATO_SEM_TELEFONE`/`CONTATO_SEM_EMAIL`; aluno ou mensalidade fora do escopo: `404`. Auditado como `registrar_contato_aluno`. |
 
 `POST /alunos` e `PUT /alunos/:id` aceitam `email` opcional; formato inválido: `400 ALUNO_EMAIL_INVALIDO`. A avaliação de acesso passa a devolver `pendencia` com `meses`, `meses_cobertos`, `cobertura_ate` e `saldo_em_aberto` quando o motivo é `cobertura_proporcional` ou `cobertura_proporcional_encerrada`. `platform_admin` não recebe as duas permissões. Validação em [smoke-l04-pendencias.js](../../tests/scripts/smoke-l04-pendencias.js) e [pendencias.spec.js](../../tests/e2e/playwright/pendencias.spec.js).
+
+## L04 · Estorno de baixa de conta
+
+Rotas em `/contas-financeiras` (atrás de `financeiro:acessar`), sempre na unidade selecionada. Regras em [L04 — Estorno de baixa de conta financeira](requisitos-base.md#l04--estorno-de-baixa-de-conta-financeira).
+
+| Rota | Permissão | Papéis e recusas |
+|---|---|---|
+| `PATCH /:id/status`, `POST /` e `PUT /:id` com `status: pago` (com `meio_baixa` opcional) | — (rotas existentes) | Grava data, responsável e meio da baixa. Meio inválido: `400 BAIXA_MEIO_INVALIDO`, sem baixar. Voltar conta paga a pendente: `409 REVERSAO_APROVACAO_NECESSARIA`. |
+| `POST /:id/estornos-baixa` (com `motivo`) | `contas:baixa_estorno_solicitar` | Financeiro, admin e dono. Pedido ativo existente: `200` com `Idempotent-Replayed: true`. Conta pendente: `409 CONTA_NAO_BAIXADA`; derivada: `409 CONTA_FINANCEIRA_DERIVADA_PROTEGIDA`; outra unidade: `404`. |
+| `POST /estornos-baixa/:estornoId/aprovar` | `contas:baixa_estorno_aprovar` | Admin e dono. Quem solicitou: `403 AUTOAPROVACAO_PROIBIDA`. |
+| `POST /estornos-baixa/:estornoId/autorizacao-externa` | `contas:baixa_estorno_registrar_autorizacao` | Financeiro, admin e dono. Própria conta: `403 AUTOAUTORIZACAO_PROIBIDA`; autorizador sem `contas:baixa_estorno_aprovar`: `422 AUTORIZADOR_SEM_PERMISSAO`; data anterior à baixa ou posterior ao registro: `400 DATA_AUTORIZACAO_INVALIDA`. |
+| `POST /estornos-baixa/:estornoId/executar` | `contas:baixa_estorno_executar` | Financeiro, admin e dono. Sem aprovação: `409 REVERSAO_APROVACAO_NECESSARIA`; três contas exigidas: `403 CONTAS_DISTINTAS_EXIGIDAS`; mês fechado: `423 PERIODO_FECHADO`; repetição: `409 ESTORNO_JA_EXECUTADO`. |
+| `GET /estornos-baixa` (filtros `status`, `conta_id`) e `GET /estornos-baixa/politica` | Qualquer uma das quatro acima | Financeiro, admin e dono. |
+| `GET /estornos-baixa/autorizadores` | `contas:baixa_estorno_registrar_autorizacao` | Contas ativas da unidade com `contas:baixa_estorno_aprovar`, sem a do operador. |
+| `PATCH /estornos-baixa/politica` (`contas_distintas`) | Papel `owner` | Demais: `403 PERMISSAO_NEGADA`. Auditado. |
+
+`platform_admin` não recebe essas permissões. `POST /:id/reverter` (cancelamento com lançamento inverso) segue bloqueado. Validação em [smoke-l04-estorno-baixa.js](../../tests/scripts/smoke-l04-estorno-baixa.js) e [estorno-baixa.spec.js](../../tests/e2e/playwright/estorno-baixa.spec.js).
 
 ## Categorias encontradas
 

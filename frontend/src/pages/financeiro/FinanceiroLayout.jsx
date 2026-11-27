@@ -14,6 +14,7 @@ const tabs = [
   { to: "plano-contas", path: "plano-contas", label: "Plano de Contas", icon: FileText },
   { to: "estornos-venda", path: "estornos-venda", label: "Estornos de venda", icon: RotateCcw },
   { to: "estornos-pagamento", path: "estornos-pagamento", label: "Estornos de pagamento", icon: RotateCcw },
+  { to: "estornos-baixa", path: "estornos-baixa", label: "Estornos de baixa", icon: RotateCcw },
 ];
 
 export default function FinanceiroLayout() {
