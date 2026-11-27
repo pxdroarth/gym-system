@@ -547,6 +547,16 @@ Decisões de 20/11 e 26/11/2026 (sublote B).
 - **E-mail do aluno.** Opcional no cadastro e na edição, com o formato validado só quando preenchido; não impede o cadastro rápido.
 - **Validação:** `tests/scripts/smoke-l04-pendencias.js` e `tests/e2e/playwright/pendencias.spec.js`.
 
+### L04 — Estorno de baixa de conta financeira
+
+Decisões de 20/11 e 26/11/2026 (sublote C). Vale para contas manuais; lançamentos automáticos (venda, mensalidade, pagamento, estorno) seguem o fluxo de origem.
+
+- **Baixa.** Ao passar a paga, a conta grava a data da baixa (data operacional da unidade), quem baixou e, opcionalmente, o meio (dinheiro, Pix, cartão de crédito ou débito, transferência, boleto). Contas pagas antes do sublote usam a data da conta como data da baixa, marcada como estimada, sem meio registrado.
+- **Efeito do estorno.** A conta volta a pendente e continua existindo; o valor sai do realizado. Não há lançamento inverso. Uma nova baixa grava nova data e permite novo pedido. O cancelamento da conta inteira continua bloqueado.
+- **Papéis.** Solicitam financeiro, admin e dono, com motivo. Aprovam no sistema admin e dono. Financeiro, admin e dono registram a autorização dada por admin ou dono por WhatsApp ou e-mail. Executam financeiro, admin e dono. Quem solicitou nunca autoriza o próprio pedido; o dono pode exigir três contas distintas na unidade.
+- **Períodos.** O mês da conta e o mês da baixa precisam estar abertos; após reabertura, a mesma aprovação pode ser executada.
+- **Validação:** `tests/scripts/smoke-l04-estorno-baixa.js` e `tests/e2e/playwright/estorno-baixa.spec.js`.
+
 ## 15. Critérios de aceite do produto
 
 O produto pode ser considerado pronto para PostgreSQL/deploy de portfólio quando:
