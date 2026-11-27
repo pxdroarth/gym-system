@@ -301,7 +301,7 @@ node tests/scripts/smoke-l02-ciclos.js
 | `smoke-a06-conta-fechamento.js` | O dono reabre as unidades da fixture com motivo, conforme a DN-3. As verificações A-06 de meses de origem e destino e de isolamento permanecem. | A interface nova de fechamento é de outro sublote. A regra A-06 mantém sua cobertura neste smoke. |
 | `smoke-financeiro-isolamento.js` | Financeiro pode conferir, mas o estorno direto fica bloqueado e não gera contrapartida. Reabertura exige dono com motivo. A Rede Beta agora fecha e reabre de fato seu período, com status e unidade verificados, antes de confirmar que o período da Alfa permaneceu intacto. Os testes de categorias de Rede para leitura e lançamentos automáticos continuam. | Contrapartida de execução aprovada preserva valor e origem e usa somente categoria válida da própria Rede, inclusive nos registros legados. |
 
-Os estornos de mensalidade e de baixa de conta permanecem bloqueados até o fluxo próprio. O estorno de venda e o estorno de pagamento do aluno já têm solicitação, autorização (direta ou externa registrada) e execução, validados nos smokes `smoke-l04-estorno-venda*` e `smoke-l04-estorno-pagamento.js` abaixo. A rota direta `POST /pagamentos/:id/estornar` continua bloqueada.
+O estorno de mensalidade inteira e o cancelamento de conta com lançamento inverso permanecem bloqueados. O estorno de baixa de conta tem fluxo próprio, validado em `smoke-l04-estorno-baixa.js`. O estorno de venda e o estorno de pagamento do aluno já têm solicitação, autorização (direta ou externa registrada) e execução, validados nos smokes `smoke-l04-estorno-venda*` e `smoke-l04-estorno-pagamento.js` abaixo. A rota direta `POST /pagamentos/:id/estornar` continua bloqueada.
 
 ## `smoke-l04-estorno-venda.js` (L04 · Estorno de venda pela API)
 
@@ -342,6 +342,16 @@ node tests\scripts\smoke-l04-pendencias.js --base-url=http://localhost:3001 --db
 ```
 
 Cobre o e-mail opcional (normalizado, vazio, inválido recusado sem gravar, edição que mantém ou limpa), o pacote com cobertura proporcional ainda vigente (acesso `liberado_com_restricao`), encerrada e sem nenhum mês coberto (bloqueio com `cobertura_proporcional_encerrada`), a mensal com estorno parcial (bloqueio na hora), a lista, a ordem, o resumo e o filtro de pendências, permissões e escopo de Rede e Unidade, o registro de contato (WhatsApp, e-mail, canal inválido, aluno sem e-mail, outro aluno, outra unidade e operador de acesso, sempre sem gravar nas recusas) e a quitação, que encerra a pendência e preserva o histórico de contatos.
+
+## `smoke-l04-estorno-baixa.js` (L04 · Estorno de baixa de conta)
+
+Rode em base descartável semeada, com a API sobre ela. O smoke cria contas "L04C" na Matriz, dá baixa com e sem meio, solicita, autoriza e executa estornos de baixa, fecha e reabre o mês corrente, liga e desliga a opção de três contas e lê o SQLite só para conferir os efeitos.
+
+```cmd
+node tests\scripts\smoke-l04-estorno-baixa.js --base-url=http://localhost:3001 --db=backend\academia.sqlite
+```
+
+Cobre a baixa com data, responsável e meio (inválido recusado sem baixar, conta criada já paga, meio opcional), a data estimada das contas pagas antes do sublote, a volta direta a pendente bloqueada, permissões por etapa e papel, conta pendente, sem motivo, de outra unidade ou derivada, pedido único (reenvio e concorrência), execução sem aprovação, autoaprovação, autorização externa (data anterior à baixa, registrador como autorizador, autorizador sem permissão), execução com a conta voltando a pendente sem lançamento inverso, repetição, nova baixa e novo pedido, mês fechado com nova tentativa após reabertura, três contas distintas e a fila do Financeiro. Cada recusa confere conta, estornos e auditoria antes e depois.
 
 ## `smoke-l04-estorno-venda-datas.js` (L04 · Períodos, data operacional e rollback)
 

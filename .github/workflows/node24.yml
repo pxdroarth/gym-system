@@ -97,7 +97,7 @@ jobs:
       - name: Run critical suite on disposable SQLite
         if: github.event_name == 'pull_request'
         shell: pwsh
-        run: ./tests/scripts/smoke-sqlite.ps1 -Playwright -PlaywrightFiles auth.spec.js,vendas.spec.js,vendas-pagamento.spec.js,estorno-pagamento.spec.js,pendencias.spec.js
+        run: ./tests/scripts/smoke-sqlite.ps1 -Playwright -PlaywrightFiles auth.spec.js,vendas.spec.js,vendas-pagamento.spec.js,estorno-pagamento.spec.js,pendencias.spec.js,estorno-baixa.spec.js
       - name: Run full suite on disposable SQLite
         if: github.event_name == 'workflow_dispatch'
         shell: pwsh
