@@ -6,6 +6,31 @@ const { PERMISSIONS } = require('../constants/userRoles');
 const { requirePermission } = require('../middlewares/requirePermission');
 const { actorWithScope, requireScope } = require('../helpers/scope');
 
+// L04 sublote D: historico de fechamentos, responsaveis por ressalva e situacao do mes.
+router.get('/', async (req, res, next) => {
+  try {
+    res.json(await FechamentoMensalService.listarFechamentos(requireScope(req)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/responsaveis', async (req, res, next) => {
+  try {
+    res.json(await FechamentoMensalService.listarResponsaveis(requireScope(req)));
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/:ano/:mes', async (req, res, next) => {
+  try {
+    res.json(await FechamentoMensalService.situacaoDoPeriodo(req.params.ano, req.params.mes, requireScope(req)));
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/:ano/:mes/analisar', async (req, res, next) => {
   try {
     const scope = requireScope(req);
@@ -22,7 +47,8 @@ router.post('/:ano/:mes/fechar', requirePermission(PERMISSIONS.FECHAMENTO_FECHAR
       req.params.ano,
       req.params.mes,
       actorWithScope(AuditService.getActorFromRequest(req), scope),
-      scope
+      scope,
+      req.body || {}
     ));
   } catch (error) {
     next(error);

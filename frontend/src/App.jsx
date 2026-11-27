@@ -21,6 +21,7 @@ import PlanoContasPage from "./pages/financeiro/PlanoContasPage";
 import EstornosVendaPage from "./pages/financeiro/EstornosVendaPage";
 import EstornosPagamentoPage from "./pages/financeiro/EstornosPagamentoPage";
 import EstornosBaixaPage from "./pages/financeiro/EstornosBaixaPage";
+import FechamentoMensalPage from "./pages/financeiro/FechamentoMensalPage";
 import OnboardingTenantPage from "./pages/platform/OnboardingTenantPage";
 import PlanoAssociadosPage from "./pages/planos/associacoes/PlanoAssociadosPage";
 import PlanosPage from "./pages/planos/PlanosPage";
@@ -65,6 +66,7 @@ function App() {
                 <Route path="estornos-venda" element={<EstornosVendaPage />} />
                 <Route path="estornos-pagamento" element={<EstornosPagamentoPage />} />
                 <Route path="estornos-baixa" element={<EstornosBaixaPage />} />
+                <Route path="fechamento" element={<FechamentoMensalPage />} />
               </Route>
             </Route>
           </Route>

@@ -57,6 +57,9 @@ export const UI_PERMISSIONS = Object.freeze({
   LOGS_VISUALIZAR_TOTAL: "logs:visualizar_total",
   LOGS_VISUALIZAR_ESCOPO: "logs:visualizar_escopo",
   FINANCEIRO_VISUALIZAR: "financeiro:visualizar",
+  // Fechamento mensal (L04 sublote D): dono e admin fecham; so o dono reabre.
+  FECHAMENTO_FECHAR: "fechamento:fechar",
+  FECHAMENTO_REABRIR: "fechamento:reabrir",
   TENANT_CONSOLIDADO_VISUALIZAR: "tenant:consolidado_visualizar",
   PLATFORM_ONBOARDING_GERENCIAR: "platform-onboarding:gerenciar",
 });
@@ -76,6 +79,8 @@ const ESTORNO_VENDA = [
   UI_PERMISSIONS.CONTAS_BAIXA_ESTORNO_APROVAR,
   UI_PERMISSIONS.CONTAS_BAIXA_ESTORNO_REGISTRAR_AUTORIZACAO,
   UI_PERMISSIONS.CONTAS_BAIXA_ESTORNO_EXECUTAR,
+  UI_PERMISSIONS.FECHAMENTO_FECHAR,
+  UI_PERMISSIONS.FECHAMENTO_REABRIR,
 ];
 
 const ROLE_UI_PERMISSIONS = Object.freeze({
@@ -93,6 +98,7 @@ const ROLE_UI_PERMISSIONS = Object.freeze({
     UI_PERMISSIONS.LOGS_VISUALIZAR_TOTAL,
   ].includes(permission)),
   [ROLES.ADMIN]: Object.values(UI_PERMISSIONS).filter((permission) => ![
+    UI_PERMISSIONS.FECHAMENTO_REABRIR,
     UI_PERMISSIONS.PLANOS_GERENCIAR,
     UI_PERMISSIONS.PLANO_CONTAS_GERENCIAR_REDE,
     UI_PERMISSIONS.NAV_PLATFORM_ONBOARDING,

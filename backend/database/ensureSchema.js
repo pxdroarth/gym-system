@@ -353,6 +353,14 @@ async function ensureFechamentoMensal() {
   }
 }
 
+// L04 sublote D: ressalva, conferencia por meio e autor do fechamento.
+async function ensureFechamentoRessalva() {
+  await addColumnIfMissing('fechamento_mensal', 'ressalva_json TEXT');
+  await addColumnIfMissing('fechamento_mensal', 'conferencia_json TEXT');
+  await addColumnIfMissing('fechamento_mensal', 'fechado_por TEXT');
+  await addColumnIfMissing('fechamento_mensal', 'fechado_por_nome TEXT');
+}
+
 async function ensureFechamentoMensalUnitUnique(defaultScope = {}) {
   if (!(await tableExists('fechamento_mensal'))) return;
 
@@ -1265,6 +1273,7 @@ async function ensureSchema() {
   await ensurePagamentoEstorno();
   await ensureAlunoContato();
   await ensureEstornoBaixaConta();
+  await ensureFechamentoRessalva();
   await ensureUsuarioInterno(defaultScope);
   await ensureLegacyUserScopes(defaultScope);
   await backfillDefaultScope(defaultScope.tenantId, defaultScope.unitId);

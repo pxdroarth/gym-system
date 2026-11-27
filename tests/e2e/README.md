@@ -23,7 +23,7 @@ Na raiz do repositório, com Node 24.22.3, dependências instaladas no backend e
 ./tests/scripts/smoke-sqlite.ps1 -Playwright -PlaywrightFiles estorno-baixa.spec.js
 
 # Suíte crítica, igual à execução automática do PR
-./tests/scripts/smoke-sqlite.ps1 -Playwright -PlaywrightFiles auth.spec.js,vendas.spec.js,vendas-pagamento.spec.js,estorno-pagamento.spec.js,pendencias.spec.js,estorno-baixa.spec.js
+./tests/scripts/smoke-sqlite.ps1 -Playwright -PlaywrightFiles auth.spec.js,vendas.spec.js,vendas-pagamento.spec.js,estorno-pagamento.spec.js,pendencias.spec.js,estorno-baixa.spec.js,fechamento.spec.js
 
 # Suíte completa
 ./tests/scripts/smoke-sqlite.ps1 -Playwright
@@ -35,7 +35,7 @@ O relatório local fica em `tests/e2e/playwright-report/`. Em caso de falha, os 
 
 ## Pull requests
 
-**Playwright E2E**, no workflow **Node 24**, executa automaticamente `auth.spec.js`, `vendas.spec.js`, `vendas-pagamento.spec.js`, `estorno-pagamento.spec.js`, `pendencias.spec.js` e `estorno-baixa.spec.js` em PRs abertos, reabertos ou atualizados que estejam prontos para revisão. O evento `ready_for_review` inicia a execução quando o PR sai do rascunho, inclusive sem novo push. O job faz checkout do SHA de origem do PR recebido no evento e verifica o `HEAD` antes de instalar as dependências. Em **Details**, confira a etapa **Verify checked-out commit** e o resultado dos testes para o commit atual. O job **validate** continua executando os smokes de API e o build nos PRs.
+**Playwright E2E**, no workflow **Node 24**, executa automaticamente `auth.spec.js`, `vendas.spec.js`, `vendas-pagamento.spec.js`, `estorno-pagamento.spec.js`, `pendencias.spec.js`, `estorno-baixa.spec.js` e `fechamento.spec.js` em PRs abertos, reabertos ou atualizados que estejam prontos para revisão. O evento `ready_for_review` inicia a execução quando o PR sai do rascunho, inclusive sem novo push. O job faz checkout do SHA de origem do PR recebido no evento e verifica o `HEAD` antes de instalar as dependências. Em **Details**, confira a etapa **Verify checked-out commit** e o resultado dos testes para o commit atual. O job **validate** continua executando os smokes de API e o build nos PRs.
 
 ## Rodada completa antes do merge
 

@@ -106,7 +106,7 @@ try {
       'smoke-cobertura', 'smoke-f0-acesso-datas', 'smoke-acesso', 'smoke-l04-integridade',
       'smoke-diagnostico-consistencia', 'smoke-l04-estorno-venda', 'smoke-l04-venda-pagamento',
       'smoke-l04-estorno-pagamento', 'smoke-l04-pendencias',
-      'smoke-l04-estorno-baixa'
+      'smoke-l04-estorno-baixa', 'smoke-l04-fechamento'
     )) {
       Invoke-Node "tests/scripts/$smoke.js" "--base-url=$baseUrl" '--db=backend/academia.sqlite'
     }

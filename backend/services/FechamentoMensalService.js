@@ -2,7 +2,9 @@ const { runQuery, runGet, runExecute, runTransaction } = require('../dbHelper');
 const AppError = require('../errors/AppError');
 const AuditService = require('./AuditService');
 const { FECHAMENTO_STATUS } = require('../constants/domainStates');
-const { PERMISSIONS, roleHasPermission } = require('../constants/userRoles');
+const { PERMISSIONS, ROLE_PERMISSIONS, roleHasPermission } = require('../constants/userRoles');
+const { USER_SCOPE_STATUS } = require('../constants/scope');
+const { conferenciaDoPeriodo } = require('./ConferenciaMeiosService');
 
 function clientOrDefault(client) {
   return client || { all: runQuery, get: runGet, run: runExecute };
@@ -168,56 +170,166 @@ async function analisarPeriodo(ano, mes, client = null, scope = null) {
     });
   }
 
+  // L04 sublote D: chave estavel de cada divergencia (para a ressalva) e a
+  // conferencia por meio do periodo.
+  for (const item of inconsistencias) item.chave = `${item.tipo}:${item.registro_id}`;
+  const conferencia = scope?.tenant_id && scope?.unit_id
+    ? await conferenciaDoPeriodo(db, inicio, fim, scope)
+    : null;
+
   return {
     ano: anoNum,
     mes: mesNum,
     inicio,
     fim,
     inconsistencias,
+    conferencia,
   };
 }
 
-async function fecharPeriodo(ano, mes, actor, scope = null) {
+// Situacao do mes para a tela: fechamento gravado (ou aberto) e analise.
+async function situacaoDoPeriodo(ano, mes, scope) {
+  const periodo = validarPeriodo(ano, mes);
+  const [fechamento, analise] = await Promise.all([
+    obterFechamento(periodo.ano, periodo.mes, null, scope),
+    analisarPeriodo(periodo.ano, periodo.mes, null, scope),
+  ]);
+  return { fechamento: publicarFechamento(fechamento), analise };
+}
+
+function publicarFechamento(f) {
+  if (!f) return null;
+  const json = (v) => { try { return v ? JSON.parse(v) : null; } catch { return null; } };
+  return {
+    id: f.id,
+    ano: f.ano,
+    mes: f.mes,
+    status: f.status,
+    fechado_em: f.fechado_em,
+    reaberto_em: f.reaberto_em,
+    fechado_por: f.fechado_por || null,
+    fechado_por_nome: f.fechado_por_nome || null,
+    inconsistencias: json(f.inconsistencias_json) || [],
+    ressalva: json(f.ressalva_json),
+    conferencia: json(f.conferencia_json),
+  };
+}
+
+async function listarFechamentos(scope) {
+  if (!scope?.tenant_id || !scope?.unit_id) throw new AppError('Escopo de tenant/unidade nao resolvido', 401, 'SCOPE_REQUIRED');
+  const rows = await runQuery(
+    'SELECT * FROM fechamento_mensal WHERE tenant_id = ? AND unit_id = ? ORDER BY ano DESC, mes DESC LIMIT 36',
+    [scope.tenant_id, scope.unit_id]
+  );
+  return rows.map(publicarFechamento);
+}
+
+// Quem pode acompanhar uma ressalva: contas ativas da unidade com acesso ao Financeiro.
+async function listarResponsaveis(scope) {
+  if (!scope?.tenant_id || !scope?.unit_id) throw new AppError('Escopo de tenant/unidade nao resolvido', 401, 'SCOPE_REQUIRED');
+  const papeis = Object.entries(ROLE_PERMISSIONS)
+    .filter(([, perms]) => perms.includes(PERMISSIONS.FINANCEIRO_ACESSAR))
+    .map(([papel]) => papel)
+    .filter((papel) => papel !== 'platform_admin');
+  return runQuery(
+    `SELECT ui.id, ui.nome, ui.papel
+     FROM usuario_interno ui
+     JOIN usuario_unit uu ON uu.usuario_id = ui.id AND uu.unit_id = ? AND uu.status = ?
+     JOIN usuario_tenant ut ON ut.usuario_id = ui.id AND ut.tenant_id = ? AND ut.status = ?
+     WHERE ui.status = 'ativo' AND ui.papel IN (${papeis.map(() => '?').join(',')})
+     ORDER BY ui.nome COLLATE NOCASE`,
+    [scope.unit_id, USER_SCOPE_STATUS.ATIVO, scope.tenant_id, USER_SCOPE_STATUS.ATIVO, ...papeis]
+  );
+}
+
+// Ressalva (decisao 6): divergencia temporaria comprovada permite ao dono ou
+// admin fechar registrando motivo, evidencia, valor e responsavel.
+async function validarRessalva(tx, payload, scope) {
+  const r = payload?.ressalva;
+  if (!r || typeof r !== 'object') return null;
+  const texto = (v) => String(v ?? '').trim();
+  const motivo = texto(r.motivo);
+  const evidencia = texto(r.evidencia);
+  if (motivo.length < 3 || motivo.length > 500) throw new AppError('Informe o motivo da ressalva', 400, 'RESSALVA_MOTIVO_OBRIGATORIO');
+  if (evidencia.length < 3 || evidencia.length > 500) throw new AppError('Informe a evidencia da ressalva', 400, 'RESSALVA_EVIDENCIA_OBRIGATORIA');
+  const valor = r.valor === undefined || r.valor === null || r.valor === '' ? null : Number(r.valor);
+  if (valor !== null && (!Number.isFinite(valor) || valor < 0 || Math.round(valor * 100) !== valor * 100)) {
+    throw new AppError('Valor da ressalva invalido', 400, 'RESSALVA_VALOR_INVALIDO');
+  }
+  const responsavelId = Number(r.responsavel_id);
+  if (!Number.isInteger(responsavelId) || responsavelId <= 0) throw new AppError('Informe o responsavel pelo acompanhamento', 400, 'RESSALVA_RESPONSAVEL_OBRIGATORIO');
+  const responsaveis = await listarResponsaveis(scope);
+  const responsavel = responsaveis.find((u) => Number(u.id) === responsavelId);
+  if (!responsavel) throw new AppError('Responsavel sem acesso ao Financeiro desta unidade', 422, 'RESSALVA_RESPONSAVEL_INVALIDO');
+  return { motivo, evidencia, valor, responsavel: { id: String(responsavel.id), nome: responsavel.nome, papel: responsavel.papel } };
+}
+
+// L04 sublote D (decisao 6 de 16/11/2026): divergencia sem ressalva bloqueia o
+// fechamento; com ressalva do dono ou admin o mes fecha com o status
+// fechado_com_inconsistencias e a ressalva gravada.
+async function fecharPeriodo(ano, mes, actor, scope = null, payload = {}) {
   return runTransaction(async (tx) => {
     const periodo = validarPeriodo(ano, mes);
     const before = await obterFechamento(periodo.ano, periodo.mes, tx, scope);
     const analise = await analisarPeriodo(periodo.ano, periodo.mes, tx, scope);
-    const status = analise.inconsistencias.length
-      ? FECHAMENTO_STATUS.FECHADO_COM_INCONSISTENCIAS
-      : FECHAMENTO_STATUS.FECHADO;
+    let ressalva = null;
+    if (analise.inconsistencias.length) {
+      ressalva = await validarRessalva(tx, payload, scope);
+      if (!ressalva) {
+        throw new AppError(
+          'O periodo tem divergencias. Corrija-as ou feche com ressalva (motivo, evidencia e responsavel).',
+          409,
+          'FECHAMENTO_COM_DIVERGENCIA',
+          { inconsistencias: analise.inconsistencias }
+        );
+      }
+      ressalva = {
+        ...ressalva,
+        divergencias: analise.inconsistencias.map((i) => i.chave),
+        registrada_por: { id: actor?.id != null ? String(actor.id) : null, nome: actor?.name || null, papel: actor?.role || null },
+        registrada_em: new Date().toISOString(),
+      };
+    }
+    const status = ressalva ? FECHAMENTO_STATUS.FECHADO_COM_INCONSISTENCIAS : FECHAMENTO_STATUS.FECHADO;
     const inconsistenciasJson = JSON.stringify(analise.inconsistencias);
+    const ressalvaJson = ressalva ? JSON.stringify(ressalva) : null;
+    const conferenciaJson = analise.conferencia ? JSON.stringify(analise.conferencia) : null;
+    const fechadoPor = actor?.id != null ? String(actor.id) : null;
 
     if (before) {
       await tx.run(
         `UPDATE fechamento_mensal
-         SET status = ?, inconsistencias_json = ?, fechado_em = datetime('now'), updated_at = datetime('now')
+         SET status = ?, inconsistencias_json = ?, ressalva_json = ?, conferencia_json = ?, fechado_por = ?, fechado_por_nome = ?,
+             fechado_em = datetime('now'), updated_at = datetime('now')
          WHERE id = ?`,
-        [status, inconsistenciasJson, before.id]
+        [status, inconsistenciasJson, ressalvaJson, conferenciaJson, fechadoPor, actor?.name || null, before.id]
       );
     } else {
       await tx.run(
         `INSERT INTO fechamento_mensal
-          (ano, mes, status, inconsistencias_json, fechado_em, tenant_id, unit_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, datetime('now'), ?, ?, datetime('now'), datetime('now'))`,
-        [periodo.ano, periodo.mes, status, inconsistenciasJson, scope?.tenant_id || null, scope?.unit_id || null]
+          (ano, mes, status, inconsistencias_json, ressalva_json, conferencia_json, fechado_por, fechado_por_nome,
+           fechado_em, tenant_id, unit_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), ?, ?, datetime('now'), datetime('now'))`,
+        [periodo.ano, periodo.mes, status, inconsistenciasJson, ressalvaJson, conferenciaJson, fechadoPor, actor?.name || null,
+          scope?.tenant_id || null, scope?.unit_id || null]
       );
     }
 
     const after = await obterFechamento(periodo.ano, periodo.mes, tx, scope);
     await AuditService.logAction({
       actor,
-      action: 'fechar_periodo',
+      action: ressalva ? 'fechar_periodo_com_ressalva' : 'fechar_periodo',
       module: 'fechamento_mensal',
       recordType: 'fechamento_mensal',
       recordId: after.id,
       before,
       after,
-      metadata: { inconsistencias_total: analise.inconsistencias.length },
+      metadata: { inconsistencias_total: analise.inconsistencias.length, ressalva },
       tenant_id: scope?.tenant_id,
       unit_id: scope?.unit_id,
     }, tx);
 
-    return { fechamento: after, analise };
+    return { fechamento: publicarFechamento(after), analise };
   });
 }
 
@@ -260,6 +372,9 @@ async function reabrirPeriodo(ano, mes, actor, scope, motivo) {
 }
 
 module.exports = {
+  situacaoDoPeriodo,
+  listarFechamentos,
+  listarResponsaveis,
   periodoDeData,
   assertPeriodoEditavelPorData,
   analisarPeriodo,
