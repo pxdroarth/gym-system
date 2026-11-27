@@ -5,6 +5,7 @@ import { fetchAlunos } from "../services/alunoService";
 import { fetchTodosAcessos } from "../services/acessoService";
 import AccessHistory, { accessHour, accessInstant, allowedAccess, operationalDay, StudentIdentity } from "../components/AccessHistory";
 import ModalAcessosHoje from "../components/ModalAcessosHoje";
+import { PendenciasPainel } from "../components/pendencias/Pendencias";
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
 import KpiCard from "../components/ui/KpiCard";
@@ -66,6 +67,7 @@ export default function Dashboard() {
         <KpiCard label="Sem cobertura paga" value={withoutCoverage.length} subtitle="Situação atual" tone="amber" icon={<UserX size={28} />} />
         <KpiCard label="Acessos hoje" value={todayRows.length} subtitle={dateLabel} icon={<Radio size={28} />} onClick={() => setDayModal(true)} />
       </div>
+      <PendenciasPainel />
       <Card className="gym-panel">
         <div className="gym-panel__head"><h2 className="ui-section-title">Últimos acessos</h2><Link to="/acessos">Ver todos os acessos →</Link></div>
         <AccessHistory rows={access.slice(0, 6)} students={byId} unit={currentUnit} />

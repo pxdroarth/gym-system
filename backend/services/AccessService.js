@@ -11,6 +11,9 @@ const { PERMISSIONS, roleHasPermission } = require('../constants/userRoles');
 const AuditService = require('./AuditService');
 const { dataLocalISO } = require('../utils/dataLocal');
 
+// Carregado sob demanda: PendenciaService depende de userRoles e AuditService.
+const aplicarCoberturaProporcional = (...args) => require('./PendenciaService').aplicarCoberturaProporcional(...args);
+
 function resultadoBancoPorStatus(status) {
   return [
     ACESSO_STATUS.LIBERADO,
@@ -172,7 +175,12 @@ async function avaliarAcessoAluno(alunoId, options = {}) {
     );
   }
 
-  const mensalidades = await listarMensalidadesAcesso(idFinanceiro, options.scope);
+  // L04 sublote B: pacote com pagamento estornado vale como pago ate o fim da
+  // cobertura proporcional ao que continua pago.
+  const mensalidades = await aplicarCoberturaProporcional(
+    await listarMensalidadesAcesso(idFinanceiro, options.scope),
+    hoje
+  );
   const responsavel_id = vinculo ? vinculo.responsavel_id : null;
 
   if (!mensalidades.length) {
@@ -193,6 +201,12 @@ async function avaliarAcessoAluno(alunoId, options = {}) {
   ));
 
   if (mensalidadeVencida) {
+    if (mensalidadeVencida.cobertura_proporcional_encerrada) {
+      return {
+        ...respostaBloqueada(ACESSO_STATUS.BLOQUEADO_INADIMPLENCIA, 'cobertura_proporcional_encerrada', aluno, responsavel_id),
+        pendencia: mensalidadeVencida.cobertura_proporcional_encerrada,
+      };
+    }
     return respostaBloqueada(
       ACESSO_STATUS.BLOQUEADO_INADIMPLENCIA,
       motivoInadimplencia(vinculo),
@@ -231,12 +245,28 @@ async function avaliarAcessoAluno(alunoId, options = {}) {
   }
 
   if (mensalidadeVigente.status !== MENSALIDADE_STATUS.PAGO) {
-    return respostaBloqueada(
-      ACESSO_STATUS.BLOQUEADO_INADIMPLENCIA,
-      'sem_cobertura_paga_vigente',
+    const encerrada = mensalidadeVigente.cobertura_proporcional_encerrada;
+    return {
+      ...respostaBloqueada(
+        ACESSO_STATUS.BLOQUEADO_INADIMPLENCIA,
+        encerrada ? 'cobertura_proporcional_encerrada' : 'sem_cobertura_paga_vigente',
+        aluno,
+        responsavel_id
+      ),
+      ...(encerrada ? { pendencia: encerrada } : {}),
+    };
+  }
+
+  if (mensalidadeVigente.cobertura_proporcional) {
+    return {
+      ok: true,
+      status: ACESSO_STATUS.LIBERADO_COM_RESTRICAO,
+      resultado: ACESSO_RESULTADO.PERMITIDO,
+      motivo: 'cobertura_proporcional',
+      pendencia: mensalidadeVigente.cobertura_proporcional,
       aluno,
-      responsavel_id
-    );
+      responsavel_id,
+    };
   }
 
   return {

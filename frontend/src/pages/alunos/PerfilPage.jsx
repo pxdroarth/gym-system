@@ -14,6 +14,7 @@ import { fetchMensalidadesPorAluno, emitirMensalidadePadrao, preverMensalidadePa
 import { fetchPagamentosAluno, registrarPagamento } from "../../services/pagamentoService";
 import { MEIOS_PAGAMENTO, PagamentosMensalidadeModal, usePermissoesEstornoPagamento } from "../../components/pagamentos/EstornoPagamento";
 import { fetchPlanos } from "../../services/planoService";
+import { PendenciasAluno, mensagemAcessoPendencia } from "../../components/pendencias/Pendencias";
 import Badge from "../../components/ui/Badge";
 import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
@@ -289,7 +290,8 @@ export default function PerfilPage() {
     try {
       setSimulandoAcesso(true);
       const resposta = await simularAcesso(Number(id));
-      setToastMsg(resposta?.mensagem || "Teste de acesso executado.");
+      setToastMsg(mensagemAcessoPendencia(resposta?.avaliacao) || resposta?.mensagem || "Teste de acesso executado.");
+      carregarAluno();
       await carregarAcessos();
     } catch (error) {
       setToastMsg(getApiErrorMessage(error));
@@ -358,6 +360,8 @@ export default function PerfilPage() {
         </div>
       </Card>
 
+      <PendenciasAluno aluno={aluno} versao={aluno} />
+
       <Tabs>
         <TabButton active={abaAtiva === "informacoes"} onClick={() => setAbaAtiva("informacoes")}>
           Informações
@@ -383,6 +387,7 @@ export default function PerfilPage() {
               <InfoItem label="Matrícula" value={aluno.matricula} />
               <InfoItem label="Nome" value={aluno.nome} />
               <InfoItem label="Telefone" value={aluno.telefone} />
+              <InfoItem label="E-mail" value={aluno.email || "Não informado"} />
               <InfoItem label="Data de Nascimento" value={aluno.data_nascimento?.slice(0, 10)} />
               <InfoItem label="Status Cadastral" value={aluno.status} />
               <InfoItem label="Status Operacional" value={aluno.status_ativo} />

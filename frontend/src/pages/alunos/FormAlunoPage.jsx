@@ -27,6 +27,7 @@ export default function FormAlunoPage() {
     dia_vencimento: "",
     plano_id: "",
     telefone: "",
+    email: "",
     data_nascimento: "",
     matricula: "",
   });
@@ -57,6 +58,7 @@ export default function FormAlunoPage() {
           dia_vencimento: data.dia_vencimento ?? "",
           plano_id: data.plano_id ?? "",
           telefone: data.telefone || "",
+          email: data.email || "",
           data_nascimento: data.data_nascimento || "",
           matricula: data.matricula || "",
         });
@@ -156,6 +158,13 @@ export default function FormAlunoPage() {
         <div>
           <label className="font-semibold">Telefone (opcional):</label>
           <input name="telefone" value={form.telefone} onChange={handleChange} placeholder="(99) 99999-9999" className="w-full border rounded px-4 py-2" />
+        </div>
+
+        <div>
+          <label className="font-semibold" htmlFor="aluno-email">E-mail (opcional):</label>
+          <input id="aluno-email" name="email" type="email" value={form.email} onChange={handleChange} placeholder="aluno@exemplo.com"
+            autoComplete="email" className="w-full border rounded px-4 py-2" />
+          <p className="text-xs text-gray-500 mt-1">Sugerido para avisos de pendência. Pode ficar em branco.</p>
         </div>
 
         <div>

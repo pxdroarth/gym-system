@@ -105,7 +105,7 @@ try {
       'smoke-financeiro-isolamento', 'smoke-l02', 'smoke-l02-ciclos',
       'smoke-cobertura', 'smoke-f0-acesso-datas', 'smoke-acesso', 'smoke-l04-integridade',
       'smoke-diagnostico-consistencia', 'smoke-l04-estorno-venda', 'smoke-l04-venda-pagamento',
-      'smoke-l04-estorno-pagamento'
+      'smoke-l04-estorno-pagamento', 'smoke-l04-pendencias'
     )) {
       Invoke-Node "tests/scripts/$smoke.js" "--base-url=$baseUrl" '--db=backend/academia.sqlite'
     }
