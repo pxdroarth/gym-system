@@ -973,6 +973,29 @@ async function ensurePagamentoParcialColumns() {
 // L04 sublote A (20/11/2026): meio do pagamento da mensalidade e estorno de
 // pagamento com solicitacao, autorizacao e execucao, como o estorno de venda.
 // Pagamentos anteriores ficam com forma_pagamento nulo (meio nao registrado).
+// L04 sublote B (decisoes de 20/11 e 26/11/2026): e-mail opcional do aluno e
+// registro das tentativas de contato sobre pendencias.
+async function ensureAlunoContato() {
+  await addColumnIfMissing('aluno', 'email TEXT');
+  await runExecute(`
+    CREATE TABLE IF NOT EXISTS aluno_contato (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant_id INTEGER NOT NULL,
+      unit_id INTEGER NOT NULL,
+      aluno_id INTEGER NOT NULL,
+      mensalidade_id INTEGER,
+      canal TEXT NOT NULL CHECK (canal IN ('whatsapp', 'email', 'telefone', 'presencial')),
+      observacao TEXT,
+      registrado_por TEXT NOT NULL,
+      registrado_por_nome TEXT,
+      registrado_por_papel TEXT,
+      registrado_em TEXT NOT NULL,
+      FOREIGN KEY (aluno_id) REFERENCES aluno(id)
+    )
+  `);
+  await runExecute('CREATE INDEX IF NOT EXISTS idx_aluno_contato_aluno ON aluno_contato (tenant_id, unit_id, aluno_id, id)');
+}
+
 async function ensurePagamentoEstorno() {
   await addColumnIfMissing('pagamento', 'forma_pagamento TEXT');
   await runExecute(`
@@ -1179,6 +1202,7 @@ async function ensureSchema() {
   await ensureVendaEstorno();
   await ensureVendaPagamento();
   await ensurePagamentoEstorno();
+  await ensureAlunoContato();
   await ensureUsuarioInterno(defaultScope);
   await ensureLegacyUserScopes(defaultScope);
   await backfillDefaultScope(defaultScope.tenantId, defaultScope.unitId);

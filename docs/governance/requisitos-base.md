@@ -536,6 +536,17 @@ Decisões de 20/11/2026 (sublote A). Segue o modelo do estorno de venda.
 - **Telas.** No perfil do aluno, o recebimento informa o meio e cada mensalidade abre "Pagamentos e estornos". No Financeiro, a fila "Estornos de pagamento" filtra por estado e permite ao dono ligar as três contas distintas.
 - **Validação:** `tests/scripts/smoke-l04-estorno-pagamento.js` e `tests/e2e/playwright/estorno-pagamento.spec.js`.
 
+### L04 — Pendências por estorno e contato com o aluno
+
+Decisões de 20/11 e 26/11/2026 (sublote B).
+
+- **Pacote.** Mensalidade cujas datas de cobertura somam dois meses ou mais (30 dias por mês, arredondado). Com pagamento estornado e saldo em aberto, a cobertura passa a ser a dos meses inteiros que o valor que continua pago quita, contados do início da cobertura e arredondados para baixo; dia inexistente no mês de destino cobre até o último dia desse mês. Dentro desse período o acesso é liberado com restrição (`cobertura_proporcional`); depois dele, ou quando o valor não cobre nem o primeiro mês, bloqueia (`cobertura_proporcional_encerrada`).
+- **Mensal.** Estorno parcial de uma mensalidade de um mês bloqueia na hora (`sem_cobertura_paga_vigente`), sem tolerância.
+- **Pendência.** Mensalidade com estorno de pagamento executado e saldo em aberto. Aparece no Dashboard ("Pendências para contatar", bloqueadas primeiro), no perfil do aluno, no teste de acesso e num aviso de cerca de 10 s ao entrar, que volta no próximo login enquanto houver pendência. Some quando um novo pagamento quita a mensalidade.
+- **Contato.** "Contatar aluno" abre WhatsApp (telefone), e-mail (se houver) ou ligação e registra a tentativa com canal, observação, operador e data, auditada. Registrar o contato não encerra a pendência. Recepção, gestor, financeiro, admin e dono veem pendências e registram contatos.
+- **E-mail do aluno.** Opcional no cadastro e na edição, com o formato validado só quando preenchido; não impede o cadastro rápido.
+- **Validação:** `tests/scripts/smoke-l04-pendencias.js` e `tests/e2e/playwright/pendencias.spec.js`.
+
 ## 15. Critérios de aceite do produto
 
 O produto pode ser considerado pronto para PostgreSQL/deploy de portfólio quando:

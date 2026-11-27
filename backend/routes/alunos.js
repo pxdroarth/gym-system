@@ -188,6 +188,21 @@ router.get('/', async (req, res) => {
   }
 });
 
+// E-mail opcional (L04 sublote B): vazio grava nulo; preenchido precisa ter
+// formato valido. Ausente no corpo da edicao mantem o atual.
+function normalizarEmail(body) {
+  if (!Object.prototype.hasOwnProperty.call(body || {}, 'email')) return { definido: false, valor: null };
+  const valor = body.email == null ? '' : String(body.email).trim().toLowerCase();
+  if (!valor) return { definido: true, valor: null };
+  if (valor.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(valor)) {
+    const erro = new Error('E-mail inválido');
+    erro.statusCode = 400;
+    erro.code = 'ALUNO_EMAIL_INVALIDO';
+    throw erro;
+  }
+  return { definido: true, valor };
+}
+
 router.post('/', requirePermission(PERMISSIONS.ALUNOS_EDITAR), async (req, res, next) => {
   try {
     const scope = requireScope(req);
@@ -215,6 +230,13 @@ router.post('/', requirePermission(PERMISSIONS.ALUNOS_EDITAR), async (req, res, 
       return res.status(400).json({ error: 'data_nascimento inválida' });
     }
 
+    let email;
+    try {
+      email = normalizarEmail(req.body);
+    } catch (erro) {
+      return res.status(400).json({ error: erro.message, code: erro.code });
+    }
+
     const statusFinal = req.operator.papel === USER_ROLES.RECEPCAO
       ? 'ativo'
       : ((status || 'ativo') === 'inativo' ? 'inativo' : 'ativo');
@@ -226,9 +248,9 @@ router.post('/', requirePermission(PERMISSIONS.ALUNOS_EDITAR), async (req, res, 
       );
       const novaMatricula = (Number(last?.ultima) || 1000) + 1;
       const result = await tx.run(
-        `INSERT INTO aluno (matricula, nome, status, dia_vencimento, plano_id, telefone, data_nascimento, tenant_id, unit_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [novaMatricula, String(nome).trim(), statusFinal, dv, planoIdFinal, telefone || null, dataNascISO, scope.tenant_id, scope.unit_id]
+        `INSERT INTO aluno (matricula, nome, status, dia_vencimento, plano_id, telefone, email, data_nascimento, tenant_id, unit_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [novaMatricula, String(nome).trim(), statusFinal, dv, planoIdFinal, telefone || null, email.valor, dataNascISO, scope.tenant_id, scope.unit_id]
       );
       await AuditService.logAction({
         actor, action: 'cadastrar_aluno', module: 'alunos', recordType: 'aluno',
@@ -297,6 +319,13 @@ router.put('/:id', requirePermission(PERMISSIONS.ALUNOS_EDITAR), async (req, res
       return res.status(400).json({ error: 'data_nascimento inválida' });
     }
 
+    let email;
+    try {
+      email = normalizarEmail(req.body);
+    } catch (erro) {
+      return res.status(400).json({ error: erro.message, code: erro.code });
+    }
+
     const statusFinal = (status || 'ativo') === 'inativo' ? 'inativo' : 'ativo';
     const actor = actorWithScope(AuditService.getActorFromRequest(req), scope);
 
@@ -335,9 +364,10 @@ router.put('/:id', requirePermission(PERMISSIONS.ALUNOS_EDITAR), async (req, res
 
       const result = await tx.run(
         `UPDATE aluno
-           SET nome = ?, status = ?, dia_vencimento = ?, plano_id = ?, telefone = ?, data_nascimento = ?
+           SET nome = ?, status = ?, dia_vencimento = ?, plano_id = ?, telefone = ?, email = ?, data_nascimento = ?
          WHERE id = ?`,
-        [String(nome).trim(), status === undefined ? antes.status : statusFinal, dv, planoIdFinal, telefone || null, dataNascISO, id]
+        [String(nome).trim(), status === undefined ? antes.status : statusFinal, dv, planoIdFinal, telefone || null,
+          email.definido ? email.valor : (antes.email || null), dataNascISO, id]
       );
 
       if (result.changes === 0) return null;

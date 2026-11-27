@@ -103,6 +103,7 @@ async function start() {
   app.use('/plano-associado', require('./routes/planoAssociado'));
   app.use('/mensalidades', require('./routes/mensalidades'));
   app.use('/pagamentos', require('./routes/pagamentos'));
+  app.use('/pendencias', require('./routes/pendencias'));
   app.use('/acessos', require('./routes/acessos'));
   app.use('/access-devices', accessDeviceRoutes.devicesRouter);
   app.use('/access-credentials', accessDeviceRoutes.credentialsRouter);

@@ -333,6 +333,16 @@ node tests\scripts\smoke-l04-estorno-pagamento.js --base-url=http://localhost:30
 
 Cobre o meio gravado nos pagamentos novos (meio inválido recusado), permissões por etapa e papel (recepção solicita e registra autorização, só dono e admin aprovam, financeiro executa), pedido único por pagamento, execução sem aprovação e rota direta bloqueada, escopo de Rede e Unidade, autoaprovação e autoautorização, aprovação direta com devolução pelo meio original (mensalidade volta a parcial, acesso bloqueado, contrapartida na data local), repetição, autorização externa com devolução em outro meio (motivo e comprovante obrigatórios), pagamento sem meio registrado, execuções concorrentes, mês fechado com nova tentativa após reabertura, três contas distintas e a fila do Financeiro. Cada recusa confere pagamentos, mensalidade, lançamentos, estados e auditoria antes e depois.
 
+## `smoke-l04-pendencias.js` (L04 · Pendências por estorno e contato com o aluno)
+
+Rode em base descartável semeada, com a API sobre ela. O smoke cria alunos "L04B" na Matriz com pacotes do Plano Trimestral iniciados há 45 dias e mensalidades do Plano Basico, estorna pagamentos pelo fluxo do sublote A e lê o SQLite só para conferir os efeitos.
+
+```cmd
+node tests\scripts\smoke-l04-pendencias.js --base-url=http://localhost:3001 --db=backend\academia.sqlite
+```
+
+Cobre o e-mail opcional (normalizado, vazio, inválido recusado sem gravar, edição que mantém ou limpa), o pacote com cobertura proporcional ainda vigente (acesso `liberado_com_restricao`), encerrada e sem nenhum mês coberto (bloqueio com `cobertura_proporcional_encerrada`), a mensal com estorno parcial (bloqueio na hora), a lista, a ordem, o resumo e o filtro de pendências, permissões e escopo de Rede e Unidade, o registro de contato (WhatsApp, e-mail, canal inválido, aluno sem e-mail, outro aluno, outra unidade e operador de acesso, sempre sem gravar nas recusas) e a quitação, que encerra a pendência e preserva o histórico de contatos.
+
 ## `smoke-l04-estorno-venda-datas.js` (L04 · Períodos, data operacional e rollback)
 
 Roda em processo, sobre o SQLite da cópia descartável semeada, e controla só o relógio de negócio (como o `smoke-l02-ciclos.js`). Usa os anos de 2030 e 2031 e grava fechamentos e datas de venda direto na base.

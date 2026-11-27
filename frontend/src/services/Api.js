@@ -222,6 +222,27 @@ export async function registrarPagamento(payload, chaveIdempotencia = null) {
   return response.data;
 }
 
+// ---------- Pendencias por estorno e contato com o aluno (L04, sublote B) ----------
+export async function fetchPendencias(params = {}) {
+  const response = await api.get("/pendencias", { params });
+  return response.data;
+}
+
+export async function fetchResumoPendencias() {
+  const response = await api.get("/pendencias/resumo");
+  return response.data;
+}
+
+export async function fetchContatosAluno(alunoId) {
+  const response = await api.get("/pendencias/contatos", { params: { aluno_id: alunoId } });
+  return response.data;
+}
+
+export async function registrarContatoAluno(dados) {
+  const response = await api.post("/pendencias/contatos", dados);
+  return response.data;
+}
+
 // ---------- Estorno de pagamento do aluno (L04, sublote A) ----------
 export async function fetchPagamentosAluno(alunoId) {
   const response = await api.get(`/pagamentos/aluno/${alunoId}`);

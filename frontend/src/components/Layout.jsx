@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Header from "./Header";
 import useAuth from "../hooks/useAuth";
+import { AvisoPendencias } from "./pendencias/Pendencias";
 import useMediaQuery, { COMPACT_SHELL_QUERY } from "../hooks/useMediaQuery";
 
 // Desktop: menu lateral fixo (recolhivel pelo botao do topo).
@@ -72,6 +73,7 @@ export default function Layout() {
         />
 
         <main className="app-content" key={currentUnit?.id}>
+          <AvisoPendencias />
           <Outlet />
         </main>
       </div>
